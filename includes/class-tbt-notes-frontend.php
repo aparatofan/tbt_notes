@@ -188,6 +188,8 @@ class TBT_Notes_Frontend {
 	protected function strings() {
 		return array(
 			'panelTitle'        => __( 'Notes', 'tbt-notes' ),
+			'headerStatic'      => __( 'LESSON NOTES:', 'tbt-notes' ),
+			'headerClasses'     => __( 'CLASSES', 'tbt-notes' ),
 			'open'              => __( 'Open notes', 'tbt-notes' ),
 			'close'             => __( 'Close', 'tbt-notes' ),
 			'back'              => __( 'Back', 'tbt-notes' ),

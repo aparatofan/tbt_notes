@@ -28,17 +28,19 @@
 }
 
 .tbt-notes-app {
-	/* Colour */
-	--tbt-accent: #0856c9;
-	--tbt-accent-hover: #0746a6;
-	--tbt-accent-soft: #e7f0fd;
-	--tbt-accent-contrast: #ffffff;
+	/* Colour — one brand blue (#6aa0ef) for surfaces; navy ink for text. */
+	--tbt-accent: #6aa0ef;            /* brand blue: header, buttons, focus, accents */
+	--tbt-accent-hover: #5a93ea;
+	--tbt-accent-soft: #e9f1fd;       /* lightened brand blue: cards, chips, selected */
+	--tbt-accent-soft-hover: #d8e6fb;
+	--tbt-accent-contrast: #11346b;   /* navy text on brand-blue buttons (AA-readable) */
 	--tbt-panel-bg: #ffffff;
-	--tbt-text: #0b2a66;
+	--tbt-text: #11346b;              /* dark navy ink for all body + heading text */
 	--tbt-muted: #5b6b8c;
-	--tbt-border: #d8dee9;
+	--tbt-border: #d3ddec;
 	--tbt-hover: #eef3fb;
 	--tbt-danger: #c0392b;
+	--tbt-header-image: url("https://thebluetree.pl/wp-content/uploads/2026/06/tbt-notes-header.png");
 
 	/* Type scale (importance encoded by size). */
 	--tbt-fs-classname: 40px;
@@ -258,56 +260,77 @@
 
 /* --------------------------------------------------------------- Panel chrome */
 
+/* Branded header bar (this is the top bar). Background = tree header image,
+   brand-blue fallback. All header text + controls are white. */
 .tbt-notes-topbar {
 	flex: 0 0 auto;
-	background: #fff;
-	border-bottom: 2px solid var(--tbt-accent);
+	background-color: var(--tbt-accent);
+	background-image: var(--tbt-header-image);
+	background-size: cover;
+	background-position: center;
+	background-repeat: no-repeat;
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
 	padding: var(--tbt-s2) var(--tbt-s4);
 }
 
+/* Taller on the classes screen; shorter on a lesson so the editor gets room. */
+.tbt-notes-topbar--tall {
+	padding-top: var(--tbt-s4);
+	padding-bottom: var(--tbt-s4);
+}
+
 .tbt-notes-topbar__inner {
-	position: relative;
 	display: flex;
 	align-items: center;
 	gap: var(--tbt-s2);
 	width: 100%;
-	min-height: 48px;
+	min-height: 44px;
+}
+
+.tbt-notes-topbar--tall .tbt-notes-topbar__inner {
+	min-height: 96px;
 }
 
 .tbt-notes-topbar__title {
-	font-size: var(--tbt-fs-topbar);
-	font-weight: 700;
 	margin: 0;
 	flex: 1 1 auto;
-	color: var(--tbt-accent);
+	min-width: 0;
+	color: #fff;
+	font-family: "Roboto Slab", Georgia, serif;
+	font-size: var(--tbt-fs-topbar);
+	text-transform: uppercase;
+	letter-spacing: 0.5px;
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
+	text-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
 }
 
-/* Class name: largest text, Roboto Slab, centred both ways in the bar. */
-.tbt-notes-topbar--centered {
-	min-height: 64px;
-}
-
-.tbt-notes-topbar__title--class {
-	position: absolute;
-	inset: 0;
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	font-family: "Roboto Slab", Georgia, serif;
+.tbt-notes-topbar--tall .tbt-notes-topbar__title {
 	font-size: var(--tbt-fs-classname);
-	font-weight: 700;
 	letter-spacing: 1px;
-	text-transform: uppercase;
-	padding: 0 140px;
-	pointer-events: none;
 }
 
-/* With an absolute title, push the trailing controls to the right. */
-.tbt-notes-topbar--centered .tbt-notes-topbar__title + .tbt-notes-iconbtn {
-	margin-left: auto;
+/* Hierarchy by weight, one colour: "LESSON NOTES:" normal, context bold. */
+.tbt-notes-topbar__static {
+	font-weight: 400;
+}
+
+.tbt-notes-topbar__dynamic {
+	font-weight: 700;
+}
+
+/* Controls sit on the coloured header → white. */
+.tbt-notes-topbar .tbt-notes-iconbtn {
+	color: #fff;
+}
+
+.tbt-notes-topbar .tbt-notes-iconbtn:hover {
+	background: rgba(255, 255, 255, 0.18);
+}
+
+.tbt-notes-topbar .tbt-notes-iconbtn:focus-visible {
+	outline: 2px solid #fff;
 }
 
 /* Non-split views (classes list, settings, empty) — left-aligned column. */
@@ -406,6 +429,17 @@
 	border-color: var(--tbt-accent);
 }
 
+/* Class cards: light-blue (lightened brand blue) so they read as tappable. */
+.tbt-notes-list .tbt-notes-listitem {
+	background: var(--tbt-accent-soft);
+	border-color: transparent;
+}
+
+.tbt-notes-list .tbt-notes-listitem:hover {
+	background: var(--tbt-accent-soft-hover);
+	border-color: var(--tbt-accent);
+}
+
 .tbt-notes-listitem__main {
 	flex: 1 1 auto;
 	text-align: left;
@@ -436,7 +470,7 @@
 .tbt-notes-listitem__meta {
 	display: block;
 	font-size: 13px;
-	color: var(--tbt-muted);
+	color: var(--tbt-text);
 	margin-top: 4px;
 }
 
@@ -614,7 +648,7 @@
 .tbt-notes-read-header {
 	font-size: var(--tbt-fs-lessontitle);
 	font-weight: 700;
-	color: var(--tbt-accent);
+	color: var(--tbt-text);
 	margin: 0 0 var(--tbt-s3);
 	line-height: 1.3;
 }
@@ -642,7 +676,7 @@
 .tbt-notes-read h2,
 .tbt-notes-read h3 {
 	font-family: "Roboto Slab", Georgia, serif;
-	color: var(--tbt-accent);
+	color: var(--tbt-text);
 	font-weight: 700;
 	line-height: 1.3;
 	margin: 1em 0 0.4em;
@@ -661,8 +695,9 @@
 }
 
 .tbt-notes-read a {
-	color: var(--tbt-accent);
+	color: var(--tbt-text);
 	text-decoration: underline;
+	text-decoration-color: var(--tbt-accent);
 }
 
 .tbt-notes-read blockquote {
@@ -787,7 +822,7 @@
 .tbt-notes-app .ql-editor h2,
 .tbt-notes-app .ql-editor h3 {
 	font-family: "Roboto Slab", Georgia, serif;
-	color: var(--tbt-accent);
+	color: var(--tbt-text);
 	font-weight: 700;
 }
 
@@ -933,8 +968,10 @@
 		flex-basis: 230px;
 		width: 230px;
 	}
-	.tbt-notes-topbar__title--class {
+	.tbt-notes-topbar--tall .tbt-notes-topbar__title {
 		font-size: 26px;
-		padding: 0 96px;
+	}
+	.tbt-notes-topbar--tall .tbt-notes-topbar__inner {
+		min-height: 64px;
 	}
 }

@@ -199,12 +199,19 @@
 	}
 
 	function buildTopbar( opts ) {
-		var bar = el( 'div', 'tbt-notes-topbar' );
-		var inner = el( 'div', 'tbt-notes-topbar__inner' + ( opts.centerTitle ? ' tbt-notes-topbar--centered' : '' ) );
+		var bar = el( 'div', 'tbt-notes-topbar' + ( opts.tall ? ' tbt-notes-topbar--tall' : '' ) );
+		var inner = el( 'div', 'tbt-notes-topbar__inner' );
 		if ( opts.onBack ) {
 			inner.appendChild( iconButton( '‹', t( 'back', 'Back' ), opts.onBack ) );
 		}
-		inner.appendChild( el( 'h2', 'tbt-notes-topbar__title' + ( opts.centerTitle ? ' tbt-notes-topbar__title--class' : '' ), opts.title || '' ) );
+		// Title: static "LESSON NOTES:" (normal) + dynamic context (bold), both white.
+		var h = el( 'h2', 'tbt-notes-topbar__title' );
+		h.appendChild( el( 'span', 'tbt-notes-topbar__static', t( 'headerStatic', 'LESSON NOTES:' ) ) );
+		if ( opts.dynamic ) {
+			h.appendChild( document.createTextNode( ' ' ) );
+			h.appendChild( el( 'span', 'tbt-notes-topbar__dynamic', opts.dynamic ) );
+		}
+		inner.appendChild( h );
 		( opts.buttons || [] ).forEach( function ( btn ) {
 			inner.appendChild( iconButton( btn.symbol, btn.label, btn.onClick ) );
 		} );
@@ -227,13 +234,13 @@
 		clear( content );
 
 		if ( ! state.loaded ) {
-			content.appendChild( buildTopbar( { title: t( 'panelTitle', 'Notes' ) } ) );
+			content.appendChild( buildTopbar( {} ) );
 			content.appendChild( el( 'div', 'tbt-notes-loading', t( 'loading', 'Loading…' ) ) );
 			return;
 		}
 
 		if ( state.error ) {
-			content.appendChild( buildTopbar( { title: t( 'panelTitle', 'Notes' ) } ) );
+			content.appendChild( buildTopbar( {} ) );
 			var b = el( 'div', 'tbt-notes-body' );
 			b.appendChild( errorBlock( state.error ) );
 			content.appendChild( b );
@@ -258,7 +265,7 @@
 	/* ------------------------------------------------------------ Student empty */
 
 	function renderStudentEmpty() {
-		content.appendChild( buildTopbar( { title: t( 'panelTitle', 'Notes' ) } ) );
+		content.appendChild( buildTopbar( {} ) );
 		var body = el( 'div', 'tbt-notes-body' );
 		body.appendChild( emptyBlock( t( 'noClassStudent', 'You have no notes assigned yet.' ) ) );
 		content.appendChild( body );
@@ -267,7 +274,7 @@
 	/* ------------------------------------------------------------- Teacher root */
 
 	function renderTeacherRoot() {
-		content.appendChild( buildTopbar( { title: t( 'panelTitle', 'Notes' ) } ) );
+		content.appendChild( buildTopbar( { dynamic: t( 'headerClasses', 'CLASSES' ), tall: true } ) );
 		var body = el( 'div', 'tbt-notes-body' );
 
 		var newBtn = el( 'button', 'tbt-notes-btn tbt-notes-btn--block', t( 'newClass', 'New class' ) );
@@ -386,8 +393,7 @@
 		}
 
 		content.appendChild( buildTopbar( {
-			title: cls ? ( cls.title || t( 'untitledClass', 'Untitled class' ) ) : '',
-			centerTitle: true,
+			dynamic: cls ? ( cls.title || t( 'untitledClass', 'Untitled class' ) ) : '',
 			onBack: isTeacher ? function () {
 				flushActiveSaver();
 				state.view = 'root';
@@ -506,7 +512,7 @@
 	function renderClassSettings() {
 		var cls = state.currentClass;
 		content.appendChild( buildTopbar( {
-			title: t( 'manageClass', 'Class settings' ),
+			dynamic: cls ? ( cls.title || t( 'untitledClass', 'Untitled class' ) ) : '',
 			onBack: function () {
 				state.view = 'class';
 				render();
