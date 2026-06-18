@@ -285,43 +285,79 @@
 	min-height: 88px;
 }
 
-/* Centred title, vertically + horizontally, across the whole bar. */
-.tbt-notes-topbar__title {
+/* Container for stacked titles */
+.tbt-notes-topbar__title-wrap {
 	position: absolute;
 	inset: 0;
 	display: flex;
+	flex-direction: column;
 	align-items: center;
 	justify-content: center;
 	text-align: center;
-	margin: 0;
 	padding: 0 150px;
-	pointer-events: none;
+	pointer-events: none; /* Let clicks pass through to side buttons */
+}
+
+/* With the title wrap absolute, push the trailing controls to the right edge. */
+.tbt-notes-topbar__title-wrap + .tbt-notes-iconbtn {
+	margin-left: auto;
+}
+
+/* 1. Class Title (Bold, Uppercase) */
+.tbt-notes-topbar__title {
 	color: #fff;
-	background: transparent;
 	font-family: "Roboto Slab", Georgia, serif;
-	font-size: var(--tbt-fs-classname);
-	line-height: 1.15;
+	font-size: 24px;
+	font-weight: 700;
+	line-height: 1.2;
 	text-transform: uppercase;
 	letter-spacing: 1px;
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
+	width: 100%;
 }
 
-/* With the title absolute, push the trailing controls to the right edge. */
-.tbt-notes-topbar__title + .tbt-notes-iconbtn {
-	margin-left: auto;
-}
-
-/* Hierarchy by weight, one colour: "LESSON NOTES:" normal, context bold. */
-.tbt-notes-topbar__static {
+/* 2. Lesson Title - Read View (Normal) */
+.tbt-notes-topbar__subtitle {
+	color: #fff;
+	font-family: "Roboto Slab", Georgia, serif;
+	font-size: 20px;
 	font-weight: 400;
-	background: transparent;
+	line-height: 1.2;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	width: 100%;
+	margin-top: 2px;
 }
 
-.tbt-notes-topbar__dynamic {
-	font-weight: 700;
+/* 2. Lesson Title - Editor Input (Normal, blends into header) */
+.tbt-notes-topbar__subtitle-input {
+	pointer-events: auto; /* Re-enable clicking for the input */
 	background: transparent;
+	border: 1px dashed transparent;
+	color: #fff;
+	font-family: "Roboto Slab", Georgia, serif;
+	font-size: 20px;
+	font-weight: 400;
+	text-align: center;
+	padding: 2px 8px;
+	border-radius: 4px;
+	width: 100%;
+	max-width: 400px;
+	margin-top: 2px;
+}
+
+.tbt-notes-topbar__subtitle-input:hover,
+.tbt-notes-topbar__subtitle-input:focus {
+	background: rgba(255, 255, 255, 0.15);
+	border-color: rgba(255, 255, 255, 0.4);
+	outline: none;
+}
+
+.tbt-notes-topbar__subtitle-input::placeholder {
+	color: rgba(255, 255, 255, 0.6);
 }
 
 /* Controls sit on the coloured header → white. */
@@ -649,14 +685,6 @@
 
 /* --------------------------------------------------------------- Read view */
 
-.tbt-notes-read-header {
-	font-size: var(--tbt-fs-lessontitle);
-	font-weight: 700;
-	color: var(--tbt-text);
-	margin: 0 0 var(--tbt-s3);
-	line-height: 1.3;
-}
-
 .tbt-notes-read {
 	font-size: var(--tbt-fs-body);
 	font-weight: var(--tbt-fw-body);
@@ -762,24 +790,6 @@
 	max-width: none;
 }
 
-.tbt-notes-editor-header {
-	padding: var(--tbt-s4) var(--tbt-s4) var(--tbt-s2);
-	flex: 0 0 auto;
-}
-
-/* Lesson title / header field — large, roomy. */
-.tbt-notes-editor-headerinput {
-	font-size: var(--tbt-fs-lessontitle);
-	font-weight: 600;
-	padding: 14px 18px;
-	border-color: transparent;
-	border-radius: var(--tbt-radius);
-}
-
-.tbt-notes-editor-headerinput:hover {
-	border-color: var(--tbt-border);
-}
-
 .tbt-notes-editor-quillwrap {
 	flex: 1 1 auto;
 	min-height: 0;
@@ -791,7 +801,7 @@
 	flex: 0 0 auto;
 	border-left: 0;
 	border-right: 0;
-	border-top: 1px solid var(--tbt-border);
+	border-top: 1px solid transparent;
 	border-bottom: 1px solid var(--tbt-border);
 	position: sticky;
 	top: 0;
@@ -972,9 +982,15 @@
 		flex-basis: 230px;
 		width: 230px;
 	}
-	.tbt-notes-topbar__title {
-		font-size: 24px;
+	.tbt-notes-topbar__title-wrap {
 		padding: 0 92px;
+	}
+	.tbt-notes-topbar__title {
+		font-size: 20px;
+	}
+	.tbt-notes-topbar__subtitle,
+	.tbt-notes-topbar__subtitle-input {
+		font-size: 16px;
 	}
 	.tbt-notes-topbar__inner {
 		min-height: 64px;
