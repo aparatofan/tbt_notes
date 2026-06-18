@@ -199,7 +199,7 @@
 	}
 
 	function buildTopbar( opts ) {
-		var bar = el( 'div', 'tbt-notes-topbar' + ( opts.tall ? ' tbt-notes-topbar--tall' : '' ) );
+		var bar = el( 'div', 'tbt-notes-topbar' );
 		var inner = el( 'div', 'tbt-notes-topbar__inner' );
 		if ( opts.onBack ) {
 			inner.appendChild( iconButton( '‹', t( 'back', 'Back' ), opts.onBack ) );
@@ -274,7 +274,7 @@
 	/* ------------------------------------------------------------- Teacher root */
 
 	function renderTeacherRoot() {
-		content.appendChild( buildTopbar( { dynamic: t( 'headerClasses', 'CLASSES' ), tall: true } ) );
+		content.appendChild( buildTopbar( { dynamic: t( 'headerClasses', 'CLASSES' ) } ) );
 		var body = el( 'div', 'tbt-notes-body' );
 
 		var newBtn = el( 'button', 'tbt-notes-btn tbt-notes-btn--block', t( 'newClass', 'New class' ) );

@@ -59,7 +59,9 @@
 	--tbt-radius: 10px;
 
 	--tbt-admin-offset: 0px;
-	--tbt-z: 99990;
+	/* Very high so the full-screen panel/header sits above the site's own
+	   floating menus (still below the WP admin bar, which the panel offsets). */
+	--tbt-z: 2147483000;
 
 	--tbt-hl-blue: #bcdcff;
 	--tbt-hl-yellow: #fff2a8;
@@ -261,7 +263,8 @@
 /* --------------------------------------------------------------- Panel chrome */
 
 /* Branded header bar (this is the top bar). Background = tree header image,
-   brand-blue fallback. All header text + controls are white. */
+   brand-blue fallback. Title is centred; all header text + controls are white,
+   with no text background/shadow. Same (tall) size on every screen. */
 .tbt-notes-topbar {
 	flex: 0 0 auto;
 	background-color: var(--tbt-accent);
@@ -270,54 +273,55 @@
 	background-position: center;
 	background-repeat: no-repeat;
 	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
-	padding: var(--tbt-s2) var(--tbt-s4);
-}
-
-/* Taller on the classes screen; shorter on a lesson so the editor gets room. */
-.tbt-notes-topbar--tall {
-	padding-top: var(--tbt-s4);
-	padding-bottom: var(--tbt-s4);
+	padding: var(--tbt-s4);
 }
 
 .tbt-notes-topbar__inner {
+	position: relative;
 	display: flex;
 	align-items: center;
 	gap: var(--tbt-s2);
 	width: 100%;
-	min-height: 44px;
+	min-height: 88px;
 }
 
-.tbt-notes-topbar--tall .tbt-notes-topbar__inner {
-	min-height: 96px;
-}
-
+/* Centred title, vertically + horizontally, across the whole bar. */
 .tbt-notes-topbar__title {
+	position: absolute;
+	inset: 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	text-align: center;
 	margin: 0;
-	flex: 1 1 auto;
-	min-width: 0;
+	padding: 0 150px;
+	pointer-events: none;
 	color: #fff;
+	background: transparent;
 	font-family: "Roboto Slab", Georgia, serif;
-	font-size: var(--tbt-fs-topbar);
+	font-size: var(--tbt-fs-classname);
+	line-height: 1.15;
 	text-transform: uppercase;
-	letter-spacing: 0.5px;
+	letter-spacing: 1px;
+	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
-	white-space: nowrap;
-	text-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
 }
 
-.tbt-notes-topbar--tall .tbt-notes-topbar__title {
-	font-size: var(--tbt-fs-classname);
-	letter-spacing: 1px;
+/* With the title absolute, push the trailing controls to the right edge. */
+.tbt-notes-topbar__title + .tbt-notes-iconbtn {
+	margin-left: auto;
 }
 
 /* Hierarchy by weight, one colour: "LESSON NOTES:" normal, context bold. */
 .tbt-notes-topbar__static {
 	font-weight: 400;
+	background: transparent;
 }
 
 .tbt-notes-topbar__dynamic {
 	font-weight: 700;
+	background: transparent;
 }
 
 /* Controls sit on the coloured header → white. */
@@ -968,10 +972,11 @@
 		flex-basis: 230px;
 		width: 230px;
 	}
-	.tbt-notes-topbar--tall .tbt-notes-topbar__title {
-		font-size: 26px;
+	.tbt-notes-topbar__title {
+		font-size: 24px;
+		padding: 0 92px;
 	}
-	.tbt-notes-topbar--tall .tbt-notes-topbar__inner {
+	.tbt-notes-topbar__inner {
 		min-height: 64px;
 	}
 }
