@@ -32,12 +32,15 @@ in the REST API (`includes/class-tbt-notes-rest.php`), not just hidden in the UI
   through WordPress's public surfaces (REST defaults, search, archives, feeds,
   sitemaps). Every read goes through one ownership check.
 
-### Roles (future-proofing)
+### Roles & granting teacher access
 
-Permissions hang off a single capability, `manage_tbt_notes`, granted to
-administrators on activation. Nothing is hard-coded to a user ID, so a future
-"teacher" role can be granted the same capability to gain authoring rights — add
-it via the `tbt_notes_managing_roles` filter — without reworking the model.
+Permissions hang off a single capability, `manage_tbt_notes`. Administrators can
+always manage notes. To let a **non-admin teacher** account manage notes (the
+usual case — you run lessons logged in as the teacher, not as an admin), go to
+**wp-admin → TBT Notes** and enter that account's username under *"Teacher
+accounts."* That grants the capability to those specific users without elevating
+everyone who shares their role. A whole role can be granted too (advanced), and
+the `tbt_notes_managing_roles` filter still works for code-level control.
 
 ## Formatting
 

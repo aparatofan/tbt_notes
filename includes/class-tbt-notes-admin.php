@@ -3,8 +3,13 @@
  * Admin (wp-admin) settings page for TBT Notes.
  *
  * Authoring happens in the front-end slide-out panel; this dashboard page is for
- * setup: choosing who can manage notes (which is how you give a non-admin
- * "teacher" account authoring rights) and toggling the floating launcher tab.
+ * setup: choosing who can manage notes and toggling the floating launcher tab.
+ *
+ * The recommended way to let a teacher manage notes is to name their account(s)
+ * directly (by username). That grants the capability to those specific users
+ * without elevating everyone who shares their role (important when teachers and
+ * students share a role on an LMS). Role-based granting is offered too, with a
+ * warning.
  *
  * @package TBT_Notes
  */
@@ -50,15 +55,26 @@ class TBT_Notes_Admin {
 			wp_die( esc_html__( 'You do not have permission to access this page.', 'tbt-notes' ) );
 		}
 
-		$saved = false;
+		$saved   = false;
+		$unknown = array();
 		if ( isset( $_POST['tbt_notes_nonce'] ) && wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['tbt_notes_nonce'] ) ), 'tbt_notes_save_settings' ) ) {
-			$this->save();
-			$saved = true;
+			$unknown = $this->save();
+			$saved   = true;
 		}
 
-		$show_launcher = get_option( 'tbt_notes_show_launcher', '1' ) !== '0';
-		$manager_roles = (array) get_option( 'tbt_notes_manager_roles', array( 'administrator' ) );
-		$all_roles     = wp_roles()->roles;
+		$show_launcher    = get_option( 'tbt_notes_show_launcher', '1' ) !== '0';
+		$manager_roles    = (array) get_option( 'tbt_notes_manager_roles', array( 'administrator' ) );
+		$manager_user_ids = (array) get_option( 'tbt_notes_manager_users', array() );
+		$all_roles        = wp_roles()->roles;
+
+		// Build the current teacher-usernames string for the field.
+		$teacher_logins = array();
+		foreach ( $manager_user_ids as $uid ) {
+			$u = get_userdata( (int) $uid );
+			if ( $u ) {
+				$teacher_logins[] = $u->user_login;
+			}
+		}
 		?>
 		<div class="wrap">
 			<h1><?php echo esc_html__( 'TBT Notes', 'tbt-notes' ); ?></h1>
@@ -66,14 +82,42 @@ class TBT_Notes_Admin {
 			<?php if ( $saved ) : ?>
 				<div class="notice notice-success is-dismissible"><p><?php echo esc_html__( 'Settings saved.', 'tbt-notes' ); ?></p></div>
 			<?php endif; ?>
+			<?php if ( ! empty( $unknown ) ) : ?>
+				<div class="notice notice-warning is-dismissible">
+					<p>
+						<?php
+						echo esc_html(
+							sprintf(
+								/* translators: %s: comma-separated usernames. */
+								__( 'These usernames were not found and were skipped: %s', 'tbt-notes' ),
+								implode( ', ', $unknown )
+							)
+						);
+						?>
+					</p>
+				</div>
+			<?php endif; ?>
 
 			<p><?php echo esc_html__( 'Teachers create and edit notes in the slide-out panel on the front-end of the site. Use this page to choose who can manage notes and how the panel is opened.', 'tbt-notes' ); ?></p>
 
 			<form method="post" action="">
 				<?php wp_nonce_field( 'tbt_notes_save_settings', 'tbt_notes_nonce' ); ?>
 
-				<h2 class="title"><?php echo esc_html__( 'Who can manage notes', 'tbt-notes' ); ?></h2>
-				<p class="description"><?php echo esc_html__( 'Selected roles can create classes, assign students and write notes. Administrators can always manage notes.', 'tbt-notes' ); ?></p>
+				<h2 class="title"><?php echo esc_html__( 'Teacher accounts', 'tbt-notes' ); ?></h2>
+				<p class="description"><?php echo esc_html__( 'Recommended. Enter the username(s) of the teacher account(s) that can create classes and write notes — separated by commas or new lines. These users get access regardless of their role.', 'tbt-notes' ); ?></p>
+				<table class="form-table" role="presentation">
+					<tbody>
+						<tr>
+							<th scope="row"><label for="tbt_notes_manager_users"><?php echo esc_html__( 'Teacher usernames', 'tbt-notes' ); ?></label></th>
+							<td>
+								<textarea id="tbt_notes_manager_users" name="tbt_notes_manager_users" rows="2" class="large-text" placeholder="<?php echo esc_attr__( 'e.g. annateacher, mateusz', 'tbt-notes' ); ?>"><?php echo esc_textarea( implode( ', ', $teacher_logins ) ); ?></textarea>
+							</td>
+						</tr>
+					</tbody>
+				</table>
+
+				<h2 class="title"><?php echo esc_html__( 'Roles that can manage (advanced)', 'tbt-notes' ); ?></h2>
+				<p class="description"><?php echo esc_html__( 'Optional. Everyone in a ticked role can manage notes — avoid ticking a role that students also use. Administrators can always manage notes.', 'tbt-notes' ); ?></p>
 				<table class="form-table" role="presentation">
 					<tbody>
 						<tr>
@@ -133,21 +177,59 @@ class TBT_Notes_Admin {
 
 	/**
 	 * Persist submitted settings.
+	 *
+	 * @return string[] Usernames that could not be resolved (for a warning).
 	 */
 	protected function save() {
 		$show_launcher = isset( $_POST['tbt_notes_show_launcher'] ) ? '1' : '0';
 		update_option( 'tbt_notes_show_launcher', $show_launcher );
 
+		// Roles.
 		$selected = isset( $_POST['tbt_notes_manager_roles'] )
 			? array_map( 'sanitize_key', (array) wp_unslash( $_POST['tbt_notes_manager_roles'] ) )
 			: array();
-
-		// Administrators are always managers; keep the role list meaningful.
 		if ( ! in_array( 'administrator', $selected, true ) ) {
 			$selected[] = 'administrator';
 		}
-
 		update_option( 'tbt_notes_manager_roles', $selected );
 		TBT_Notes_Capabilities::sync_role_caps( $selected );
+
+		// Specific teacher accounts (by username/email).
+		$raw     = isset( $_POST['tbt_notes_manager_users'] ) ? (string) wp_unslash( $_POST['tbt_notes_manager_users'] ) : '';
+		$tokens  = preg_split( '/[\s,]+/', $raw, -1, PREG_SPLIT_NO_EMPTY );
+		$new_ids = array();
+		$unknown = array();
+		foreach ( (array) $tokens as $token ) {
+			$user = get_user_by( 'login', $token );
+			if ( ! $user ) {
+				$user = get_user_by( 'email', $token );
+			}
+			if ( $user ) {
+				$new_ids[] = (int) $user->ID;
+			} else {
+				$unknown[] = sanitize_text_field( $token );
+			}
+		}
+		$new_ids = array_values( array_unique( $new_ids ) );
+
+		$old_ids = (array) get_option( 'tbt_notes_manager_users', array() );
+
+		// Revoke from users no longer listed.
+		foreach ( array_diff( $old_ids, $new_ids ) as $remove_id ) {
+			$u = get_userdata( (int) $remove_id );
+			if ( $u ) {
+				$u->remove_cap( TBT_NOTES_CAP );
+			}
+		}
+		// Grant to listed users.
+		foreach ( $new_ids as $add_id ) {
+			$u = get_userdata( $add_id );
+			if ( $u ) {
+				$u->add_cap( TBT_NOTES_CAP );
+			}
+		}
+		update_option( 'tbt_notes_manager_users', $new_ids );
+
+		return $unknown;
 	}
 }

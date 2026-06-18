@@ -236,11 +236,18 @@ class TBT_Notes_REST {
 	}
 
 	/**
-	 * List assignable students for the class dropdown (teacher only).
+	 * Search assignable students by username/display name (teacher only).
 	 *
+	 * @param WP_REST_Request $request Request.
 	 * @return WP_REST_Response
 	 */
-	public function get_students() {
+	public function get_students( WP_REST_Request $request ) {
+		$search = trim( (string) $request->get_param( 'search' ) );
+		$number = (int) $request->get_param( 'number' );
+		if ( $number <= 0 || $number > 50 ) {
+			$number = 20;
+		}
+
 		// Map of student_id => class currently assigned, to flag taken users.
 		$assigned = array();
 		foreach ( TBT_Notes_DB::get_all_classes() as $class ) {
@@ -249,14 +256,18 @@ class TBT_Notes_REST {
 			}
 		}
 
-		$users = get_users(
-			array(
-				'orderby' => 'display_name',
-				'order'   => 'ASC',
-				'number'  => 500,
-				'fields'  => array( 'ID', 'display_name', 'user_login' ),
-			)
+		$args = array(
+			'orderby' => 'display_name',
+			'order'   => 'ASC',
+			'number'  => $number,
+			'fields'  => array( 'ID', 'display_name', 'user_login' ),
 		);
+		if ( '' !== $search ) {
+			$args['search']         = '*' . $search . '*';
+			$args['search_columns'] = array( 'user_login', 'display_name', 'user_nicename' );
+		}
+
+		$users = get_users( $args );
 
 		$out = array();
 		foreach ( $users as $user ) {
@@ -269,6 +280,7 @@ class TBT_Notes_REST {
 			$out[]        = array(
 				'id'                  => $uid,
 				'name'                => $user->display_name ? $user->display_name : $user->user_login,
+				'username'            => $user->user_login,
 				'assigned_class_id'   => $assigned_row ? (int) $assigned_row['id'] : null,
 				'assigned_class_name' => $assigned_row ? $assigned_row['title'] : '',
 			);

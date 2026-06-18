@@ -202,12 +202,13 @@
 
 	function buildTopbar( opts ) {
 		var bar = el( 'div', 'tbt-notes-topbar' );
+		var inner = el( 'div', 'tbt-notes-topbar__inner' );
 		if ( opts.onBack ) {
-			bar.appendChild( iconButton( '‹', t( 'back', 'Back' ), opts.onBack ) );
+			inner.appendChild( iconButton( '‹', t( 'back', 'Back' ), opts.onBack ) );
 		}
-		var h = el( 'h2', 'tbt-notes-topbar__title', opts.title || '' );
-		bar.appendChild( h );
-		bar.appendChild( iconButton( '✕', t( 'close', 'Close' ), closePanel ) );
+		inner.appendChild( el( 'h2', 'tbt-notes-topbar__title', opts.title || '' ) );
+		inner.appendChild( iconButton( '✕', t( 'close', 'Close' ), closePanel ) );
+		bar.appendChild( inner );
 		return bar;
 	}
 
@@ -470,37 +471,11 @@
 		titleField.appendChild( titleInput );
 		body.appendChild( titleField );
 
-		// Student field.
+		// Student field — username search (no giant dropdown).
 		var studentField = el( 'div', 'tbt-notes-field' );
 		studentField.appendChild( el( 'label', 'tbt-notes-field__label', t( 'assignedStudent', 'Assigned student' ) ) );
-		var select = el( 'select', 'tbt-notes-select' );
-		select.disabled = true;
-		select.appendChild( el( 'option', null, t( 'loading', 'Loading…' ) ) );
-		studentField.appendChild( select );
-		var msgHolder = el( 'div' );
-		studentField.appendChild( msgHolder );
+		buildStudentPicker( studentField, cls );
 		body.appendChild( studentField );
-
-		loadStudents().then( function ( students ) {
-			populateStudentSelect( select, students, cls );
-			select.disabled = false;
-			select.addEventListener( 'change', function () {
-				clear( msgHolder );
-				var val = select.value ? parseInt( select.value, 10 ) : 0;
-				saveClassField( cls, { student_id: val } ).then( function () {
-					// Refresh cached assignment data for future dropdowns.
-					state.students = null;
-				} ).catch( function ( err ) {
-					msgHolder.appendChild( errorBlock( err.message ) );
-					// Revert selection to the stored value.
-					select.value = cls.student_id ? String( cls.student_id ) : '';
-				} );
-			} );
-		} ).catch( function ( err ) {
-			clear( select );
-			select.appendChild( el( 'option', null, '' ) );
-			msgHolder.appendChild( errorBlock( err.message ) );
-		} );
 
 		// Delete.
 		var del = el( 'button', 'tbt-notes-btn tbt-notes-btn--danger tbt-notes-btn--block', t( 'deleteClass', 'Delete class' ) );
@@ -521,34 +496,116 @@
 		}
 	}
 
-	function populateStudentSelect( select, students, cls ) {
-		clear( select );
-		var none = el( 'option', null, t( 'unassigned', '— Not assigned —' ) );
-		none.value = '';
-		select.appendChild( none );
-		students.forEach( function ( s ) {
-			var opt = el( 'option' );
-			opt.value = String( s.id );
-			var label = s.name;
-			// Disable students already assigned to a different class.
-			if ( s.assigned_class_id && s.assigned_class_id !== cls.id ) {
-				opt.disabled = true;
-				label += ' (' + ( s.assigned_class_name || '' ) + ')';
-			}
-			opt.textContent = label;
-			select.appendChild( opt );
-		} );
-		select.value = cls.student_id ? String( cls.student_id ) : '';
-	}
+	/**
+	 * Username-search picker for assigning a student to a class. Replaces the
+	 * unwieldy full dropdown: type a username, pick a match.
+	 */
+	function buildStudentPicker( container, cls ) {
+		var chipHolder = el( 'div' );
+		var msg = el( 'div' );
+		var input = el( 'input', 'tbt-notes-input' );
+		input.type = 'text';
+		input.placeholder = t( 'searchStudents', 'Search by username…' );
+		input.setAttribute( 'autocomplete', 'off' );
+		var results = el( 'ul', 'tbt-notes-userresults' );
+		results.hidden = true;
+		var hint = el( 'p', 'tbt-notes-hint', t( 'searchHint', 'Type a username to find a student.' ) );
 
-	function loadStudents() {
-		if ( state.students ) {
-			return Promise.resolve( state.students );
+		function renderChip() {
+			clear( chipHolder );
+			if ( cls.student_id ) {
+				var chip = el( 'div', 'tbt-notes-chip' );
+				chip.appendChild( el( 'span', 'tbt-notes-chip__name', cls.student_name || ( '#' + cls.student_id ) ) );
+				var rm = el( 'button', 'tbt-notes-chip__remove' );
+				rm.type = 'button';
+				rm.textContent = '✕';
+				rm.setAttribute( 'aria-label', t( 'unassign', 'Remove student' ) );
+				rm.addEventListener( 'click', function () {
+					assign( 0, '' );
+				} );
+				chip.appendChild( rm );
+				chipHolder.appendChild( chip );
+			}
 		}
-		return api( 'GET', 'students' ).then( function ( data ) {
-			state.students = data.students || [];
-			return state.students;
+
+		function assign( id, name ) {
+			clear( msg );
+			saveClassField( cls, { student_id: id } ).then( function ( data ) {
+				var updated = data && data.class ? data.class : null;
+				cls.student_id = updated ? updated.student_id : ( id || null );
+				cls.student_name = updated ? ( updated.student_name || '' ) : ( id ? name : '' );
+				state.students = null;
+				input.value = '';
+				results.hidden = true;
+				clear( results );
+				renderChip();
+			} ).catch( function ( err ) {
+				msg.appendChild( errorBlock( err.message ) );
+			} );
+		}
+
+		function renderResults( students ) {
+			clear( results );
+			if ( ! students.length ) {
+				var none = el( 'li' );
+				none.appendChild( el( 'div', 'tbt-notes-userresult', t( 'noResults', 'No matches' ) ) );
+				results.appendChild( none );
+				results.hidden = false;
+				return;
+			}
+			students.forEach( function ( s ) {
+				var li = el( 'li' );
+				var b = el( 'button', 'tbt-notes-userresult' );
+				b.type = 'button';
+				b.appendChild( el( 'span', 'tbt-notes-userresult__user', s.name || s.username ) );
+				var sub = s.username && s.username !== s.name ? ( '@' + s.username ) : '';
+				if ( s.assigned_class_id && s.assigned_class_id !== cls.id ) {
+					b.disabled = true;
+					sub = ( sub ? sub + ' · ' : '' ) + t( 'alreadyIn', 'already assigned: ' ) + ( s.assigned_class_name || '' );
+				}
+				if ( sub ) {
+					b.appendChild( document.createElement( 'br' ) );
+					b.appendChild( el( 'span', 'tbt-notes-userresult__sub', sub ) );
+				}
+				if ( ! b.disabled ) {
+					b.addEventListener( 'click', function () {
+						assign( s.id, s.name || s.username );
+					} );
+				}
+				li.appendChild( b );
+				results.appendChild( li );
+			} );
+			results.hidden = false;
+		}
+
+		var timer = null;
+		input.addEventListener( 'input', function () {
+			clearTimeout( timer );
+			var term = input.value.trim();
+			if ( ! term ) {
+				results.hidden = true;
+				clear( results );
+				return;
+			}
+			timer = setTimeout( function () {
+				api( 'GET', 'students?search=' + encodeURIComponent( term ) + '&number=20' ).then( function ( data ) {
+					renderResults( data.students || [] );
+				} ).catch( function ( err ) {
+					clear( results );
+					var li = el( 'li' );
+					li.appendChild( errorBlock( err.message ) );
+					results.appendChild( li );
+					results.hidden = false;
+				} );
+			}, 250 );
 		} );
+
+		container.appendChild( chipHolder );
+		container.appendChild( input );
+		container.appendChild( results );
+		container.appendChild( hint );
+		container.appendChild( msg );
+		renderChip();
 	}
 
 	function saveClassField( cls, fields ) {
@@ -787,7 +844,17 @@
 		var saver = createSaver( lesson, indicator );
 		activeSaver = saver;
 
-		// Wire highlight swatches.
+		// Track the last real selection so the highlight buttons can apply to it
+		// even after focus moves to the toolbar button.
+		var lastRange = null;
+		quill.on( 'selection-change', function ( range ) {
+			if ( range ) {
+				lastRange = range;
+			}
+		} );
+
+		// Wire highlight swatches. Applying with formatText on explicit indices
+		// is reliable regardless of focus/selection timing.
 		var swatches = toolbar.querySelectorAll( '.tbt-hl-btn, .tbt-hl-clear' );
 		Array.prototype.forEach.call( swatches, function ( btn ) {
 			btn.addEventListener( 'mousedown', function ( e ) {
@@ -795,17 +862,28 @@
 			} );
 			btn.addEventListener( 'click', function () {
 				var color = btn.getAttribute( 'data-color' );
-				quill.focus();
-				var range = quill.getSelection( true );
+				var range = quill.getSelection() || lastRange;
+				if ( ! range ) {
+					quill.focus();
+					range = quill.getSelection();
+				}
 				if ( ! range ) {
 					return;
 				}
-				if ( ! color ) {
-					quill.format( 'highlight', false, 'user' );
-					return;
+				if ( range.length > 0 ) {
+					var value = color ? color : false;
+					if ( color ) {
+						var fmt = quill.getFormat( range.index, range.length );
+						if ( fmt.highlight === color ) {
+							value = false; // Toggle off if the whole range already has it.
+						}
+					}
+					quill.formatText( range.index, range.length, 'highlight', value, 'user' );
+					quill.setSelection( range.index, range.length, 'silent' );
+				} else {
+					// Collapsed cursor: highlight the next typed text.
+					quill.format( 'highlight', color ? color : false, 'user' );
 				}
-				var current = quill.getFormat( range ).highlight;
-				quill.format( 'highlight', current === color ? false : color, 'user' );
 			} );
 		} );
 

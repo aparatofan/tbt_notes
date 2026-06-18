@@ -25,6 +25,18 @@ $wpdb->query( "DROP TABLE IF EXISTS {$classes_table}" );
 // phpcs:enable WordPress.DB.PreparedSQL.NotPrepared
 
 delete_option( 'tbt_notes_db_version' );
+delete_option( 'tbt_notes_show_launcher' );
+delete_option( 'tbt_notes_manager_roles' );
+
+// Revoke the capability from any specific users it was granted to, then clear.
+$manager_users = (array) get_option( 'tbt_notes_manager_users', array() );
+foreach ( $manager_users as $uid ) {
+	$user = get_userdata( (int) $uid );
+	if ( $user ) {
+		$user->remove_cap( 'manage_tbt_notes' );
+	}
+}
+delete_option( 'tbt_notes_manager_users' );
 
 // Remove the management capability from every role.
 $cap = 'manage_tbt_notes';
