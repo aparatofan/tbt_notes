@@ -99,6 +99,26 @@ class TBT_Notes_REST {
 
 		register_rest_route(
 			$ns,
+			'/classes/(?P<id>\d+)/students',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'add_student' ),
+				'permission_callback' => array( $this, 'require_manage' ),
+			)
+		);
+
+		register_rest_route(
+			$ns,
+			'/classes/(?P<id>\d+)/students/(?P<user_id>\d+)',
+			array(
+				'methods'             => WP_REST_Server::DELETABLE,
+				'callback'            => array( $this, 'remove_student' ),
+				'permission_callback' => array( $this, 'require_manage' ),
+			)
+		);
+
+		register_rest_route(
+			$ns,
 			'/lessons/(?P<id>\d+)',
 			array(
 				array(
@@ -158,10 +178,14 @@ class TBT_Notes_REST {
 			return new WP_Error( 'tbt_notes_unauthenticated', __( 'You must be logged in.', 'tbt-notes' ), array( 'status' => 401 ) );
 		}
 
-		$class = TBT_Notes_DB::get_class( (int) $request['id'] );
+		$class_id = (int) $request['id'];
+		$class    = TBT_Notes_DB::get_class( $class_id );
 		if ( ! $class ) {
 			return new WP_Error( 'tbt_notes_not_found', __( 'Class not found.', 'tbt-notes' ), array( 'status' => 404 ) );
 		}
+
+		// Attach membership so the ownership decision is self-contained/testable.
+		$class['student_ids'] = TBT_Notes_DB::get_student_ids_for_class( $class_id );
 
 		if ( ! self::user_can_view_class( $class, get_current_user_id() ) ) {
 			return new WP_Error( 'tbt_notes_forbidden', __( 'You are not allowed to view this class.', 'tbt-notes' ), array( 'status' => 403 ) );
@@ -173,7 +197,7 @@ class TBT_Notes_REST {
 	/**
 	 * Core ownership decision used across read paths.
 	 *
-	 * @param array $class   Shaped class row.
+	 * @param array $class   Shaped class row including a 'student_ids' array.
 	 * @param int   $user_id Current user ID.
 	 * @return bool
 	 */
@@ -185,7 +209,8 @@ class TBT_Notes_REST {
 		if ( TBT_Notes_Capabilities::user_can_manage( $user_id ) ) {
 			return true;
 		}
-		return isset( $class['student_id'] ) && (int) $class['student_id'] === $user_id;
+		$student_ids = isset( $class['student_ids'] ) ? array_map( 'intval', (array) $class['student_ids'] ) : array();
+		return in_array( $user_id, $student_ids, true );
 	}
 
 	/* --------------------------------------------------------------------- *
@@ -248,41 +273,39 @@ class TBT_Notes_REST {
 			$number = 20;
 		}
 
-		// Map of student_id => class currently assigned, to flag taken users.
-		$assigned = array();
-		foreach ( TBT_Notes_DB::get_all_classes() as $class ) {
-			if ( ! empty( $class['student_id'] ) ) {
-				$assigned[ (int) $class['student_id'] ] = $class;
-			}
-		}
-
 		$args = array(
 			'orderby' => 'display_name',
 			'order'   => 'ASC',
 			'number'  => $number,
-			'fields'  => array( 'ID', 'display_name', 'user_login' ),
+			'fields'  => array( 'ID', 'display_name', 'user_login', 'user_email' ),
 		);
 		if ( '' !== $search ) {
+			// Search by username, display name, nicename and email.
 			$args['search']         = '*' . $search . '*';
-			$args['search_columns'] = array( 'user_login', 'display_name', 'user_nicename' );
+			$args['search_columns'] = array( 'user_login', 'display_name', 'user_nicename', 'user_email' );
 		}
 
 		$users = get_users( $args );
 
 		$out = array();
 		foreach ( $users as $user ) {
+			$uid = (int) $user->ID;
+
 			// Teachers/admins are not students; keep them out of the list.
-			if ( TBT_Notes_Capabilities::user_can_manage( (int) $user->ID ) ) {
+			if ( TBT_Notes_Capabilities::user_can_manage( $uid ) ) {
 				continue;
 			}
-			$uid          = (int) $user->ID;
-			$assigned_row = isset( $assigned[ $uid ] ) ? $assigned[ $uid ] : null;
-			$out[]        = array(
+
+			$assigned_class_id = TBT_Notes_DB::get_class_id_of_student( $uid );
+			$assigned_class    = $assigned_class_id ? TBT_Notes_DB::get_class( $assigned_class_id ) : null;
+
+			$out[] = array(
 				'id'                  => $uid,
 				'name'                => $user->display_name ? $user->display_name : $user->user_login,
 				'username'            => $user->user_login,
-				'assigned_class_id'   => $assigned_row ? (int) $assigned_row['id'] : null,
-				'assigned_class_name' => $assigned_row ? $assigned_row['title'] : '',
+				'email'               => $user->user_email,
+				'assigned_class_id'   => $assigned_class_id ? $assigned_class_id : null,
+				'assigned_class_name' => $assigned_class ? $assigned_class['title'] : '',
 			);
 		}
 
@@ -300,21 +323,9 @@ class TBT_Notes_REST {
 	 * @return WP_REST_Response|WP_Error
 	 */
 	public function create_class( WP_REST_Request $request ) {
-		$title      = TBT_Notes_Sanitizer::text( (string) $request->get_param( 'title' ) );
-		$student_id = $this->resolve_student_id( $request->get_param( 'student_id' ) );
+		$title = TBT_Notes_Sanitizer::text( (string) $request->get_param( 'title' ) );
 
-		if ( is_wp_error( $student_id ) ) {
-			return $student_id;
-		}
-
-		if ( $student_id ) {
-			$conflict = TBT_Notes_DB::get_conflicting_class_for_student( $student_id, 0 );
-			if ( $conflict ) {
-				return $this->student_conflict_error( $conflict );
-			}
-		}
-
-		$new_id = TBT_Notes_DB::create_class( $title, $student_id );
+		$new_id = TBT_Notes_DB::create_class( $title );
 		if ( ! $new_id ) {
 			return new WP_Error( 'tbt_notes_create_failed', __( 'Could not create the class.', 'tbt-notes' ), array( 'status' => 500 ) );
 		}
@@ -340,20 +351,6 @@ class TBT_Notes_REST {
 
 		if ( null !== $request->get_param( 'title' ) ) {
 			$fields['title'] = TBT_Notes_Sanitizer::text( (string) $request->get_param( 'title' ) );
-		}
-
-		if ( $request->has_param( 'student_id' ) ) {
-			$student_id = $this->resolve_student_id( $request->get_param( 'student_id' ) );
-			if ( is_wp_error( $student_id ) ) {
-				return $student_id;
-			}
-			if ( $student_id ) {
-				$conflict = TBT_Notes_DB::get_conflicting_class_for_student( $student_id, $class_id );
-				if ( $conflict ) {
-					return $this->student_conflict_error( $conflict );
-				}
-			}
-			$fields['student_id'] = $student_id; // May be null to unassign.
 		}
 
 		$ok = TBT_Notes_DB::update_class( $class_id, $fields );
@@ -384,6 +381,73 @@ class TBT_Notes_REST {
 		}
 
 		return rest_ensure_response( array( 'deleted' => true, 'id' => $class_id ) );
+	}
+
+	/* --------------------------------------------------------------------- *
+	 * Handlers — class membership
+	 * --------------------------------------------------------------------- */
+
+	/**
+	 * Add a student to a class.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function add_student( WP_REST_Request $request ) {
+		$class_id = (int) $request['id'];
+		$class    = TBT_Notes_DB::get_class( $class_id );
+		if ( ! $class ) {
+			return new WP_Error( 'tbt_notes_not_found', __( 'Class not found.', 'tbt-notes' ), array( 'status' => 404 ) );
+		}
+
+		$user_id = (int) $request->get_param( 'user_id' );
+		$user    = $user_id > 0 ? get_userdata( $user_id ) : false;
+		if ( ! $user ) {
+			return new WP_Error( 'tbt_notes_invalid_student', __( 'That student does not exist.', 'tbt-notes' ), array( 'status' => 400 ) );
+		}
+
+		// Teachers/admins are not students.
+		if ( TBT_Notes_Capabilities::user_can_manage( $user_id ) ) {
+			return new WP_Error( 'tbt_notes_invalid_student', __( 'That account manages notes and cannot be assigned as a student.', 'tbt-notes' ), array( 'status' => 400 ) );
+		}
+
+		// Enforce one class per student.
+		$existing = TBT_Notes_DB::get_class_id_of_student( $user_id );
+		if ( $existing && $existing !== $class_id ) {
+			$other = TBT_Notes_DB::get_class( $existing );
+			return new WP_Error(
+				'tbt_notes_student_taken',
+				sprintf(
+					/* translators: %s: class title. */
+					__( 'That student is already in another class (%s). Remove them there first.', 'tbt-notes' ),
+					$other && '' !== $other['title'] ? $other['title'] : __( 'Untitled', 'tbt-notes' )
+				),
+				array( 'status' => 409 )
+			);
+		}
+
+		TBT_Notes_DB::add_student_to_class( $class_id, $user_id );
+
+		return rest_ensure_response( array( 'students' => TBT_Notes_DB::get_students_for_class( $class_id ) ) );
+	}
+
+	/**
+	 * Remove a student from a class.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function remove_student( WP_REST_Request $request ) {
+		$class_id = (int) $request['id'];
+		$user_id  = (int) $request['user_id'];
+		$class    = TBT_Notes_DB::get_class( $class_id );
+		if ( ! $class ) {
+			return new WP_Error( 'tbt_notes_not_found', __( 'Class not found.', 'tbt-notes' ), array( 'status' => 404 ) );
+		}
+
+		TBT_Notes_DB::remove_student_from_class( $class_id, $user_id );
+
+		return rest_ensure_response( array( 'students' => TBT_Notes_DB::get_students_for_class( $class_id ) ) );
 	}
 
 	/* --------------------------------------------------------------------- *
@@ -476,61 +540,22 @@ class TBT_Notes_REST {
 	 * --------------------------------------------------------------------- */
 
 	/**
-	 * Validate and normalise a student_id parameter.
-	 *
-	 * @param mixed $raw Raw param value.
-	 * @return int|null|WP_Error Integer user ID, null (unassigned), or error.
-	 */
-	protected function resolve_student_id( $raw ) {
-		if ( null === $raw || '' === $raw || 0 === $raw || '0' === $raw ) {
-			return null;
-		}
-		$student_id = (int) $raw;
-		if ( $student_id <= 0 || ! get_userdata( $student_id ) ) {
-			return new WP_Error( 'tbt_notes_invalid_student', __( 'That student does not exist.', 'tbt-notes' ), array( 'status' => 400 ) );
-		}
-		return $student_id;
-	}
-
-	/**
-	 * Build a 409 error describing a one-student-per-class conflict.
-	 *
-	 * @param array $conflict The class the student is already assigned to.
-	 * @return WP_Error
-	 */
-	protected function student_conflict_error( $conflict ) {
-		return new WP_Error(
-			'tbt_notes_student_taken',
-			sprintf(
-				/* translators: %s: class title. */
-				__( 'That student is already assigned to another class (%s). Unassign them there first.', 'tbt-notes' ),
-				$conflict['title'] !== '' ? $conflict['title'] : __( 'Untitled', 'tbt-notes' )
-			),
-			array(
-				'status'            => 409,
-				'conflict_class_id' => (int) $conflict['id'],
-			)
-		);
-	}
-
-	/**
-	 * Shape a class for output. Student identity is only exposed to managers.
+	 * Shape a class for output. The student roster is only exposed to managers.
 	 *
 	 * @param array $class Shaped class row.
 	 * @return array
 	 */
 	protected function present_class( $class ) {
-		$is_teacher = TBT_Notes_Capabilities::user_can_manage();
-
 		$out = array(
 			'id'    => (int) $class['id'],
 			'title' => $class['title'],
 		);
 
-		// Only teachers need to see who a class is assigned to.
-		if ( $is_teacher ) {
-			$out['student_id']   = $class['student_id'];
-			$out['student_name'] = $class['student_name'];
+		// Only teachers need to see who is in a class.
+		if ( TBT_Notes_Capabilities::user_can_manage() ) {
+			$students            = TBT_Notes_DB::get_students_for_class( (int) $class['id'] );
+			$out['students']     = $students;
+			$out['student_count'] = count( $students );
 		}
 
 		return $out;

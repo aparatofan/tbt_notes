@@ -2,11 +2,11 @@
 /**
  * Data layer for TBT Notes.
  *
- * Owns the custom tables and every query against them. Custom tables (rather
- * than custom post types) are deliberate: the visibility rule is the whole
- * security model, and custom tables expose nothing through WordPress's public
- * surfaces (REST, search, archives, feeds, sitemaps). Every read goes through
- * one ownership check.
+ * Custom tables (rather than custom post types) keep the visibility rule the
+ * whole security model: nothing leaks through WordPress's public surfaces.
+ *
+ * A class can have MANY students (a group). Each student belongs to at most one
+ * class — enforced by the membership table using user_id as its primary key.
  *
  * @package TBT_Notes
  */
@@ -21,7 +21,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 class TBT_Notes_DB {
 
 	/**
-	 * Fully-qualified classes table name.
+	 * Classes table name.
 	 *
 	 * @return string
 	 */
@@ -31,13 +31,23 @@ class TBT_Notes_DB {
 	}
 
 	/**
-	 * Fully-qualified lessons table name.
+	 * Lessons table name.
 	 *
 	 * @return string
 	 */
 	public static function table_lessons() {
 		global $wpdb;
 		return $wpdb->prefix . 'tbt_lessons';
+	}
+
+	/**
+	 * Class/student membership table name.
+	 *
+	 * @return string
+	 */
+	public static function table_class_students() {
+		global $wpdb;
+		return $wpdb->prefix . 'tbt_class_students';
 	}
 
 	/**
@@ -51,9 +61,8 @@ class TBT_Notes_DB {
 		$charset_collate = $wpdb->get_charset_collate();
 		$classes         = self::table_classes();
 		$lessons         = self::table_lessons();
+		$members         = self::table_class_students();
 
-		// Note: dbDelta is whitespace/format sensitive (two spaces after
-		// PRIMARY KEY, each definition on its own line).
 		$sql_classes = "CREATE TABLE {$classes} (
   id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
   title varchar(255) NOT NULL DEFAULT '',
@@ -61,7 +70,6 @@ class TBT_Notes_DB {
   created_at datetime NOT NULL,
   updated_at datetime NOT NULL,
   PRIMARY KEY  (id),
-  UNIQUE KEY student_id (student_id),
   KEY created_at (created_at)
 ) {$charset_collate};";
 
@@ -77,8 +85,41 @@ class TBT_Notes_DB {
   KEY class_order (class_id, created_at)
 ) {$charset_collate};";
 
+		// user_id is the primary key: a student can be in only one class.
+		$sql_members = "CREATE TABLE {$members} (
+  user_id bigint(20) unsigned NOT NULL,
+  class_id bigint(20) unsigned NOT NULL,
+  created_at datetime NOT NULL,
+  PRIMARY KEY  (user_id),
+  KEY class_id (class_id)
+) {$charset_collate};";
+
 		dbDelta( $sql_classes );
 		dbDelta( $sql_lessons );
+		dbDelta( $sql_members );
+	}
+
+	/**
+	 * One-time migration from the old single-student column to the membership
+	 * table. Idempotent: it copies any remaining single assignments, then clears
+	 * the legacy column so re-runs do nothing.
+	 */
+	public static function migrate_single_to_membership() {
+		global $wpdb;
+		$classes = self::table_classes();
+		$members = self::table_class_students();
+		$now     = self::now();
+
+		// phpcs:disable WordPress.DB.PreparedSQL.NotPrepared -- table names, static query.
+		$wpdb->query(
+			$wpdb->prepare(
+				"INSERT IGNORE INTO {$members} (user_id, class_id, created_at)
+				 SELECT student_id, id, %s FROM {$classes} WHERE student_id IS NOT NULL AND student_id > 0",
+				$now
+			)
+		);
+		$wpdb->query( "UPDATE {$classes} SET student_id = NULL WHERE student_id IS NOT NULL" );
+		// phpcs:enable WordPress.DB.PreparedSQL.NotPrepared
 	}
 
 	/**
@@ -98,7 +139,7 @@ class TBT_Notes_DB {
 	 * Fetch a single class row by ID.
 	 *
 	 * @param int $class_id Class ID.
-	 * @return array|null Raw row as associative array, or null if not found.
+	 * @return array|null
 	 */
 	public static function get_class( $class_id ) {
 		global $wpdb;
@@ -107,17 +148,14 @@ class TBT_Notes_DB {
 			return null;
 		}
 		$table = self::table_classes();
-		$row   = $wpdb->get_row(
-			$wpdb->prepare( "SELECT * FROM {$table} WHERE id = %d", $class_id ),
-			ARRAY_A
-		);
+		$row   = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$table} WHERE id = %d", $class_id ), ARRAY_A );
 		return $row ? self::shape_class( $row ) : null;
 	}
 
 	/**
-	 * Fetch all classes (teacher view), newest first.
+	 * All classes, newest first.
 	 *
-	 * @return array[] List of shaped class rows.
+	 * @return array[]
 	 */
 	public static function get_all_classes() {
 		global $wpdb;
@@ -127,85 +165,32 @@ class TBT_Notes_DB {
 	}
 
 	/**
-	 * Fetch the single class assigned to a given student, if any.
-	 *
-	 * @param int $student_id WordPress user ID.
-	 * @return array|null Shaped class row or null.
-	 */
-	public static function get_class_for_student( $student_id ) {
-		global $wpdb;
-		$student_id = (int) $student_id;
-		if ( $student_id <= 0 ) {
-			return null;
-		}
-		$table = self::table_classes();
-		$row   = $wpdb->get_row(
-			$wpdb->prepare( "SELECT * FROM {$table} WHERE student_id = %d LIMIT 1", $student_id ),
-			ARRAY_A
-		);
-		return $row ? self::shape_class( $row ) : null;
-	}
-
-	/**
-	 * Find the class currently assigned to a student, excluding one class ID.
-	 * Used to enforce the "one student per class" invariant before assigning.
-	 *
-	 * @param int $student_id       WordPress user ID.
-	 * @param int $exclude_class_id Class ID to ignore (the one being edited).
-	 * @return array|null Shaped class row of the conflicting class, or null.
-	 */
-	public static function get_conflicting_class_for_student( $student_id, $exclude_class_id = 0 ) {
-		global $wpdb;
-		$student_id       = (int) $student_id;
-		$exclude_class_id = (int) $exclude_class_id;
-		if ( $student_id <= 0 ) {
-			return null;
-		}
-		$table = self::table_classes();
-		$row   = $wpdb->get_row(
-			$wpdb->prepare(
-				"SELECT * FROM {$table} WHERE student_id = %d AND id <> %d LIMIT 1",
-				$student_id,
-				$exclude_class_id
-			),
-			ARRAY_A
-		);
-		return $row ? self::shape_class( $row ) : null;
-	}
-
-	/**
 	 * Create a class.
 	 *
-	 * @param string   $title      Free-text class title.
-	 * @param int|null $student_id Assigned student user ID, or null/0 for none.
-	 * @return int|false New class ID on success, false on failure.
+	 * @param string $title Free-text title.
+	 * @return int|false New class ID or false.
 	 */
-	public static function create_class( $title, $student_id = null ) {
+	public static function create_class( $title ) {
 		global $wpdb;
-		$now        = self::now();
-		$student_id = $student_id ? (int) $student_id : null;
-
-		$ok = $wpdb->insert(
+		$now = self::now();
+		$ok  = $wpdb->insert(
 			self::table_classes(),
 			array(
-				'title'      => $title,
-				'student_id' => $student_id,
+				'title'      => (string) $title,
 				'created_at' => $now,
 				'updated_at' => $now,
 			),
-			array( '%s', $student_id === null ? '%s' : '%d', '%s', '%s' )
+			array( '%s', '%s', '%s' )
 		);
-
 		return $ok ? (int) $wpdb->insert_id : false;
 	}
 
 	/**
-	 * Update a class's title and/or assigned student.
+	 * Update a class's title.
 	 *
 	 * @param int   $class_id Class ID.
-	 * @param array $fields   Associative array, any of: title, student_id.
-	 *                        Pass student_id = null to unassign.
-	 * @return bool True on success.
+	 * @param array $fields   Any of: title.
+	 * @return bool
 	 */
 	public static function update_class( $class_id, array $fields ) {
 		global $wpdb;
@@ -216,40 +201,25 @@ class TBT_Notes_DB {
 
 		$data    = array();
 		$formats = array();
-
 		if ( array_key_exists( 'title', $fields ) ) {
 			$data['title'] = (string) $fields['title'];
 			$formats[]     = '%s';
 		}
-		if ( array_key_exists( 'student_id', $fields ) ) {
-			$student_id          = $fields['student_id'] ? (int) $fields['student_id'] : null;
-			$data['student_id']  = $student_id;
-			$formats[]           = $student_id === null ? '%s' : '%d'; // null written as NULL.
-		}
-
 		if ( empty( $data ) ) {
-			return true; // Nothing to change.
+			return true;
 		}
-
 		$data['updated_at'] = self::now();
 		$formats[]          = '%s';
 
-		$result = $wpdb->update(
-			self::table_classes(),
-			$data,
-			array( 'id' => $class_id ),
-			$formats,
-			array( '%d' )
-		);
-
+		$result = $wpdb->update( self::table_classes(), $data, array( 'id' => $class_id ), $formats, array( '%d' ) );
 		return false !== $result;
 	}
 
 	/**
-	 * Delete a class and all of its lessons.
+	 * Delete a class, its lessons, and its memberships.
 	 *
 	 * @param int $class_id Class ID.
-	 * @return bool True on success.
+	 * @return bool
 	 */
 	public static function delete_class( $class_id ) {
 		global $wpdb;
@@ -257,11 +227,155 @@ class TBT_Notes_DB {
 		if ( $class_id <= 0 ) {
 			return false;
 		}
-
-		// Remove child lessons first to avoid orphans.
 		$wpdb->delete( self::table_lessons(), array( 'class_id' => $class_id ), array( '%d' ) );
+		$wpdb->delete( self::table_class_students(), array( 'class_id' => $class_id ), array( '%d' ) );
 		$result = $wpdb->delete( self::table_classes(), array( 'id' => $class_id ), array( '%d' ) );
+		return false !== $result;
+	}
 
+	/* --------------------------------------------------------------------- *
+	 * Membership (students in a class)
+	 * --------------------------------------------------------------------- */
+
+	/**
+	 * IDs of students in a class.
+	 *
+	 * @param int $class_id Class ID.
+	 * @return int[]
+	 */
+	public static function get_student_ids_for_class( $class_id ) {
+		global $wpdb;
+		$class_id = (int) $class_id;
+		if ( $class_id <= 0 ) {
+			return array();
+		}
+		$table = self::table_class_students();
+		$ids   = $wpdb->get_col( $wpdb->prepare( "SELECT user_id FROM {$table} WHERE class_id = %d ORDER BY created_at ASC", $class_id ) );
+		return array_map( 'intval', $ids ? $ids : array() );
+	}
+
+	/**
+	 * Students in a class, shaped for display (id, name, username).
+	 *
+	 * @param int $class_id Class ID.
+	 * @return array[]
+	 */
+	public static function get_students_for_class( $class_id ) {
+		$out = array();
+		foreach ( self::get_student_ids_for_class( $class_id ) as $uid ) {
+			$user = get_userdata( $uid );
+			if ( $user ) {
+				$out[] = array(
+					'id'       => (int) $uid,
+					'name'     => $user->display_name ? $user->display_name : $user->user_login,
+					'username' => $user->user_login,
+				);
+			}
+		}
+		return $out;
+	}
+
+	/**
+	 * The class a student belongs to (or null).
+	 *
+	 * @param int $user_id User ID.
+	 * @return array|null Shaped class.
+	 */
+	public static function get_class_for_student( $user_id ) {
+		global $wpdb;
+		$user_id = (int) $user_id;
+		if ( $user_id <= 0 ) {
+			return null;
+		}
+		$classes = self::table_classes();
+		$members = self::table_class_students();
+		$row     = $wpdb->get_row(
+			$wpdb->prepare(
+				"SELECT c.* FROM {$classes} c INNER JOIN {$members} m ON m.class_id = c.id WHERE m.user_id = %d LIMIT 1",
+				$user_id
+			),
+			ARRAY_A
+		);
+		return $row ? self::shape_class( $row ) : null;
+	}
+
+	/**
+	 * The class ID a student is currently in (0 if none).
+	 *
+	 * @param int $user_id User ID.
+	 * @return int
+	 */
+	public static function get_class_id_of_student( $user_id ) {
+		global $wpdb;
+		$user_id = (int) $user_id;
+		if ( $user_id <= 0 ) {
+			return 0;
+		}
+		$table = self::table_class_students();
+		return (int) $wpdb->get_var( $wpdb->prepare( "SELECT class_id FROM {$table} WHERE user_id = %d", $user_id ) );
+	}
+
+	/**
+	 * Is a user a student of a class?
+	 *
+	 * @param int $class_id Class ID.
+	 * @param int $user_id  User ID.
+	 * @return bool
+	 */
+	public static function is_student_of_class( $class_id, $user_id ) {
+		global $wpdb;
+		$class_id = (int) $class_id;
+		$user_id  = (int) $user_id;
+		if ( $class_id <= 0 || $user_id <= 0 ) {
+			return false;
+		}
+		$table = self::table_class_students();
+		return (bool) $wpdb->get_var( $wpdb->prepare( "SELECT 1 FROM {$table} WHERE class_id = %d AND user_id = %d", $class_id, $user_id ) );
+	}
+
+	/**
+	 * Add a student to a class.
+	 *
+	 * @param int $class_id Class ID.
+	 * @param int $user_id  User ID.
+	 * @return bool
+	 */
+	public static function add_student_to_class( $class_id, $user_id ) {
+		global $wpdb;
+		$class_id = (int) $class_id;
+		$user_id  = (int) $user_id;
+		if ( $class_id <= 0 || $user_id <= 0 ) {
+			return false;
+		}
+		$ok = $wpdb->replace(
+			self::table_class_students(),
+			array(
+				'user_id'    => $user_id,
+				'class_id'   => $class_id,
+				'created_at' => self::now(),
+			),
+			array( '%d', '%d', '%s' )
+		);
+		return false !== $ok;
+	}
+
+	/**
+	 * Remove a student from a class.
+	 *
+	 * @param int $class_id Class ID.
+	 * @param int $user_id  User ID.
+	 * @return bool
+	 */
+	public static function remove_student_from_class( $class_id, $user_id ) {
+		global $wpdb;
+		$result = $wpdb->delete(
+			self::table_class_students(),
+			array(
+				'class_id' => (int) $class_id,
+				'user_id'  => (int) $user_id,
+			),
+			array( '%d', '%d' )
+		);
 		return false !== $result;
 	}
 
@@ -270,10 +384,10 @@ class TBT_Notes_DB {
 	 * --------------------------------------------------------------------- */
 
 	/**
-	 * Fetch a single lesson row by ID.
+	 * Fetch a lesson.
 	 *
 	 * @param int $lesson_id Lesson ID.
-	 * @return array|null Shaped lesson row or null.
+	 * @return array|null
 	 */
 	public static function get_lesson( $lesson_id ) {
 		global $wpdb;
@@ -282,18 +396,15 @@ class TBT_Notes_DB {
 			return null;
 		}
 		$table = self::table_lessons();
-		$row   = $wpdb->get_row(
-			$wpdb->prepare( "SELECT * FROM {$table} WHERE id = %d", $lesson_id ),
-			ARRAY_A
-		);
+		$row   = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$table} WHERE id = %d", $lesson_id ), ARRAY_A );
 		return $row ? self::shape_lesson( $row ) : null;
 	}
 
 	/**
-	 * Fetch all lessons for a class, ordered latest first.
+	 * Lessons for a class, newest first.
 	 *
 	 * @param int $class_id Class ID.
-	 * @return array[] List of shaped lesson rows.
+	 * @return array[]
 	 */
 	public static function get_lessons_for_class( $class_id ) {
 		global $wpdb;
@@ -303,22 +414,19 @@ class TBT_Notes_DB {
 		}
 		$table = self::table_lessons();
 		$rows  = $wpdb->get_results(
-			$wpdb->prepare(
-				"SELECT * FROM {$table} WHERE class_id = %d ORDER BY created_at DESC, id DESC",
-				$class_id
-			),
+			$wpdb->prepare( "SELECT * FROM {$table} WHERE class_id = %d ORDER BY created_at DESC, id DESC", $class_id ),
 			ARRAY_A
 		);
 		return array_map( array( __CLASS__, 'shape_lesson' ), $rows ? $rows : array() );
 	}
 
 	/**
-	 * Create an (initially empty) lesson inside a class.
+	 * Create a lesson.
 	 *
 	 * @param int    $class_id Class ID.
-	 * @param string $header   Optional header text.
-	 * @param string $body     Optional sanitized body HTML.
-	 * @return int|false New lesson ID or false.
+	 * @param string $header   Header text.
+	 * @param string $body     Sanitised body HTML.
+	 * @return int|false
 	 */
 	public static function create_lesson( $class_id, $header = '', $body = '' ) {
 		global $wpdb;
@@ -327,8 +435,7 @@ class TBT_Notes_DB {
 			return false;
 		}
 		$now = self::now();
-
-		$ok = $wpdb->insert(
+		$ok  = $wpdb->insert(
 			self::table_lessons(),
 			array(
 				'class_id'   => $class_id,
@@ -339,16 +446,15 @@ class TBT_Notes_DB {
 			),
 			array( '%d', '%s', '%s', '%s', '%s' )
 		);
-
 		return $ok ? (int) $wpdb->insert_id : false;
 	}
 
 	/**
-	 * Update a lesson's header and/or body. This is the autosave target.
+	 * Update a lesson (autosave target).
 	 *
 	 * @param int   $lesson_id Lesson ID.
 	 * @param array $fields    Any of: header, body.
-	 * @return bool True on success.
+	 * @return bool
 	 */
 	public static function update_lesson( $lesson_id, array $fields ) {
 		global $wpdb;
@@ -359,7 +465,6 @@ class TBT_Notes_DB {
 
 		$data    = array();
 		$formats = array();
-
 		if ( array_key_exists( 'header', $fields ) ) {
 			$data['header'] = (string) $fields['header'];
 			$formats[]      = '%s';
@@ -368,30 +473,21 @@ class TBT_Notes_DB {
 			$data['body'] = (string) $fields['body'];
 			$formats[]    = '%s';
 		}
-
 		if ( empty( $data ) ) {
 			return true;
 		}
-
 		$data['updated_at'] = self::now();
 		$formats[]          = '%s';
 
-		$result = $wpdb->update(
-			self::table_lessons(),
-			$data,
-			array( 'id' => $lesson_id ),
-			$formats,
-			array( '%d' )
-		);
-
+		$result = $wpdb->update( self::table_lessons(), $data, array( 'id' => $lesson_id ), $formats, array( '%d' ) );
 		return false !== $result;
 	}
 
 	/**
-	 * Delete a single lesson.
+	 * Delete a lesson.
 	 *
 	 * @param int $lesson_id Lesson ID.
-	 * @return bool True on success.
+	 * @return bool
 	 */
 	public static function delete_lesson( $lesson_id ) {
 		global $wpdb;
@@ -408,35 +504,24 @@ class TBT_Notes_DB {
 	 * --------------------------------------------------------------------- */
 
 	/**
-	 * Normalise a raw class row into typed values plus derived display fields.
+	 * Normalise a class row (without students; load those separately).
 	 *
-	 * @param array $row Raw DB row.
+	 * @param array $row Raw row.
 	 * @return array
 	 */
 	protected static function shape_class( array $row ) {
-		$student_id   = isset( $row['student_id'] ) && null !== $row['student_id'] ? (int) $row['student_id'] : null;
-		$student_name = '';
-		if ( $student_id ) {
-			$user = get_userdata( $student_id );
-			if ( $user ) {
-				$student_name = $user->display_name;
-			}
-		}
-
 		return array(
-			'id'           => (int) $row['id'],
-			'title'        => (string) $row['title'],
-			'student_id'   => $student_id,
-			'student_name' => $student_name,
-			'created_at'   => (string) $row['created_at'],
-			'updated_at'   => (string) $row['updated_at'],
+			'id'         => (int) $row['id'],
+			'title'      => (string) $row['title'],
+			'created_at' => (string) $row['created_at'],
+			'updated_at' => (string) $row['updated_at'],
 		);
 	}
 
 	/**
-	 * Normalise a raw lesson row into typed values.
+	 * Normalise a lesson row.
 	 *
-	 * @param array $row Raw DB row.
+	 * @param array $row Raw row.
 	 * @return array
 	 */
 	protected static function shape_lesson( array $row ) {

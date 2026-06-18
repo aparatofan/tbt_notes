@@ -196,12 +196,18 @@ class TBT_Notes_Frontend {
 			'classTitle'        => __( 'Class title', 'tbt-notes' ),
 			'classTitlePh'      => __( 'e.g. Iwona Wróbel', 'tbt-notes' ),
 			'assignedStudent'   => __( 'Assigned student', 'tbt-notes' ),
-			'unassigned'        => __( '— Not assigned —', 'tbt-notes' ),
-			'searchStudents'    => __( 'Search by username…', 'tbt-notes' ),
-			'searchHint'        => __( 'Type a username to find a student.', 'tbt-notes' ),
+			'students'          => __( 'Students', 'tbt-notes' ),
+			'noStudents'        => __( 'No students in this class yet.', 'tbt-notes' ),
+			'oneStudent'        => __( '1 student', 'tbt-notes' ),
+			'nStudents'         => __( 'students', 'tbt-notes' ),
+			'lessons'           => __( 'Lessons', 'tbt-notes' ),
+			'toggleLessons'     => __( 'Show / hide lessons', 'tbt-notes' ),
+			'searchStudents'    => __( 'Search by username, name or email…', 'tbt-notes' ),
+			'searchHint'        => __( 'Type to find a student to add.', 'tbt-notes' ),
 			'noResults'         => __( 'No matches.', 'tbt-notes' ),
+			'added'             => __( 'added', 'tbt-notes' ),
 			'unassign'          => __( 'Remove student', 'tbt-notes' ),
-			'alreadyIn'         => __( 'already assigned: ', 'tbt-notes' ),
+			'alreadyIn'         => __( 'in: ', 'tbt-notes' ),
 			'deleteClass'       => __( 'Delete class', 'tbt-notes' ),
 			'deleteLesson'      => __( 'Delete lesson', 'tbt-notes' ),
 			'confirmClass'      => __( 'Delete this class and all of its lessons? This cannot be undone.', 'tbt-notes' ),
@@ -243,7 +249,7 @@ class TBT_Notes_Frontend {
 					<svg class="tbt-notes-icon" viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" focusable="false">
 						<path fill="currentColor" d="M6 2h9l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2Zm8 1.5V8h4.5L14 3.5ZM8 12h8v1.6H8V12Zm0 3.4h8V17H8v-1.6ZM8 8.6h4v1.6H8V8.6Z"/>
 					</svg>
-					<span class="tbt-notes-launcher-label"><?php echo esc_html__( 'Notes', 'tbt-notes' ); ?></span>
+					<span class="tbt-notes-launcher-label"><?php echo esc_html__( 'LESSON NOTES', 'tbt-notes' ); ?></span>
 				</button>
 			<?php endif; ?>
 

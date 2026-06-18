@@ -1,13 +1,20 @@
 /**
  * TBT Notes — front-end styles.
  *
- * A full-screen notes "page" that slides in horizontally from the left, sitting
- * below the WordPress admin bar so all navigation stays visible. Solid white,
- * Roboto Slab, TBT blue. Highlight classes (.tbt-hl-*) are shared by the editor
- * and the read view so notes look identical whether being written or read.
+ * A full-screen notes page that slides in from the left, below the WordPress
+ * admin bar. Inside a class: a collapsible lessons sidebar (left) + the selected
+ * lesson (right). Solid white, Roboto Slab, TBT blue. Content is left-aligned so
+ * it works in a split-screen half-window.
  */
 
-/* Self-hosted Roboto Slab (no external CDN). */
+@font-face {
+	font-family: "Roboto Slab";
+	font-style: normal;
+	font-weight: 300;
+	font-display: swap;
+	src: url("../vendor/fonts/roboto-slab-latin-300-normal.woff2") format("woff2");
+}
+
 @font-face {
 	font-family: "Roboto Slab";
 	font-style: normal;
@@ -27,6 +34,7 @@
 .tbt-notes-app {
 	--tbt-accent: #0856c9;
 	--tbt-accent-hover: #0746a6;
+	--tbt-accent-soft: #e7f0fd;
 	--tbt-accent-contrast: #ffffff;
 	--tbt-panel-bg: #ffffff;
 	--tbt-text: #0b2a66;
@@ -35,16 +43,14 @@
 	--tbt-hover: #eef3fb;
 	--tbt-danger: #c0392b;
 	--tbt-admin-offset: 0px;
-	--tbt-content-width: 880px;
+	--tbt-reading-width: 1000px;
 	--tbt-z: 99990;
 
-	/* Highlight palette (adjustable). */
 	--tbt-hl-blue: #bcdcff;
 	--tbt-hl-yellow: #fff2a8;
 	--tbt-hl-red: #ffc2c2;
 
 	font-family: "Roboto Slab", Georgia, "Times New Roman", serif;
-	font-size: 18px;
 	color: var(--tbt-text);
 }
 
@@ -55,25 +61,27 @@
 }
 
 /* ------------------------------------------------------------------ Launcher */
+/* Bottom-left corner, just inside the edge. */
 
 .tbt-notes-launcher {
 	position: fixed;
-	left: 0;
-	top: 50%;
-	transform: translateY(-50%);
+	left: 14px;
+	bottom: 14px;
+	top: auto;
 	z-index: var(--tbt-z);
-	display: flex;
-	flex-direction: column;
+	display: inline-flex;
+	flex-direction: row;
 	align-items: center;
-	gap: 4px;
-	padding: 12px 8px;
+	gap: 8px;
+	padding: 11px 16px;
 	border: 0;
-	border-radius: 0 10px 10px 0;
+	border-radius: 10px;
 	background: var(--tbt-accent);
 	color: var(--tbt-accent-contrast);
 	cursor: pointer;
-	box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
+	box-shadow: 0 3px 12px rgba(0, 0, 0, 0.28);
 	transition: background 0.15s ease;
+	font-family: "Roboto Slab", Georgia, serif;
 }
 
 .tbt-notes-launcher:hover {
@@ -86,11 +94,9 @@
 }
 
 .tbt-notes-launcher-label {
-	font-size: 11px;
+	font-size: 13px;
 	font-weight: 700;
-	letter-spacing: 0.03em;
-	writing-mode: vertical-rl;
-	text-orientation: mixed;
+	letter-spacing: 0.05em;
 }
 
 .tbt-notes-icon {
@@ -102,7 +108,6 @@
 	pointer-events: none;
 }
 
-/* The full-screen panel covers everything, so no dimming overlay is needed. */
 .tbt-notes-overlay {
 	display: none;
 }
@@ -128,7 +133,6 @@
 	transform: translateX(0);
 }
 
-/* Sit below the WordPress admin bar so the panel header is never hidden. */
 .admin-bar .tbt-notes-panel {
 	--tbt-admin-offset: 32px;
 }
@@ -158,8 +162,7 @@
 .tbt-notes-topbar {
 	display: flex;
 	align-items: center;
-	gap: 10px;
-	padding: 12px 18px;
+	padding: 10px 18px;
 	border-bottom: 2px solid var(--tbt-accent);
 	flex: 0 0 auto;
 	background: #fff;
@@ -170,12 +173,10 @@
 	align-items: center;
 	gap: 10px;
 	width: 100%;
-	max-width: var(--tbt-content-width);
-	margin: 0 auto;
 }
 
 .tbt-notes-topbar__title {
-	font-size: 20px;
+	font-size: 22px;
 	font-weight: 700;
 	margin: 0;
 	flex: 1 1 auto;
@@ -189,8 +190,8 @@
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
-	width: 38px;
-	height: 38px;
+	width: 40px;
+	height: 40px;
 	border: 1px solid transparent;
 	border-radius: 8px;
 	background: transparent;
@@ -211,21 +212,79 @@
 	outline-offset: 1px;
 }
 
+/* Non-split views (classes list, settings, empty) — left-aligned column. */
 .tbt-notes-body {
 	flex: 1 1 auto;
 	min-height: 0;
 	overflow-y: auto;
 	width: 100%;
-	max-width: var(--tbt-content-width);
-	margin: 0 auto;
+	max-width: 760px;
+	margin: 0;
 	padding: 22px 24px 48px;
 }
 
-/* Editor view: flex column so Quill can fill the height. */
-.tbt-notes-body--editor {
+/* ----------------------------------------------------------- Master / detail */
+
+.tbt-notes-split {
+	flex: 1 1 auto;
+	min-height: 0;
+	display: flex;
+}
+
+.tbt-notes-sidebar {
+	flex: 0 0 300px;
+	width: 300px;
+	border-right: 1px solid var(--tbt-border);
+	overflow-y: auto;
+	padding: 14px 12px;
+	background: #fbfcfe;
+}
+
+.tbt-notes-split.is-folded .tbt-notes-sidebar {
+	display: none;
+}
+
+.tbt-notes-sidebar__head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	margin-bottom: 10px;
+}
+
+.tbt-notes-sidebar__title {
+	font-weight: 700;
+	font-size: 14px;
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+	color: var(--tbt-muted);
+}
+
+.tbt-notes-lesson-nav {
+	list-style: none;
+	margin: 0;
+	padding: 0;
 	display: flex;
 	flex-direction: column;
-	padding: 0;
+	gap: 6px;
+}
+
+.tbt-notes-detail {
+	flex: 1 1 auto;
+	min-width: 0;
+	overflow: hidden;
+	display: flex;
+	flex-direction: column;
+}
+
+.tbt-notes-detail__scroll {
+	flex: 1 1 auto;
+	min-height: 0;
+	overflow-y: auto;
+	padding: 24px 28px 56px;
+	width: 100%;
+	max-width: var(--tbt-reading-width);
+	margin: 0;
 }
 
 /* --------------------------------------------------------------------- Lists */
@@ -260,10 +319,16 @@
 	border: 0;
 	background: transparent;
 	cursor: pointer;
-	padding: 14px 14px;
+	padding: 12px 13px;
 	font: inherit;
 	color: inherit;
 	min-width: 0;
+	border-radius: 10px;
+}
+
+.tbt-notes-listitem__main.is-active {
+	background: var(--tbt-accent-soft);
+	box-shadow: inset 3px 0 0 var(--tbt-accent);
 }
 
 .tbt-notes-listitem__title {
@@ -283,12 +348,12 @@
 
 .tbt-notes-listitem__delete {
 	flex: 0 0 auto;
-	margin-right: 8px;
+	margin-right: 6px;
 	border: 0;
 	background: transparent;
 	color: var(--tbt-muted);
 	cursor: pointer;
-	font-size: 18px;
+	font-size: 17px;
 	padding: 8px;
 	border-radius: 8px;
 	line-height: 1;
@@ -306,7 +371,11 @@
 	color: var(--tbt-muted);
 	font-size: 16px;
 	text-align: center;
-	padding: 36px 16px;
+	padding: 32px 16px;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 14px;
 }
 
 /* -------------------------------------------------------------------- Buttons */
@@ -329,6 +398,12 @@
 .tbt-notes-btn:hover {
 	background: var(--tbt-accent-hover);
 	border-color: var(--tbt-accent-hover);
+}
+
+.tbt-notes-btn--small {
+	padding: 6px 10px;
+	font-size: 13px;
+	border-radius: 7px;
 }
 
 .tbt-notes-btn--ghost {
@@ -402,16 +477,22 @@
 
 /* --------------------------------------------------------- Student picker */
 
+.tbt-notes-chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	margin-bottom: 12px;
+}
+
 .tbt-notes-chip {
 	display: inline-flex;
 	align-items: center;
-	gap: 8px;
-	padding: 7px 8px 7px 14px;
+	gap: 6px;
+	padding: 6px 6px 6px 14px;
 	border: 1px solid var(--tbt-accent);
 	border-radius: 20px;
-	background: var(--tbt-hover);
+	background: var(--tbt-accent-soft);
 	color: var(--tbt-text);
-	margin-bottom: 10px;
 	max-width: 100%;
 }
 
@@ -427,7 +508,7 @@
 	background: transparent;
 	color: var(--tbt-muted);
 	cursor: pointer;
-	font-size: 18px;
+	font-size: 16px;
 	line-height: 1;
 	padding: 2px 6px;
 	border-radius: 50%;
@@ -446,7 +527,7 @@
 	border-radius: 10px;
 	background: #fff;
 	box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
-	max-height: 280px;
+	max-height: 320px;
 	overflow-y: auto;
 }
 
@@ -491,15 +572,16 @@
 /* --------------------------------------------------------------- Read view */
 
 .tbt-notes-read-header {
-	font-size: 24px;
+	font-size: 26px;
 	font-weight: 700;
 	color: var(--tbt-accent);
-	margin: 4px 0 18px;
+	margin: 0 0 18px;
 	line-height: 1.3;
 }
 
 .tbt-notes-read {
-	font-size: 18px;
+	font-size: 20px;
+	font-weight: 300;
 	line-height: 1.6;
 	color: var(--tbt-text);
 	word-wrap: break-word;
@@ -508,14 +590,22 @@
 
 .tbt-notes-read p {
 	margin: 0 0 0.7em;
+	font-weight: 300;
+}
+
+.tbt-notes-read strong,
+.tbt-notes-read b {
+	font-weight: 700;
 }
 
 .tbt-notes-read h1,
 .tbt-notes-read h2,
 .tbt-notes-read h3 {
+	font-family: "Roboto Slab", Georgia, serif;
+	color: var(--tbt-accent);
+	font-weight: 700;
 	line-height: 1.3;
 	margin: 1em 0 0.4em;
-	color: var(--tbt-accent);
 }
 
 .tbt-notes-read h1 {
@@ -552,7 +642,6 @@
 	margin: 0.2em 0;
 }
 
-/* OneNote-style nested numbering: 1. -> a. -> i. cycling by depth. */
 .tbt-notes-read ol {
 	list-style-type: decimal;
 }
@@ -583,18 +672,32 @@
 
 /* --------------------------------------------------------------- Editor view */
 
-.tbt-notes-editor-header {
-	padding: 16px 24px 12px;
-	border-bottom: 1px solid var(--tbt-border);
-	flex: 0 0 auto;
+.tbt-notes-editorwrap {
+	display: flex;
+	flex-direction: column;
+	flex: 1 1 auto;
+	height: 100%;
+	min-height: 0;
 	width: 100%;
-	max-width: var(--tbt-content-width);
-	margin: 0 auto;
+	max-width: var(--tbt-reading-width);
 }
 
-.tbt-notes-editor-header .tbt-notes-input {
+.tbt-notes-editor-header {
+	padding: 16px 28px 10px;
+	flex: 0 0 auto;
+}
+
+/* The lesson header / title field — large. */
+.tbt-notes-editor-headerinput {
+	font-size: 30px;
 	font-weight: 700;
-	font-size: 19px;
+	padding: 8px 12px;
+	border-color: transparent;
+	border-radius: 8px;
+}
+
+.tbt-notes-editor-headerinput:hover {
+	border-color: var(--tbt-border);
 }
 
 .tbt-notes-editor-quillwrap {
@@ -602,21 +705,19 @@
 	min-height: 0;
 	display: flex;
 	flex-direction: column;
-	width: 100%;
-	max-width: var(--tbt-content-width);
-	margin: 0 auto;
 }
 
 .tbt-notes-editor-quillwrap .ql-toolbar.ql-snow {
 	flex: 0 0 auto;
 	border-left: 0;
 	border-right: 0;
-	border-top: 0;
+	border-top: 1px solid var(--tbt-border);
 	border-bottom: 1px solid var(--tbt-border);
 	position: sticky;
 	top: 0;
 	background: #fff;
 	z-index: 2;
+	padding: 8px 24px;
 }
 
 .tbt-notes-editor-quillwrap .ql-container.ql-snow {
@@ -626,13 +727,28 @@
 	overflow-y: auto;
 }
 
-/* Editor typography matches the read view. */
+/* Editor typography matches the read view: 20px, light. */
 .tbt-notes-app .ql-editor {
 	font-family: "Roboto Slab", Georgia, "Times New Roman", serif;
-	font-size: 18px;
+	font-size: 20px;
+	font-weight: 300;
 	line-height: 1.6;
 	color: var(--tbt-text);
-	padding: 18px 4px 40px;
+	padding: 18px 28px 48px;
+}
+
+.tbt-notes-app .ql-editor strong,
+.tbt-notes-app .ql-editor b {
+	font-weight: 700;
+}
+
+/* H2 in the editor: Roboto Slab + TBT blue. */
+.tbt-notes-app .ql-editor h1,
+.tbt-notes-app .ql-editor h2,
+.tbt-notes-app .ql-editor h3 {
+	font-family: "Roboto Slab", Georgia, serif;
+	color: var(--tbt-accent);
+	font-weight: 700;
 }
 
 .tbt-notes-editor-footer {
@@ -640,12 +756,9 @@
 	align-items: center;
 	justify-content: space-between;
 	gap: 10px;
-	padding: 10px 24px;
+	padding: 10px 28px;
 	border-top: 1px solid var(--tbt-border);
 	flex: 0 0 auto;
-	width: 100%;
-	max-width: var(--tbt-content-width);
-	margin: 0 auto;
 }
 
 /* --------------------------------------------------------- Save indicator */
@@ -680,7 +793,6 @@
 }
 
 /* ------------------------------------------------------------- Highlights */
-/* Literal colours + scoped to both editor and read view so they always show. */
 
 .tbt-notes-app .tbt-hl-blue,
 .tbt-notes-read .tbt-hl-blue,
@@ -703,7 +815,6 @@
 	border-radius: 2px;
 }
 
-/* Highlight swatch buttons in the editor toolbar. */
 .tbt-notes-editor-quillwrap .ql-toolbar .tbt-hl-btn {
 	width: 24px !important;
 	height: 24px !important;
@@ -746,7 +857,7 @@
 	color: var(--tbt-danger);
 }
 
-/* Shortcode trigger button (kept neutral so it inherits your theme/menu). */
+/* Shortcode trigger button. */
 .tbt-notes-shortcode-btn {
 	display: inline-flex;
 	align-items: center;
@@ -765,10 +876,24 @@
 	background: var(--tbt-accent-hover);
 }
 
-@media (max-width: 600px) {
-	.tbt-notes-body,
+/* ------------------------------------------------------------- Responsive */
+
+@media (max-width: 700px) {
+	.tbt-notes-sidebar {
+		flex-basis: 230px;
+		width: 230px;
+	}
+	.tbt-notes-detail__scroll,
 	.tbt-notes-editor-header,
 	.tbt-notes-editor-footer {
+		padding-left: 16px;
+		padding-right: 16px;
+	}
+	.tbt-notes-app .ql-editor {
+		padding-left: 16px;
+		padding-right: 16px;
+	}
+	.tbt-notes-editor-quillwrap .ql-toolbar.ql-snow {
 		padding-left: 16px;
 		padding-right: 16px;
 	}

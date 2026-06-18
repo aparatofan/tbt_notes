@@ -29,7 +29,7 @@ define( 'TBT_NOTES_VERSION', '1.0.0' );
  * Database schema version. Bump when the table structure changes so that
  * activation/upgrade can run dbDelta again.
  */
-define( 'TBT_NOTES_DB_VERSION', '1' );
+define( 'TBT_NOTES_DB_VERSION', '2' );
 
 /**
  * Capability that gates all teacher/admin functionality (creating classes,
@@ -57,6 +57,7 @@ require_once TBT_NOTES_PLUGIN_DIR . 'includes/class-tbt-notes-plugin.php';
  */
 function tbt_notes_activate() {
 	TBT_Notes_DB::install();
+	TBT_Notes_DB::migrate_single_to_membership();
 	TBT_Notes_Capabilities::add_caps();
 	// Stamp the version so we can detect upgrades on later loads.
 	update_option( 'tbt_notes_db_version', TBT_NOTES_DB_VERSION );
@@ -80,6 +81,7 @@ function tbt_notes_bootstrap() {
 	// without a fresh activation (e.g. deployed over the top).
 	if ( get_option( 'tbt_notes_db_version' ) !== TBT_NOTES_DB_VERSION ) {
 		TBT_Notes_DB::install();
+		TBT_Notes_DB::migrate_single_to_membership();
 		TBT_Notes_Capabilities::add_caps();
 		update_option( 'tbt_notes_db_version', TBT_NOTES_DB_VERSION );
 	}

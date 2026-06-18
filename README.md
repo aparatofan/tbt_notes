@@ -89,9 +89,9 @@ tests/test-logic.php              Sanitiser + visibility-rule tests
 
 ## Data model
 
-- **Class** — free-text `title`, optional assigned `student_id` (a WP user). A
-  user can be assigned to **at most one** class (enforced by a unique index and a
-  friendly server-side check).
+- **Class** — free-text `title` with **many students** (a group). Membership is a
+  separate table; each student belongs to **at most one** class (enforced by the
+  membership table's primary key + a friendly server-side check).
 - **Lesson** — belongs to a class; has a teacher-typed free-text `header` and a
   rich-text `body`. Listed newest-first by creation time.
 

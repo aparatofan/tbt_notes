@@ -1,11 +1,11 @@
 /**
  * TBT Notes — front-end application.
  *
- * A single role-aware slide-out panel. Students get a read-only view of their
- * one class (lesson list newest-first, then a formatted read view). The teacher
- * gets inline management: classes, student assignment, lessons, and a Quill
- * editor with autosave. All authority is enforced server-side; this script just
- * reflects what the REST API allows.
+ * A full-screen, role-aware notes surface. Inside a class it's a master/detail
+ * layout: a collapsible lessons list on the left, the selected lesson on the
+ * right (read-only for students, Quill editor with autosave for the teacher).
+ * All authority is enforced server-side; this script reflects what the REST API
+ * allows.
  */
 ( function () {
 	'use strict';
@@ -22,8 +22,6 @@
 	var launcher = document.getElementById( 'tbt-notes-launcher' );
 	var overlay = document.getElementById( 'tbt-notes-overlay' );
 	var panel = document.getElementById( 'tbt-notes-panel' );
-	// The launcher tab is optional (it can be opened from a shortcode/menu
-	// instead), so only the panel itself is required.
 	if ( ! root || ! panel ) {
 		return;
 	}
@@ -36,12 +34,12 @@
 		loaded: false,
 		isTeacher: !! cfg.isTeacher,
 		classes: [],
-		students: null,
 		view: 'root',
 		currentClass: null,
 		lessons: [],
 		loadingLessons: false,
 		currentLesson: null,
+		sidebarFolded: false,
 		error: '',
 	};
 
@@ -86,9 +84,6 @@
 		}
 	}
 
-	/**
-	 * REST helper. Sends the cookie nonce; throws on non-2xx with a message.
-	 */
 	function api( method, path, body ) {
 		var opts = {
 			method: method,
@@ -111,7 +106,6 @@
 				if ( ! res.ok ) {
 					var err = new Error( ( data && data.message ) || t( 'genericError', 'Error' ) );
 					err.status = res.status;
-					err.data = data;
 					throw err;
 				}
 				return data;
@@ -130,7 +124,9 @@
 			launcher.setAttribute( 'aria-expanded', 'true' );
 		}
 		panel.setAttribute( 'aria-hidden', 'false' );
-		overlay.hidden = false;
+		if ( overlay ) {
+			overlay.hidden = false;
+		}
 		document.addEventListener( 'keydown', onKeydown );
 		if ( ! state.loaded ) {
 			bootstrap();
@@ -150,7 +146,9 @@
 			launcher.setAttribute( 'aria-expanded', 'false' );
 		}
 		panel.setAttribute( 'aria-hidden', 'true' );
-		overlay.hidden = true;
+		if ( overlay ) {
+			overlay.hidden = true;
+		}
 		document.removeEventListener( 'keydown', onKeydown );
 		var returnTo = lastOpener || launcher;
 		if ( returnTo && typeof returnTo.focus === 'function' ) {
@@ -207,6 +205,9 @@
 			inner.appendChild( iconButton( '‹', t( 'back', 'Back' ), opts.onBack ) );
 		}
 		inner.appendChild( el( 'h2', 'tbt-notes-topbar__title', opts.title || '' ) );
+		( opts.buttons || [] ).forEach( function ( btn ) {
+			inner.appendChild( iconButton( btn.symbol, btn.label, btn.onClick ) );
+		} );
 		inner.appendChild( iconButton( '✕', t( 'close', 'Close' ), closePanel ) );
 		bar.appendChild( inner );
 		return bar;
@@ -240,25 +241,21 @@
 		}
 
 		if ( state.isTeacher ) {
-			if ( state.view === 'classList' ) {
-				renderClassList( true );
+			if ( state.view === 'class' ) {
+				renderClassView( true );
 			} else if ( state.view === 'classSettings' ) {
 				renderClassSettings();
-			} else if ( state.view === 'lessonEdit' ) {
-				renderLessonEdit();
 			} else {
 				renderTeacherRoot();
 			}
-		} else if ( state.view === 'lessonRead' ) {
-			renderLessonRead();
-		} else if ( state.view === 'classList' ) {
-			renderClassList( false );
+		} else if ( state.view === 'class' ) {
+			renderClassView( false );
 		} else {
 			renderStudentEmpty();
 		}
 	}
 
-	/* ------------------------------------------------------------ Student views */
+	/* ------------------------------------------------------------ Student empty */
 
 	function renderStudentEmpty() {
 		content.appendChild( buildTopbar( { title: t( 'panelTitle', 'Notes' ) } ) );
@@ -297,17 +294,16 @@
 		var main = el( 'button', 'tbt-notes-listitem__main' );
 		main.type = 'button';
 		main.appendChild( el( 'span', 'tbt-notes-listitem__title', cls.title || t( 'untitledClass', 'Untitled class' ) ) );
-		var meta = cls.student_name ? ( t( 'assignedStudent', 'Assigned student' ) + ': ' + cls.student_name ) : t( 'unassigned', '— Not assigned —' );
+		var count = cls.student_count != null ? cls.student_count : ( cls.students ? cls.students.length : 0 );
+		var meta = count === 1 ? t( 'oneStudent', '1 student' ) : ( '' + count + ' ' + t( 'nStudents', 'students' ) );
 		main.appendChild( el( 'span', 'tbt-notes-listitem__meta', meta ) );
 		main.addEventListener( 'click', function () {
 			openClass( cls );
 		} );
 		li.appendChild( main );
-
-		var del = iconDelete( t( 'deleteClass', 'Delete class' ), function () {
+		li.appendChild( iconDelete( t( 'deleteClass', 'Delete class' ), function () {
 			deleteClassFlow( cls );
-		} );
-		li.appendChild( del );
+		} ) );
 		return li;
 	}
 
@@ -324,16 +320,18 @@
 		return b;
 	}
 
-	/* ----------------------------------------------------------- Class lessons */
+	/* ----------------------------------------------------------- Open a class */
 
 	function openClass( cls ) {
 		state.currentClass = cls;
 		state.lessons = [];
-		state.view = 'classList';
+		state.currentLesson = null;
+		state.view = 'class';
 		state.loadingLessons = true;
 		render();
 		api( 'GET', 'classes/' + cls.id + '/lessons' ).then( function ( data ) {
 			state.lessons = data.lessons || [];
+			state.currentLesson = state.lessons.length ? state.lessons[ 0 ] : null;
 			state.loadingLessons = false;
 			render();
 		} ).catch( function ( err ) {
@@ -343,64 +341,106 @@
 		} );
 	}
 
-	function renderClassList( isTeacher ) {
+	/* ------------------------------------------------------- Master/detail view */
+
+	function renderClassView( isTeacher ) {
 		var cls = state.currentClass;
-		var onBack = isTeacher ? function () {
-			state.view = 'root';
-			state.currentClass = null;
-			state.lessons = [];
-			render();
-		} : null;
 
-		content.appendChild( buildTopbar( { title: cls ? ( cls.title || t( 'untitledClass', 'Untitled class' ) ) : '', onBack: onBack } ) );
-		var body = el( 'div', 'tbt-notes-body' );
-
+		var buttons = [
+			{ symbol: '☰', label: t( 'toggleLessons', 'Show/hide lessons' ), onClick: toggleSidebar },
+		];
 		if ( isTeacher ) {
-			var row = el( 'div', 'tbt-notes-toolbar-row' );
-			var settingsBtn = el( 'button', 'tbt-notes-btn tbt-notes-btn--ghost', t( 'manageClass', 'Class settings' ) );
-			settingsBtn.type = 'button';
-			settingsBtn.addEventListener( 'click', function () {
-				state.settingsIsNew = false;
+			buttons.push( { symbol: '⚙', label: t( 'manageClass', 'Class settings' ), onClick: function () {
 				state.view = 'classSettings';
 				render();
-			} );
-			var newLesson = el( 'button', 'tbt-notes-btn', t( 'newLesson', 'New lesson' ) );
-			newLesson.type = 'button';
-			newLesson.addEventListener( 'click', createLessonFlow );
-			row.appendChild( settingsBtn );
-			row.appendChild( newLesson );
-			body.appendChild( row );
+			} } );
 		}
+
+		content.appendChild( buildTopbar( {
+			title: cls ? ( cls.title || t( 'untitledClass', 'Untitled class' ) ) : '',
+			onBack: isTeacher ? function () {
+				flushActiveSaver();
+				state.view = 'root';
+				state.currentClass = null;
+				state.lessons = [];
+				state.currentLesson = null;
+				render();
+			} : null,
+			buttons: buttons,
+		} ) );
+
+		var split = el( 'div', 'tbt-notes-split' + ( state.sidebarFolded ? ' is-folded' : '' ) );
+
+		/* Sidebar: lessons list. */
+		var sidebar = el( 'div', 'tbt-notes-sidebar' );
+		var sbHead = el( 'div', 'tbt-notes-sidebar__head' );
+		sbHead.appendChild( el( 'span', 'tbt-notes-sidebar__title', t( 'lessons', 'Lessons' ) ) );
+		if ( isTeacher ) {
+			var addLesson = el( 'button', 'tbt-notes-btn tbt-notes-btn--small', '+ ' + t( 'newLesson', 'New lesson' ) );
+			addLesson.type = 'button';
+			addLesson.addEventListener( 'click', createLessonFlow );
+			sbHead.appendChild( addLesson );
+		}
+		sidebar.appendChild( sbHead );
 
 		if ( state.loadingLessons ) {
-			body.appendChild( el( 'div', 'tbt-notes-loading', t( 'loading', 'Loading…' ) ) );
+			sidebar.appendChild( el( 'div', 'tbt-notes-loading', t( 'loading', 'Loading…' ) ) );
 		} else if ( ! state.lessons.length ) {
-			body.appendChild( emptyBlock( t( 'noLessons', 'No lessons yet.' ) ) );
+			sidebar.appendChild( emptyBlock( t( 'noLessons', 'No lessons yet.' ) ) );
 		} else {
-			var list = el( 'ul', 'tbt-notes-list' );
+			var nav = el( 'ul', 'tbt-notes-lesson-nav' );
 			state.lessons.forEach( function ( lesson ) {
-				list.appendChild( lessonListItem( lesson, isTeacher ) );
+				nav.appendChild( lessonNavItem( lesson, isTeacher ) );
 			} );
-			body.appendChild( list );
+			sidebar.appendChild( nav );
 		}
-		content.appendChild( body );
+		split.appendChild( sidebar );
+
+		/* Detail: selected lesson. */
+		var detail = el( 'div', 'tbt-notes-detail' );
+		if ( state.loadingLessons ) {
+			detail.appendChild( el( 'div', 'tbt-notes-loading', t( 'loading', 'Loading…' ) ) );
+		} else if ( state.currentLesson ) {
+			if ( isTeacher ) {
+				renderEditorInto( detail, state.currentLesson );
+			} else {
+				renderReadInto( detail, state.currentLesson );
+			}
+		} else if ( isTeacher ) {
+			var prompt = el( 'div', 'tbt-notes-empty' );
+			prompt.appendChild( el( 'p', null, t( 'noLessons', 'No lessons yet.' ) ) );
+			var first = el( 'button', 'tbt-notes-btn', t( 'newLesson', 'New lesson' ) );
+			first.type = 'button';
+			first.addEventListener( 'click', createLessonFlow );
+			prompt.appendChild( first );
+			detail.appendChild( prompt );
+		} else {
+			detail.appendChild( emptyBlock( t( 'noLessons', 'No lessons yet.' ) ) );
+		}
+		split.appendChild( detail );
+
+		content.appendChild( split );
 	}
 
-	function lessonListItem( lesson, isTeacher ) {
+	function toggleSidebar() {
+		state.sidebarFolded = ! state.sidebarFolded;
+		var split = content.querySelector( '.tbt-notes-split' );
+		if ( split ) {
+			split.classList.toggle( 'is-folded', state.sidebarFolded );
+		}
+	}
+
+	function lessonNavItem( lesson, isTeacher ) {
 		var li = el( 'li', 'tbt-notes-listitem' );
-		var main = el( 'button', 'tbt-notes-listitem__main' );
+		var active = state.currentLesson && state.currentLesson.id === lesson.id;
+		var main = el( 'button', 'tbt-notes-listitem__main' + ( active ? ' is-active' : '' ) );
 		main.type = 'button';
 		main.appendChild( el( 'span', 'tbt-notes-listitem__title', lesson.header || t( 'untitledLesson', 'Untitled lesson' ) ) );
 		main.appendChild( el( 'span', 'tbt-notes-listitem__meta', fmtDate( lesson.created_at ) ) );
 		main.addEventListener( 'click', function () {
-			if ( isTeacher ) {
-				openLessonEdit( lesson );
-			} else {
-				openLessonRead( lesson );
-			}
+			selectLesson( lesson );
 		} );
 		li.appendChild( main );
-
 		if ( isTeacher ) {
 			li.appendChild( iconDelete( t( 'deleteLesson', 'Delete lesson' ), function () {
 				deleteLessonFlow( lesson );
@@ -409,35 +449,26 @@
 		return li;
 	}
 
-	/* -------------------------------------------------------------- Read lesson */
-
-	function openLessonRead( lesson ) {
+	function selectLesson( lesson ) {
+		if ( state.currentLesson && state.currentLesson.id === lesson.id ) {
+			return;
+		}
+		flushActiveSaver();
 		state.currentLesson = lesson;
-		state.view = 'lessonRead';
 		render();
 	}
 
-	function renderLessonRead() {
-		var cls = state.currentClass;
-		var lesson = state.currentLesson;
-		content.appendChild( buildTopbar( {
-			title: cls ? ( cls.title || t( 'untitledClass', 'Untitled class' ) ) : '',
-			onBack: function () {
-				state.view = 'classList';
-				state.currentLesson = null;
-				render();
-			},
-		} ) );
+	/* -------------------------------------------------------------- Read view */
 
-		var body = el( 'div', 'tbt-notes-body' );
+	function renderReadInto( container, lesson ) {
+		var wrap = el( 'div', 'tbt-notes-detail__scroll' );
 		if ( lesson.header ) {
-			body.appendChild( el( 'div', 'tbt-notes-read-header', lesson.header ) );
+			wrap.appendChild( el( 'div', 'tbt-notes-read-header', lesson.header ) );
 		}
 		var read = el( 'div', 'tbt-notes-read' );
-		// Body is server-sanitised semantic HTML (kses allowlist, safe links).
-		read.innerHTML = lesson.body || '';
-		body.appendChild( read );
-		content.appendChild( body );
+		read.innerHTML = lesson.body || ''; // Server-sanitised semantic HTML.
+		wrap.appendChild( read );
+		container.appendChild( wrap );
 	}
 
 	/* ---------------------------------------------------------- Class settings */
@@ -447,14 +478,14 @@
 		content.appendChild( buildTopbar( {
 			title: t( 'manageClass', 'Class settings' ),
 			onBack: function () {
-				state.view = 'classList';
+				state.view = 'class';
 				render();
 			},
 		} ) );
 
 		var body = el( 'div', 'tbt-notes-body' );
 
-		// Title field.
+		// Title.
 		var titleField = el( 'div', 'tbt-notes-field' );
 		titleField.appendChild( el( 'label', 'tbt-notes-field__label', t( 'classTitle', 'Class title' ) ) );
 		var titleInput = el( 'input', 'tbt-notes-input' );
@@ -471,9 +502,9 @@
 		titleField.appendChild( titleInput );
 		body.appendChild( titleField );
 
-		// Student field — username search (no giant dropdown).
+		// Students (multi).
 		var studentField = el( 'div', 'tbt-notes-field' );
-		studentField.appendChild( el( 'label', 'tbt-notes-field__label', t( 'assignedStudent', 'Assigned student' ) ) );
+		studentField.appendChild( el( 'label', 'tbt-notes-field__label', t( 'students', 'Students' ) ) );
 		buildStudentPicker( studentField, cls );
 		body.appendChild( studentField );
 
@@ -487,61 +518,87 @@
 		body.appendChild( del );
 
 		content.appendChild( body );
-
-		if ( state.settingsIsNew ) {
-			state.settingsIsNew = false;
-			window.setTimeout( function () {
-				titleInput.focus();
-			}, 60 );
-		}
 	}
 
 	/**
-	 * Username-search picker for assigning a student to a class. Replaces the
-	 * unwieldy full dropdown: type a username, pick a match.
+	 * Multi-student picker: current students as removable chips + a username/
+	 * name/email search to add more.
 	 */
 	function buildStudentPicker( container, cls ) {
-		var chipHolder = el( 'div' );
-		var msg = el( 'div' );
+		cls.students = cls.students || [];
+		var chips = el( 'div', 'tbt-notes-chips' );
 		var input = el( 'input', 'tbt-notes-input' );
 		input.type = 'text';
-		input.placeholder = t( 'searchStudents', 'Search by username…' );
+		input.placeholder = t( 'searchStudents', 'Search by username, name or email…' );
 		input.setAttribute( 'autocomplete', 'off' );
 		var results = el( 'ul', 'tbt-notes-userresults' );
 		results.hidden = true;
-		var hint = el( 'p', 'tbt-notes-hint', t( 'searchHint', 'Type a username to find a student.' ) );
+		var hint = el( 'p', 'tbt-notes-hint', t( 'searchHint', 'Type to find a student to add.' ) );
+		var msg = el( 'div' );
 
-		function renderChip() {
-			clear( chipHolder );
-			if ( cls.student_id ) {
+		function syncClass() {
+			// Keep the cached class object's roster in step for list meta.
+			for ( var i = 0; i < state.classes.length; i++ ) {
+				if ( state.classes[ i ].id === cls.id ) {
+					state.classes[ i ].students = cls.students;
+					state.classes[ i ].student_count = cls.students.length;
+				}
+			}
+		}
+
+		function renderChips() {
+			clear( chips );
+			if ( ! cls.students.length ) {
+				chips.appendChild( el( 'p', 'tbt-notes-hint', t( 'noStudents', 'No students in this class yet.' ) ) );
+				return;
+			}
+			cls.students.forEach( function ( s ) {
 				var chip = el( 'div', 'tbt-notes-chip' );
-				chip.appendChild( el( 'span', 'tbt-notes-chip__name', cls.student_name || ( '#' + cls.student_id ) ) );
+				chip.appendChild( el( 'span', 'tbt-notes-chip__name', s.name || s.username ) );
 				var rm = el( 'button', 'tbt-notes-chip__remove' );
 				rm.type = 'button';
 				rm.textContent = '✕';
 				rm.setAttribute( 'aria-label', t( 'unassign', 'Remove student' ) );
 				rm.addEventListener( 'click', function () {
-					assign( 0, '' );
+					removeStudent( s.id );
 				} );
 				chip.appendChild( rm );
-				chipHolder.appendChild( chip );
-			}
+				chips.appendChild( chip );
+			} );
 		}
 
-		function assign( id, name ) {
+		function addStudent( id ) {
 			clear( msg );
-			saveClassField( cls, { student_id: id } ).then( function ( data ) {
-				var updated = data && data.class ? data.class : null;
-				cls.student_id = updated ? updated.student_id : ( id || null );
-				cls.student_name = updated ? ( updated.student_name || '' ) : ( id ? name : '' );
-				state.students = null;
+			api( 'POST', 'classes/' + cls.id + '/students', { user_id: id } ).then( function ( data ) {
+				cls.students = data.students || [];
+				syncClass();
 				input.value = '';
 				results.hidden = true;
 				clear( results );
-				renderChip();
+				renderChips();
 			} ).catch( function ( err ) {
 				msg.appendChild( errorBlock( err.message ) );
 			} );
+		}
+
+		function removeStudent( id ) {
+			clear( msg );
+			api( 'DELETE', 'classes/' + cls.id + '/students/' + id ).then( function ( data ) {
+				cls.students = data.students || [];
+				syncClass();
+				renderChips();
+			} ).catch( function ( err ) {
+				msg.appendChild( errorBlock( err.message ) );
+			} );
+		}
+
+		function inThisClass( id ) {
+			for ( var i = 0; i < cls.students.length; i++ ) {
+				if ( cls.students[ i ].id === id ) {
+					return true;
+				}
+			}
+			return false;
 		}
 
 		function renderResults( students ) {
@@ -558,18 +615,19 @@
 				var b = el( 'button', 'tbt-notes-userresult' );
 				b.type = 'button';
 				b.appendChild( el( 'span', 'tbt-notes-userresult__user', s.name || s.username ) );
-				var sub = s.username && s.username !== s.name ? ( '@' + s.username ) : '';
-				if ( s.assigned_class_id && s.assigned_class_id !== cls.id ) {
+				var sub = '@' + s.username + ( s.email ? ' · ' + s.email : '' );
+				if ( inThisClass( s.id ) ) {
 					b.disabled = true;
-					sub = ( sub ? sub + ' · ' : '' ) + t( 'alreadyIn', 'already assigned: ' ) + ( s.assigned_class_name || '' );
+					sub += ' · ' + t( 'added', 'added' );
+				} else if ( s.assigned_class_id && s.assigned_class_id !== cls.id ) {
+					b.disabled = true;
+					sub += ' · ' + t( 'alreadyIn', 'in: ' ) + ( s.assigned_class_name || '' );
 				}
-				if ( sub ) {
-					b.appendChild( document.createElement( 'br' ) );
-					b.appendChild( el( 'span', 'tbt-notes-userresult__sub', sub ) );
-				}
+				b.appendChild( document.createElement( 'br' ) );
+				b.appendChild( el( 'span', 'tbt-notes-userresult__sub', sub ) );
 				if ( ! b.disabled ) {
 					b.addEventListener( 'click', function () {
-						assign( s.id, s.name || s.username );
+						addStudent( s.id );
 					} );
 				}
 				li.appendChild( b );
@@ -600,41 +658,39 @@
 			}, 250 );
 		} );
 
-		container.appendChild( chipHolder );
+		container.appendChild( chips );
 		container.appendChild( input );
 		container.appendChild( results );
 		container.appendChild( hint );
 		container.appendChild( msg );
-		renderChip();
+		renderChips();
 	}
 
 	function saveClassField( cls, fields ) {
 		return api( 'PATCH', 'classes/' + cls.id, fields ).then( function ( data ) {
 			if ( data && data.class ) {
-				updateClassInState( data.class );
-				state.currentClass = data.class;
+				for ( var i = 0; i < state.classes.length; i++ ) {
+					if ( state.classes[ i ].id === data.class.id ) {
+						// Preserve the roster we track locally.
+						data.class.students = cls.students || state.classes[ i ].students;
+						state.classes[ i ] = data.class;
+					}
+				}
+				cls.title = data.class.title;
 			}
 			return data;
 		} );
 	}
 
-	function updateClassInState( updated ) {
-		for ( var i = 0; i < state.classes.length; i++ ) {
-			if ( state.classes[ i ].id === updated.id ) {
-				state.classes[ i ] = updated;
-				return;
-			}
-		}
-	}
-
 	/* ----------------------------------------------------------------- Flows */
 
 	function createClassFlow() {
-		api( 'POST', 'classes', { title: '', student_id: 0 } ).then( function ( data ) {
+		api( 'POST', 'classes', { title: '' } ).then( function ( data ) {
+			data.class.students = data.class.students || [];
 			state.classes.unshift( data.class );
 			state.currentClass = data.class;
 			state.lessons = [];
-			state.settingsIsNew = true;
+			state.currentLesson = null;
 			state.view = 'classSettings';
 			render();
 		} ).catch( function ( err ) {
@@ -652,7 +708,7 @@
 			} );
 			state.currentClass = null;
 			state.lessons = [];
-			state.students = null;
+			state.currentLesson = null;
 			state.view = 'root';
 			render();
 		} ).catch( function ( err ) {
@@ -663,7 +719,8 @@
 	function createLessonFlow() {
 		api( 'POST', 'classes/' + state.currentClass.id + '/lessons', { header: '', body: '' } ).then( function ( data ) {
 			state.lessons.unshift( data.lesson );
-			openLessonEdit( data.lesson );
+			state.currentLesson = data.lesson;
+			render();
 		} ).catch( function ( err ) {
 			window.alert( err.message );
 		} );
@@ -677,6 +734,9 @@
 			state.lessons = state.lessons.filter( function ( l ) {
 				return l.id !== lesson.id;
 			} );
+			if ( state.currentLesson && state.currentLesson.id === lesson.id ) {
+				state.currentLesson = state.lessons.length ? state.lessons[ 0 ] : null;
+			}
 			render();
 		} ).catch( function ( err ) {
 			window.alert( err.message );
@@ -685,45 +745,26 @@
 
 	/* --------------------------------------------------------------- Editor */
 
-	function openLessonEdit( lesson ) {
-		state.currentLesson = lesson;
-		state.view = 'lessonEdit';
-		render();
-	}
+	function renderEditorInto( container, lesson ) {
+		var wrap = el( 'div', 'tbt-notes-editorwrap' );
 
-	function renderLessonEdit() {
-		var cls = state.currentClass;
-		var lesson = state.currentLesson;
-
-		content.appendChild( buildTopbar( {
-			title: cls ? ( cls.title || t( 'untitledClass', 'Untitled class' ) ) : '',
-			onBack: function () {
-				flushActiveSaver();
-				state.view = 'classList';
-				state.currentLesson = null;
-				render();
-			},
-		} ) );
-
-		var body = el( 'div', 'tbt-notes-body tbt-notes-body--editor' );
-
-		// Header field.
+		// Header field (large).
 		var headerWrap = el( 'div', 'tbt-notes-editor-header' );
-		var headerInput = el( 'input', 'tbt-notes-input' );
+		var headerInput = el( 'input', 'tbt-notes-input tbt-notes-editor-headerinput' );
 		headerInput.type = 'text';
 		headerInput.value = lesson.header || '';
 		headerInput.placeholder = t( 'lessonHeaderPh', '' );
 		headerInput.setAttribute( 'aria-label', t( 'lessonHeader', 'Lesson header' ) );
 		headerWrap.appendChild( headerInput );
-		body.appendChild( headerWrap );
+		wrap.appendChild( headerWrap );
 
-		// Quill wrapper: toolbar + editor.
+		// Quill toolbar + editor.
 		var quillWrap = el( 'div', 'tbt-notes-editor-quillwrap' );
 		var toolbar = buildToolbar();
 		var editorEl = el( 'div' );
 		quillWrap.appendChild( toolbar );
 		quillWrap.appendChild( editorEl );
-		body.appendChild( quillWrap );
+		wrap.appendChild( quillWrap );
 
 		// Footer: save indicator + delete.
 		var footer = el( 'div', 'tbt-notes-editor-footer' );
@@ -735,11 +776,10 @@
 			deleteLessonFlow( lesson );
 		} );
 		footer.appendChild( del );
-		body.appendChild( footer );
+		wrap.appendChild( footer );
 
-		content.appendChild( body );
+		container.appendChild( wrap );
 
-		// Initialise editor + autosave once mounted.
 		initEditor( editorEl, toolbar, headerInput, lesson, indicator );
 	}
 
@@ -768,7 +808,6 @@
 		g1.appendChild( qbtn( 'ql-italic', null, t( 'italic', 'Italic' ) ) );
 		bar.appendChild( g1 );
 
-		// Highlight swatches (custom; wired after Quill init).
 		var gh = group();
 		gh.className = 'ql-formats tbt-hl-group';
 		( cfg.highlightColors || [] ).forEach( function ( c ) {
@@ -836,7 +875,6 @@
 			formats: [ 'bold', 'italic', 'link', 'list', 'indent', 'header', 'highlight' ],
 		} );
 
-		// Load existing content without triggering autosave.
 		if ( lesson.body && lesson.body.trim() ) {
 			quill.clipboard.dangerouslyPasteHTML( 0, lesson.body, 'silent' );
 		}
@@ -844,8 +882,6 @@
 		var saver = createSaver( lesson, indicator );
 		activeSaver = saver;
 
-		// Track the last real selection so the highlight buttons can apply to it
-		// even after focus moves to the toolbar button.
 		var lastRange = null;
 		quill.on( 'selection-change', function ( range ) {
 			if ( range ) {
@@ -853,8 +889,6 @@
 			}
 		} );
 
-		// Wire highlight swatches. Applying with formatText on explicit indices
-		// is reliable regardless of focus/selection timing.
 		var swatches = toolbar.querySelectorAll( '.tbt-hl-btn, .tbt-hl-clear' );
 		Array.prototype.forEach.call( swatches, function ( btn ) {
 			btn.addEventListener( 'mousedown', function ( e ) {
@@ -875,19 +909,17 @@
 					if ( color ) {
 						var fmt = quill.getFormat( range.index, range.length );
 						if ( fmt.highlight === color ) {
-							value = false; // Toggle off if the whole range already has it.
+							value = false;
 						}
 					}
 					quill.formatText( range.index, range.length, 'highlight', value, 'user' );
 					quill.setSelection( range.index, range.length, 'silent' );
 				} else {
-					// Collapsed cursor: highlight the next typed text.
 					quill.format( 'highlight', color ? color : false, 'user' );
 				}
 			} );
 		} );
 
-		// Autosave body on user edits.
 		quill.on( 'text-change', function ( delta, old, source ) {
 			if ( source !== 'user' ) {
 				return;
@@ -897,10 +929,14 @@
 			saver.queue( { body: html } );
 		} );
 
-		// Autosave header.
 		headerInput.addEventListener( 'input', function () {
 			lesson.header = headerInput.value;
 			saver.queue( { header: headerInput.value } );
+			// Reflect the header in the sidebar nav item live.
+			var navTitle = content.querySelector( '.tbt-notes-listitem__main.is-active .tbt-notes-listitem__title' );
+			if ( navTitle ) {
+				navTitle.textContent = headerInput.value || t( 'untitledLesson', 'Untitled lesson' );
+			}
 		} );
 
 		window.setTimeout( function () {
@@ -960,7 +996,6 @@
 					setStatus( 'saved' );
 				}
 			} ).catch( function () {
-				// Requeue what we tried to send (without clobbering newer edits).
 				for ( var k in fields ) {
 					if ( Object.prototype.hasOwnProperty.call( fields, k ) && ! ( k in dirty ) ) {
 						dirty[ k ] = fields[ k ];
@@ -1019,8 +1054,6 @@
 		} );
 	}
 
-	// Open from anywhere: a shortcode button, a menu item linking to #tbt-notes,
-	// or any element carrying the tbt-notes-trigger class / data-tbt-notes-open.
 	document.addEventListener( 'click', function ( e ) {
 		if ( ! e.target || ! e.target.closest ) {
 			return;
@@ -1037,7 +1070,9 @@
 		}
 	} );
 
-	overlay.addEventListener( 'click', closePanel );
+	if ( overlay ) {
+		overlay.addEventListener( 'click', closePanel );
+	}
 
 	window.addEventListener( 'beforeunload', function () {
 		unloading = true;

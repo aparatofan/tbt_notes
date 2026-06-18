@@ -188,35 +188,36 @@ function test_visibility() {
 
 	$GLOBALS['__user_can'] = array( $teacher_id => true ); // Only 10 can manage.
 
-	$class = array( 'id' => 1, 'student_id' => $student_id );
+	$class = array( 'id' => 1, 'student_ids' => array( $student_id ) );
 
 	ok( TBT_Notes_REST::user_can_view_class( $class, $teacher_id ) === true, 'teacher can view any class' );
-	ok( TBT_Notes_REST::user_can_view_class( $class, $student_id ) === true, 'assigned student can view their class' );
-	ok( TBT_Notes_REST::user_can_view_class( $class, $other_id ) === false, 'a different student cannot view it' );
+	ok( TBT_Notes_REST::user_can_view_class( $class, $student_id ) === true, 'a member student can view their class' );
+	ok( TBT_Notes_REST::user_can_view_class( $class, $other_id ) === false, 'a non-member cannot view it' );
 	ok( TBT_Notes_REST::user_can_view_class( $class, 0 ) === false, 'logged-out (id 0) cannot view' );
 
-	$unassigned = array( 'id' => 2, 'student_id' => null );
-	ok( TBT_Notes_REST::user_can_view_class( $unassigned, $teacher_id ) === true, 'teacher sees unassigned class' );
-	ok( TBT_Notes_REST::user_can_view_class( $unassigned, $student_id ) === false, 'student cannot see unassigned class' );
+	// Many students per class: every member sees it; outsiders do not.
+	$group = array( 'id' => 5, 'student_ids' => array( $student_id, $other_id, 99 ) );
+	ok( TBT_Notes_REST::user_can_view_class( $group, $student_id ) === true, 'group member 1 can view' );
+	ok( TBT_Notes_REST::user_can_view_class( $group, $other_id ) === true, 'group member 2 can view' );
+	ok( TBT_Notes_REST::user_can_view_class( $group, 12345 ) === false, 'non-member cannot view the group' );
 
-	ok( TBT_Notes_REST::user_can_view_class( array(), $student_id ) === false, 'empty class is not viewable' );
+	$empty_class = array( 'id' => 2, 'student_ids' => array() );
+	ok( TBT_Notes_REST::user_can_view_class( $empty_class, $teacher_id ) === true, 'teacher sees a class with no students' );
+	ok( TBT_Notes_REST::user_can_view_class( $empty_class, $student_id ) === false, 'student cannot see a class they are not in' );
 
-	// A teacher who is ALSO assigned as a student still sees everything (cap wins).
-	$GLOBALS['__user_can'] = array( $teacher_id => true );
-	$class2 = array( 'id' => 3, 'student_id' => $other_id );
-	ok( TBT_Notes_REST::user_can_view_class( $class2, $teacher_id ) === true, 'manage cap overrides ownership' );
+	ok( TBT_Notes_REST::user_can_view_class( array(), $student_id ) === false, 'empty class array is not viewable' );
 
 	// Administrators (manage_options) always manage, even without the custom cap.
 	$admin_id = 40;
 	$GLOBALS['__user_can'] = array( $admin_id => array( 'manage_options' ) );
-	$someones_class = array( 'id' => 9, 'student_id' => 99 );
+	$someones_class = array( 'id' => 9, 'student_ids' => array( 99 ) );
 	ok( TBT_Notes_REST::user_can_view_class( $someones_class, $admin_id ) === true, 'manage_options admin sees any class' );
 
-	// A plain user with no relevant caps sees only their own class.
+	// A plain user with no relevant caps sees only a class they belong to.
 	$plain_id = 50;
 	$GLOBALS['__user_can'] = array( $plain_id => array( 'read' ) );
 	ok( TBT_Notes_REST::user_can_view_class( $someones_class, $plain_id ) === false, 'plain user cannot view others' );
-	ok( TBT_Notes_REST::user_can_view_class( array( 'id' => 9, 'student_id' => $plain_id ), $plain_id ) === true, 'plain user can view own class' );
+	ok( TBT_Notes_REST::user_can_view_class( array( 'id' => 9, 'student_ids' => array( $plain_id ) ), $plain_id ) === true, 'plain user can view their own class' );
 }
 test_visibility();
 
