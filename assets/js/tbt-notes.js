@@ -201,22 +201,32 @@
 	function buildTopbar( opts ) {
 		var bar = el( 'div', 'tbt-notes-topbar' );
 		var inner = el( 'div', 'tbt-notes-topbar__inner' );
+		
 		if ( opts.onBack ) {
 			inner.appendChild( iconButton( '‹', t( 'back', 'Back' ), opts.onBack ) );
 		}
-		// Title: static "LESSON NOTES:" (normal) + dynamic context (bold), both white.
-		var h = el( 'h2', 'tbt-notes-topbar__title' );
-		h.appendChild( el( 'span', 'tbt-notes-topbar__static', t( 'headerStatic', 'LESSON NOTES:' ) ) );
-		if ( opts.dynamic ) {
-			h.appendChild( document.createTextNode( ' ' ) );
-			h.appendChild( el( 'span', 'tbt-notes-topbar__dynamic', opts.dynamic ) );
+
+		// Centered Title Container
+		var titleWrap = el( 'div', 'tbt-notes-topbar__title-wrap' );
+		
+		if ( opts.title ) {
+			titleWrap.appendChild( el( 'div', 'tbt-notes-topbar__title', opts.title ) );
 		}
-		inner.appendChild( h );
+		
+		// Subtitle (either an input field for teachers, or plain text for students)
+		if ( opts.subtitleEl ) {
+			titleWrap.appendChild( opts.subtitleEl );
+		} else if ( opts.subtitle ) {
+			titleWrap.appendChild( el( 'div', 'tbt-notes-topbar__subtitle', opts.subtitle ) );
+		}
+		inner.appendChild( titleWrap );
+
 		( opts.buttons || [] ).forEach( function ( btn ) {
 			inner.appendChild( iconButton( btn.symbol, btn.label, btn.onClick ) );
 		} );
 		inner.appendChild( iconButton( '✕', t( 'close', 'Close' ), closePanel ) );
 		bar.appendChild( inner );
+		
 		return bar;
 	}
 
@@ -265,7 +275,7 @@
 	/* ------------------------------------------------------------ Student empty */
 
 	function renderStudentEmpty() {
-		content.appendChild( buildTopbar( {} ) );
+		content.appendChild( buildTopbar( { title: '' } ) );
 		var body = el( 'div', 'tbt-notes-body' );
 		body.appendChild( emptyBlock( t( 'noClassStudent', 'You have no notes assigned yet.' ) ) );
 		content.appendChild( body );
@@ -274,7 +284,7 @@
 	/* ------------------------------------------------------------- Teacher root */
 
 	function renderTeacherRoot() {
-		content.appendChild( buildTopbar( { dynamic: t( 'headerClasses', 'CLASSES' ) } ) );
+		content.appendChild( buildTopbar( { title: t( 'headerClasses', 'CLASSES' ) } ) );
 		var body = el( 'div', 'tbt-notes-body' );
 
 		var newBtn = el( 'button', 'tbt-notes-btn tbt-notes-btn--block', t( 'newClass', 'New class' ) );
@@ -392,8 +402,20 @@
 			} } );
 		}
 
+		// Create the input field for the top bar if the teacher is editing a lesson
+		var headerInput = null;
+		if ( isTeacher && state.currentLesson ) {
+			headerInput = el( 'input', 'tbt-notes-topbar__subtitle-input' );
+			headerInput.type = 'text';
+			headerInput.value = state.currentLesson.header || '';
+			headerInput.placeholder = t( 'lessonHeaderPh', '' );
+			headerInput.setAttribute( 'aria-label', t( 'lessonHeader', 'Lesson header' ) );
+		}
+
 		content.appendChild( buildTopbar( {
-			dynamic: cls ? ( cls.title || t( 'untitledClass', 'Untitled class' ) ) : '',
+			title: cls ? ( cls.title || t( 'untitledClass', 'Untitled class' ) ) : '',
+			subtitle: !isTeacher && state.currentLesson ? state.currentLesson.header : null,
+			subtitleEl: headerInput,
 			onBack: isTeacher ? function () {
 				flushActiveSaver();
 				state.view = 'root';
@@ -438,7 +460,7 @@
 			detail.appendChild( el( 'div', 'tbt-notes-loading', t( 'loading', 'Loading…' ) ) );
 		} else if ( state.currentLesson ) {
 			if ( isTeacher ) {
-				renderEditorInto( detail, state.currentLesson );
+				renderEditorInto( detail, state.currentLesson, headerInput );
 			} else {
 				renderReadInto( detail, state.currentLesson );
 			}
@@ -498,9 +520,6 @@
 
 	function renderReadInto( container, lesson ) {
 		var wrap = el( 'div', 'tbt-notes-detail__scroll' );
-		if ( lesson.header ) {
-			wrap.appendChild( el( 'div', 'tbt-notes-read-header', lesson.header ) );
-		}
 		var read = el( 'div', 'tbt-notes-read' );
 		read.innerHTML = lesson.body || ''; // Server-sanitised semantic HTML.
 		wrap.appendChild( read );
@@ -512,7 +531,7 @@
 	function renderClassSettings() {
 		var cls = state.currentClass;
 		content.appendChild( buildTopbar( {
-			dynamic: cls ? ( cls.title || t( 'untitledClass', 'Untitled class' ) ) : '',
+			title: cls ? ( cls.title || t( 'untitledClass', 'Untitled class' ) ) : '',
 			onBack: function () {
 				state.view = 'class';
 				render();
@@ -781,18 +800,8 @@
 
 	/* --------------------------------------------------------------- Editor */
 
-	function renderEditorInto( container, lesson ) {
+	function renderEditorInto( container, lesson, headerInput ) {
 		var wrap = el( 'div', 'tbt-notes-editorwrap' );
-
-		// Header field (large).
-		var headerWrap = el( 'div', 'tbt-notes-editor-header' );
-		var headerInput = el( 'input', 'tbt-notes-input tbt-notes-editor-headerinput' );
-		headerInput.type = 'text';
-		headerInput.value = lesson.header || '';
-		headerInput.placeholder = t( 'lessonHeaderPh', '' );
-		headerInput.setAttribute( 'aria-label', t( 'lessonHeader', 'Lesson header' ) );
-		headerWrap.appendChild( headerInput );
-		wrap.appendChild( headerWrap );
 
 		// Quill toolbar + editor.
 		var quillWrap = el( 'div', 'tbt-notes-editor-quillwrap' );
