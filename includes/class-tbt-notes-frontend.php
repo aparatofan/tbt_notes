@@ -210,6 +210,7 @@ class TBT_Notes_Frontend {
 			'nStudents'         => __( 'students', 'tbt-notes' ),
 			'lessons'           => __( 'Lessons', 'tbt-notes' ),
 			'toggleLessons'     => __( 'Show / hide lessons', 'tbt-notes' ),
+			'print'             => __( 'Print', 'tbt-notes' ),
 			'searchStudents'    => __( 'Search by username, name or email…', 'tbt-notes' ),
 			'searchHint'        => __( 'Type to find a student to add.', 'tbt-notes' ),
 			'noResults'         => __( 'No matches.', 'tbt-notes' ),

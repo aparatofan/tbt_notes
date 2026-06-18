@@ -996,3 +996,38 @@
 		min-height: 64px;
 	}
 }
+
+/* ------------------------------------------------------------------- Print */
+
+@media print {
+	/* Hide the lessons sidebar. */
+	.tbt-notes-sidebar {
+		display: none !important;
+	}
+
+	/* Hide the top bar. */
+	.tbt-notes-topbar {
+		display: none !important;
+	}
+
+	/* Remove any scrollbars so nothing is clipped on paper. */
+	.tbt-notes-app,
+	.tbt-notes-panel,
+	.tbt-notes-panel__inner,
+	.tbt-notes-body,
+	.tbt-notes-split,
+	.tbt-notes-detail,
+	.tbt-notes-detail__scroll {
+		overflow: visible !important;
+		height: auto !important;
+		min-height: 0 !important;
+	}
+
+	/* Let the lesson detail view take up the full width. */
+	.tbt-notes-detail,
+	.tbt-notes-detail__scroll {
+		flex: 1 1 100% !important;
+		width: 100% !important;
+		max-width: 100% !important;
+	}
+}

@@ -394,6 +394,9 @@
 
 		var buttons = [
 			{ symbol: '☰', label: t( 'toggleLessons', 'Show/hide lessons' ), onClick: toggleSidebar },
+			{ symbol: '🖨', label: t( 'print', 'Print' ), onClick: function () {
+				window.print();
+			} },
 		];
 		if ( isTeacher ) {
 			buttons.push( { symbol: '⚙', label: t( 'manageClass', 'Class settings' ), onClick: function () {
