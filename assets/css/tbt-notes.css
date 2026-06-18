@@ -996,3 +996,86 @@
 		min-height: 64px;
 	}
 }
+
+/* ------------------------------------------------------------------- Print */
+
+/* The notes panel is a fixed, transformed full-screen overlay. Printing it
+   as-is makes the browser repaint the transformed layer on every sheet, which
+   produced overlapping text and a runaway page count. For print we hide the
+   host page, drop the panel back into normal document flow, and expand every
+   nested scroll container so the lesson prints once, top to bottom. */
+@media print {
+	/* Hide everything on the host page except our app. The app is appended at
+	   wp_footer, so it is a direct child of <body>. */
+	body > *:not( #tbt-notes-app ) {
+		display: none !important;
+	}
+
+	/* Drop the app + panel out of the fixed/transformed overlay and into
+	   normal flow so pagination works. */
+	.tbt-notes-app,
+	.tbt-notes-panel {
+		position: static !important;
+		transform: none !important;
+		transition: none !important;
+		width: 100% !important;
+		max-width: 100% !important;
+		height: auto !important;
+		max-height: none !important;
+		box-shadow: none !important;
+	}
+
+	/* Hide the chrome: launcher, overlay, top bar and lessons sidebar. */
+	.tbt-notes-launcher,
+	.tbt-notes-overlay,
+	.tbt-notes-topbar,
+	.tbt-notes-sidebar,
+	.tbt-notes-editor-quillwrap .ql-toolbar.ql-snow {
+		display: none !important;
+	}
+
+	/* Remove every nested scroll container so nothing is clipped on paper. */
+	.tbt-notes-panel__inner,
+	.tbt-notes-body,
+	.tbt-notes-split,
+	.tbt-notes-detail,
+	.tbt-notes-detail__scroll,
+	.tbt-notes-editor-quillwrap .ql-container.ql-snow,
+	.tbt-notes-app .ql-editor {
+		display: block !important;
+		overflow: visible !important;
+		height: auto !important;
+		max-height: none !important;
+		min-height: 0 !important;
+	}
+
+	/* Let the lesson detail view take up the full width. */
+	.tbt-notes-split,
+	.tbt-notes-detail,
+	.tbt-notes-detail__scroll {
+		flex: 1 1 100% !important;
+		width: 100% !important;
+		max-width: 100% !important;
+	}
+
+	/* Print-only header with the class name and date. */
+	.tbt-notes-print-head {
+		display: block !important;
+		margin-bottom: 16px;
+		padding-bottom: 8px;
+		border-bottom: 2px solid #000;
+	}
+	.tbt-notes-print-head__class {
+		font-size: 22px;
+		font-weight: 700;
+	}
+	.tbt-notes-print-head__meta {
+		font-size: 14px;
+		margin-top: 2px;
+	}
+}
+
+/* The print header is only ever shown on paper. */
+.tbt-notes-print-head {
+	display: none;
+}

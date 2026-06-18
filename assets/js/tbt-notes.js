@@ -394,6 +394,9 @@
 
 		var buttons = [
 			{ symbol: '☰', label: t( 'toggleLessons', 'Show/hide lessons' ), onClick: toggleSidebar },
+			{ symbol: '⎙', label: t( 'print', 'Print' ), onClick: function () {
+				window.print();
+			} },
 		];
 		if ( isTeacher ) {
 			buttons.push( { symbol: '⚙', label: t( 'manageClass', 'Class settings' ), onClick: function () {
@@ -456,6 +459,20 @@
 
 		/* Detail: selected lesson. */
 		var detail = el( 'div', 'tbt-notes-detail' );
+
+		/* Print-only header: class name + lesson and print date. Hidden on
+		   screen, shown by the @media print rules in the stylesheet. */
+		var printHead = el( 'div', 'tbt-notes-print-head' );
+		printHead.appendChild( el( 'div', 'tbt-notes-print-head__class',
+			cls ? ( cls.title || t( 'untitledClass', 'Untitled class' ) ) : '' ) );
+		var printMeta = [];
+		if ( state.currentLesson && state.currentLesson.header ) {
+			printMeta.push( state.currentLesson.header );
+		}
+		printMeta.push( new Date().toLocaleDateString() );
+		printHead.appendChild( el( 'div', 'tbt-notes-print-head__meta', printMeta.join( ' — ' ) ) );
+		detail.appendChild( printHead );
+
 		if ( state.loadingLessons ) {
 			detail.appendChild( el( 'div', 'tbt-notes-loading', t( 'loading', 'Loading…' ) ) );
 		} else if ( state.currentLesson ) {
