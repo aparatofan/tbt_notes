@@ -54,8 +54,23 @@ function current_user_can( $cap ) {
 	return ! empty( $GLOBALS['__cur_can'] );
 }
 
+/**
+ * Cap-aware stub: a user's value may be `true` (all caps) or an array of
+ * specific cap slugs.
+ */
 function user_can( $user_id, $cap ) {
-	return ! empty( $GLOBALS['__user_can'][ (int) $user_id ] );
+	$map = $GLOBALS['__user_can'];
+	if ( ! isset( $map[ (int) $user_id ] ) ) {
+		return false;
+	}
+	$val = $map[ (int) $user_id ];
+	if ( true === $val ) {
+		return true;
+	}
+	if ( is_array( $val ) ) {
+		return in_array( $cap, $val, true );
+	}
+	return (bool) $val;
 }
 
 /* ----------------------------------------------------------------- Load code */
@@ -190,6 +205,18 @@ function test_visibility() {
 	$GLOBALS['__user_can'] = array( $teacher_id => true );
 	$class2 = array( 'id' => 3, 'student_id' => $other_id );
 	ok( TBT_Notes_REST::user_can_view_class( $class2, $teacher_id ) === true, 'manage cap overrides ownership' );
+
+	// Administrators (manage_options) always manage, even without the custom cap.
+	$admin_id = 40;
+	$GLOBALS['__user_can'] = array( $admin_id => array( 'manage_options' ) );
+	$someones_class = array( 'id' => 9, 'student_id' => 99 );
+	ok( TBT_Notes_REST::user_can_view_class( $someones_class, $admin_id ) === true, 'manage_options admin sees any class' );
+
+	// A plain user with no relevant caps sees only their own class.
+	$plain_id = 50;
+	$GLOBALS['__user_can'] = array( $plain_id => array( 'read' ) );
+	ok( TBT_Notes_REST::user_can_view_class( $someones_class, $plain_id ) === false, 'plain user cannot view others' );
+	ok( TBT_Notes_REST::user_can_view_class( array( 'id' => 9, 'student_id' => $plain_id ), $plain_id ) === true, 'plain user can view own class' );
 }
 test_visibility();
 

@@ -26,6 +26,52 @@ class TBT_Notes_Frontend {
 	public function register() {
 		add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_assets' ) );
 		add_action( 'wp_footer', array( $this, 'render_container' ) );
+		add_shortcode( 'tbt_notes', array( $this, 'render_shortcode' ) );
+	}
+
+	/**
+	 * Should the floating launcher tab be shown? Off when the teacher opens the
+	 * panel from their own menu instead.
+	 *
+	 * @return bool
+	 */
+	protected function show_launcher() {
+		$show = get_option( 'tbt_notes_show_launcher', '1' ) !== '0';
+		/**
+		 * Filter whether the floating Notes launcher tab is shown.
+		 *
+		 * @param bool $show Whether to show the tab.
+		 */
+		return (bool) apply_filters( 'tbt_notes_show_launcher', $show );
+	}
+
+	/**
+	 * Shortcode: a button that opens the Notes panel. Use it in a page, widget
+	 * or block, e.g. [tbt_notes label="Notes"].
+	 *
+	 * @param array $atts Shortcode attributes.
+	 * @return string
+	 */
+	public function render_shortcode( $atts ) {
+		if ( ! is_user_logged_in() ) {
+			return '';
+		}
+		$atts = shortcode_atts(
+			array(
+				'label' => __( 'Notes', 'tbt-notes' ),
+				'class' => '',
+			),
+			$atts,
+			'tbt_notes'
+		);
+
+		$extra = '';
+		if ( ! empty( $atts['class'] ) ) {
+			$parts = array_filter( array_map( 'sanitize_html_class', explode( ' ', $atts['class'] ) ) );
+			$extra = $parts ? ' ' . implode( ' ', $parts ) : '';
+		}
+
+		return '<button type="button" class="tbt-notes-trigger tbt-notes-shortcode-btn' . esc_attr( $extra ) . '" data-tbt-notes-open>' . esc_html( $atts['label'] ) . '</button>';
 	}
 
 	/**
@@ -187,12 +233,14 @@ class TBT_Notes_Frontend {
 		}
 		?>
 		<div id="tbt-notes-app" class="tbt-notes-app" data-tbt-notes>
-			<button type="button" id="tbt-notes-launcher" class="tbt-notes-launcher" aria-haspopup="dialog" aria-expanded="false" aria-controls="tbt-notes-panel" aria-label="<?php echo esc_attr__( 'Open notes', 'tbt-notes' ); ?>">
-				<svg class="tbt-notes-icon" viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" focusable="false">
-					<path fill="currentColor" d="M6 2h9l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2Zm8 1.5V8h4.5L14 3.5ZM8 12h8v1.6H8V12Zm0 3.4h8V17H8v-1.6ZM8 8.6h4v1.6H8V8.6Z"/>
-				</svg>
-				<span class="tbt-notes-launcher-label"><?php echo esc_html__( 'Notes', 'tbt-notes' ); ?></span>
-			</button>
+			<?php if ( $this->show_launcher() ) : ?>
+				<button type="button" id="tbt-notes-launcher" class="tbt-notes-launcher" aria-haspopup="dialog" aria-expanded="false" aria-controls="tbt-notes-panel" aria-label="<?php echo esc_attr__( 'Open notes', 'tbt-notes' ); ?>">
+					<svg class="tbt-notes-icon" viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" focusable="false">
+						<path fill="currentColor" d="M6 2h9l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2Zm8 1.5V8h4.5L14 3.5ZM8 12h8v1.6H8V12Zm0 3.4h8V17H8v-1.6ZM8 8.6h4v1.6H8V8.6Z"/>
+					</svg>
+					<span class="tbt-notes-launcher-label"><?php echo esc_html__( 'Notes', 'tbt-notes' ); ?></span>
+				</button>
+			<?php endif; ?>
 
 			<div id="tbt-notes-overlay" class="tbt-notes-overlay" hidden></div>
 

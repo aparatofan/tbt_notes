@@ -20,20 +20,25 @@ if ( ! defined( 'ABSPATH' ) ) {
 class TBT_Notes_Capabilities {
 
 	/**
-	 * Roles that should receive the management capability on activation.
+	 * Roles that should receive the management capability.
 	 *
-	 * Filterable so additional roles (e.g. a future "teacher" role) can be
-	 * granted authoring rights without code changes.
+	 * Read from the saved setting (configurable on the TBT Notes admin page),
+	 * defaulting to administrators. Filterable so additional roles (e.g. a
+	 * future "teacher" role) can be granted authoring rights in code too.
 	 *
 	 * @return string[]
 	 */
 	public static function managing_roles() {
+		$roles = get_option( 'tbt_notes_manager_roles', array( 'administrator' ) );
+		if ( ! is_array( $roles ) || empty( $roles ) ) {
+			$roles = array( 'administrator' );
+		}
 		/**
 		 * Filter the list of roles granted the TBT Notes management capability.
 		 *
 		 * @param string[] $roles Role slugs.
 		 */
-		return (array) apply_filters( 'tbt_notes_managing_roles', array( 'administrator' ) );
+		return (array) apply_filters( 'tbt_notes_managing_roles', $roles );
 	}
 
 	/**
@@ -44,6 +49,34 @@ class TBT_Notes_Capabilities {
 			$role = get_role( $role_slug );
 			if ( $role && ! $role->has_cap( TBT_NOTES_CAP ) ) {
 				$role->add_cap( TBT_NOTES_CAP );
+			}
+		}
+	}
+
+	/**
+	 * Sync the management capability across all roles to match a selection.
+	 * Roles in the list gain the cap; all others lose it. Used by the settings
+	 * page. (Administrators always manage via manage_options regardless.)
+	 *
+	 * @param string[] $selected_roles Role slugs that should have the cap.
+	 */
+	public static function sync_role_caps( $selected_roles ) {
+		$selected = array_map( 'strval', (array) $selected_roles );
+		$roles    = wp_roles();
+		if ( ! $roles ) {
+			return;
+		}
+		foreach ( array_keys( $roles->roles ) as $role_slug ) {
+			$role = get_role( $role_slug );
+			if ( ! $role ) {
+				continue;
+			}
+			if ( in_array( $role_slug, $selected, true ) ) {
+				if ( ! $role->has_cap( TBT_NOTES_CAP ) ) {
+					$role->add_cap( TBT_NOTES_CAP );
+				}
+			} elseif ( $role->has_cap( TBT_NOTES_CAP ) ) {
+				$role->remove_cap( TBT_NOTES_CAP );
 			}
 		}
 	}
@@ -71,9 +104,11 @@ class TBT_Notes_Capabilities {
 	 * @return bool
 	 */
 	public static function user_can_manage( $user_id = null ) {
+		// Administrators (manage_options) always count as teachers, so access
+		// never depends solely on the custom capability having been attached.
 		if ( null === $user_id ) {
-			return current_user_can( TBT_NOTES_CAP );
+			return current_user_can( TBT_NOTES_CAP ) || current_user_can( 'manage_options' );
 		}
-		return user_can( $user_id, TBT_NOTES_CAP );
+		return user_can( $user_id, TBT_NOTES_CAP ) || user_can( $user_id, 'manage_options' );
 	}
 }

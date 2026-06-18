@@ -36,6 +36,13 @@ class TBT_Notes_Plugin {
 	protected $frontend;
 
 	/**
+	 * Admin controller.
+	 *
+	 * @var TBT_Notes_Admin
+	 */
+	protected $admin;
+
+	/**
 	 * Get the singleton.
 	 *
 	 * @return TBT_Notes_Plugin
@@ -53,6 +60,7 @@ class TBT_Notes_Plugin {
 	protected function __construct() {
 		$this->rest     = new TBT_Notes_REST();
 		$this->frontend = new TBT_Notes_Frontend();
+		$this->admin    = new TBT_Notes_Admin();
 	}
 
 	/**
@@ -61,6 +69,10 @@ class TBT_Notes_Plugin {
 	public function run() {
 		$this->rest->register();
 		$this->frontend->register();
+
+		if ( is_admin() ) {
+			$this->admin->register();
+		}
 
 		add_action( 'init', array( $this, 'load_textdomain' ) );
 	}

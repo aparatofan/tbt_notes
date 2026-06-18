@@ -49,6 +49,7 @@ require_once TBT_NOTES_PLUGIN_DIR . 'includes/class-tbt-notes-capabilities.php';
 require_once TBT_NOTES_PLUGIN_DIR . 'includes/class-tbt-notes-sanitizer.php';
 require_once TBT_NOTES_PLUGIN_DIR . 'includes/class-tbt-notes-rest.php';
 require_once TBT_NOTES_PLUGIN_DIR . 'includes/class-tbt-notes-frontend.php';
+require_once TBT_NOTES_PLUGIN_DIR . 'includes/class-tbt-notes-admin.php';
 require_once TBT_NOTES_PLUGIN_DIR . 'includes/class-tbt-notes-plugin.php';
 
 /**

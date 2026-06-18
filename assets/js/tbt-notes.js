@@ -22,10 +22,13 @@
 	var launcher = document.getElementById( 'tbt-notes-launcher' );
 	var overlay = document.getElementById( 'tbt-notes-overlay' );
 	var panel = document.getElementById( 'tbt-notes-panel' );
-	if ( ! root || ! launcher || ! panel ) {
+	// The launcher tab is optional (it can be opened from a shortcode/menu
+	// instead), so only the panel itself is required.
+	if ( ! root || ! panel ) {
 		return;
 	}
 	var content = panel.querySelector( '[data-tbt-content]' );
+	var lastOpener = null;
 
 	/* ---------------------------------------------------------------- State */
 
@@ -118,9 +121,14 @@
 
 	/* ---------------------------------------------------------- Panel open/close */
 
-	function openPanel() {
+	function openPanel( opener ) {
+		if ( opener ) {
+			lastOpener = opener;
+		}
 		root.classList.add( 'is-open' );
-		launcher.setAttribute( 'aria-expanded', 'true' );
+		if ( launcher ) {
+			launcher.setAttribute( 'aria-expanded', 'true' );
+		}
 		panel.setAttribute( 'aria-hidden', 'false' );
 		overlay.hidden = false;
 		document.addEventListener( 'keydown', onKeydown );
@@ -138,11 +146,16 @@
 	function closePanel() {
 		flushActiveSaver();
 		root.classList.remove( 'is-open' );
-		launcher.setAttribute( 'aria-expanded', 'false' );
+		if ( launcher ) {
+			launcher.setAttribute( 'aria-expanded', 'false' );
+		}
 		panel.setAttribute( 'aria-hidden', 'true' );
 		overlay.hidden = true;
 		document.removeEventListener( 'keydown', onKeydown );
-		launcher.focus();
+		var returnTo = lastOpener || launcher;
+		if ( returnTo && typeof returnTo.focus === 'function' ) {
+			returnTo.focus();
+		}
 	}
 
 	function onKeydown( e ) {
@@ -918,11 +931,31 @@
 
 	/* ----------------------------------------------------------------- Events */
 
-	launcher.addEventListener( 'click', function () {
+	if ( launcher ) {
+		launcher.addEventListener( 'click', function () {
+			if ( root.classList.contains( 'is-open' ) ) {
+				closePanel();
+			} else {
+				openPanel( launcher );
+			}
+		} );
+	}
+
+	// Open from anywhere: a shortcode button, a menu item linking to #tbt-notes,
+	// or any element carrying the tbt-notes-trigger class / data-tbt-notes-open.
+	document.addEventListener( 'click', function ( e ) {
+		if ( ! e.target || ! e.target.closest ) {
+			return;
+		}
+		var trigger = e.target.closest( '[data-tbt-notes-open], .tbt-notes-trigger, a[href$="#tbt-notes"]' );
+		if ( ! trigger || trigger.id === 'tbt-notes-launcher' ) {
+			return;
+		}
+		e.preventDefault();
 		if ( root.classList.contains( 'is-open' ) ) {
 			closePanel();
 		} else {
-			openPanel();
+			openPanel( trigger );
 		}
 	} );
 

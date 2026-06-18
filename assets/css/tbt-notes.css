@@ -10,11 +10,16 @@
 .tbt-notes-app {
 	--tbt-accent: #2b6cb0;
 	--tbt-accent-contrast: #ffffff;
-	--tbt-panel-bg: #ffffff;
+	/* Frosted-glass panel: translucent white + blur. Falls back to near-opaque
+	   white where backdrop-filter is unsupported. Tune the alpha/blur here. */
+	--tbt-panel-bg: rgba(255, 255, 255, 0.85);
+	--tbt-panel-blur: 14px;
+	--tbt-card-bg: rgba(255, 255, 255, 0.55);
+	--tbt-card-bg-hover: rgba(255, 255, 255, 0.85);
 	--tbt-panel-fg: #1a202c;
-	--tbt-muted: #64748b;
-	--tbt-border: #e2e8f0;
-	--tbt-hover: #f1f5f9;
+	--tbt-muted: #475569;
+	--tbt-border: rgba(148, 163, 184, 0.4);
+	--tbt-hover: rgba(241, 245, 249, 0.7);
 	--tbt-danger: #c0392b;
 	--tbt-panel-width: 390px;
 	--tbt-z: 99990;
@@ -109,6 +114,8 @@
 	max-width: 92vw;
 	z-index: calc(var(--tbt-z) + 2);
 	background: var(--tbt-panel-bg);
+	-webkit-backdrop-filter: blur(var(--tbt-panel-blur)) saturate(120%);
+	backdrop-filter: blur(var(--tbt-panel-blur)) saturate(120%);
 	box-shadow: 4px 0 24px rgba(0, 0, 0, 0.18);
 	transform: translateX(-100%);
 	transition: transform 0.25s ease;
@@ -212,12 +219,12 @@
 	gap: 6px;
 	border: 1px solid var(--tbt-border);
 	border-radius: 10px;
-	background: #fff;
+	background: var(--tbt-card-bg);
 	transition: background 0.12s ease, border-color 0.12s ease;
 }
 
 .tbt-notes-listitem:hover {
-	background: var(--tbt-hover);
+	background: var(--tbt-card-bg-hover);
 	border-color: #cbd5e1;
 }
 
@@ -595,6 +602,25 @@
 .tbt-notes-inlinemsg--error {
 	background: #fdecea;
 	color: var(--tbt-danger);
+}
+
+/* Shortcode trigger button (kept neutral so it inherits your theme/menu). */
+.tbt-notes-shortcode-btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 8px 14px;
+	border: 1px solid var(--tbt-accent);
+	border-radius: 9px;
+	background: var(--tbt-accent);
+	color: var(--tbt-accent-contrast);
+	font: inherit;
+	font-weight: 600;
+	cursor: pointer;
+}
+
+.tbt-notes-shortcode-btn:hover {
+	filter: brightness(0.95);
 }
 
 /* On small screens, fill the width. */
