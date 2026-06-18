@@ -28,7 +28,7 @@ class TBT_Notes_Sanitizer {
 	 * @return string[]
 	 */
 	public static function allowed_classes() {
-		return array( 'tbt-hl-blue', 'tbt-hl-yellow', 'tbt-hl-red' );
+		return array( 'tbt-hl-blue', 'tbt-hl-yellow', 'tbt-hl-red', 'tbt-hl-green' );
 	}
 
 	/**

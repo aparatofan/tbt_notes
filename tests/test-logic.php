@@ -120,7 +120,7 @@ function test_allowlist() {
 	ok( isset( $allowed['strong'], $allowed['em'], $allowed['h2'] ), 'bold/italic/heading allowed' );
 
 	$classes = TBT_Notes_Sanitizer::allowed_classes();
-	ok( $classes === array( 'tbt-hl-blue', 'tbt-hl-yellow', 'tbt-hl-red' ), 'exactly three highlight classes' );
+	ok( $classes === array( 'tbt-hl-blue', 'tbt-hl-yellow', 'tbt-hl-red', 'tbt-hl-green' ), 'four highlight classes (blue/yellow/red/green)' );
 }
 test_allowlist();
 

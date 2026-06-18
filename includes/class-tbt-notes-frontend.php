@@ -171,6 +171,10 @@ class TBT_Notes_Frontend {
 					'key'   => 'red',
 					'label' => __( 'Red', 'tbt-notes' ),
 				),
+				array(
+					'key'   => 'green',
+					'label' => __( 'Green', 'tbt-notes' ),
+				),
 			),
 			'i18n'            => $this->strings(),
 		);
@@ -193,6 +197,8 @@ class TBT_Notes_Frontend {
 			'noClassesTeacher'  => __( 'No classes yet. Create one to get started.', 'tbt-notes' ),
 			'newClass'          => __( 'New class', 'tbt-notes' ),
 			'newLesson'         => __( 'New lesson', 'tbt-notes' ),
+			'newLessonShort'    => __( '+ NEW', 'tbt-notes' ),
+			'searchClasses'     => __( 'Search classes…', 'tbt-notes' ),
 			'classTitle'        => __( 'Class title', 'tbt-notes' ),
 			'classTitlePh'      => __( 'e.g. Iwona Wróbel', 'tbt-notes' ),
 			'assignedStudent'   => __( 'Assigned student', 'tbt-notes' ),

@@ -200,11 +200,11 @@
 
 	function buildTopbar( opts ) {
 		var bar = el( 'div', 'tbt-notes-topbar' );
-		var inner = el( 'div', 'tbt-notes-topbar__inner' );
+		var inner = el( 'div', 'tbt-notes-topbar__inner' + ( opts.centerTitle ? ' tbt-notes-topbar--centered' : '' ) );
 		if ( opts.onBack ) {
 			inner.appendChild( iconButton( '‹', t( 'back', 'Back' ), opts.onBack ) );
 		}
-		inner.appendChild( el( 'h2', 'tbt-notes-topbar__title', opts.title || '' ) );
+		inner.appendChild( el( 'h2', 'tbt-notes-topbar__title' + ( opts.centerTitle ? ' tbt-notes-topbar__title--class' : '' ), opts.title || '' ) );
 		( opts.buttons || [] ).forEach( function ( btn ) {
 			inner.appendChild( iconButton( btn.symbol, btn.label, btn.onClick ) );
 		} );
@@ -279,13 +279,42 @@
 
 		if ( ! state.classes.length ) {
 			body.appendChild( emptyBlock( t( 'noClassesTeacher', 'No classes yet.' ) ) );
-		} else {
-			var list = el( 'ul', 'tbt-notes-list' );
-			state.classes.forEach( function ( cls ) {
+			content.appendChild( body );
+			return;
+		}
+
+		// Filter-as-you-type search (classes are already loaded client-side).
+		var search = el( 'input', 'tbt-notes-input tbt-notes-classsearch' );
+		search.type = 'text';
+		search.placeholder = t( 'searchClasses', 'Search classes…' );
+		search.setAttribute( 'autocomplete', 'off' );
+		body.appendChild( search );
+
+		var list = el( 'ul', 'tbt-notes-list' );
+		body.appendChild( list );
+
+		function renderList( term ) {
+			clear( list );
+			var q = ( term || '' ).trim().toLowerCase();
+			var matches = state.classes.filter( function ( cls ) {
+				return ! q || ( cls.title || '' ).toLowerCase().indexOf( q ) !== -1;
+			} );
+			if ( ! matches.length ) {
+				var li = el( 'li' );
+				li.appendChild( el( 'div', 'tbt-notes-empty', t( 'noResults', 'No matches' ) ) );
+				list.appendChild( li );
+				return;
+			}
+			matches.forEach( function ( cls ) {
 				list.appendChild( classListItem( cls ) );
 			} );
-			body.appendChild( list );
 		}
+
+		search.addEventListener( 'input', function () {
+			renderList( search.value );
+		} );
+		renderList( '' );
+
 		content.appendChild( body );
 	}
 
@@ -358,6 +387,7 @@
 
 		content.appendChild( buildTopbar( {
 			title: cls ? ( cls.title || t( 'untitledClass', 'Untitled class' ) ) : '',
+			centerTitle: true,
 			onBack: isTeacher ? function () {
 				flushActiveSaver();
 				state.view = 'root';
@@ -376,7 +406,7 @@
 		var sbHead = el( 'div', 'tbt-notes-sidebar__head' );
 		sbHead.appendChild( el( 'span', 'tbt-notes-sidebar__title', t( 'lessons', 'Lessons' ) ) );
 		if ( isTeacher ) {
-			var addLesson = el( 'button', 'tbt-notes-btn tbt-notes-btn--small', '+ ' + t( 'newLesson', 'New lesson' ) );
+			var addLesson = el( 'button', 'tbt-notes-btn', t( 'newLessonShort', '+ NEW' ) );
 			addLesson.type = 'button';
 			addLesson.addEventListener( 'click', createLessonFlow );
 			sbHead.appendChild( addLesson );
@@ -435,8 +465,8 @@
 		var active = state.currentLesson && state.currentLesson.id === lesson.id;
 		var main = el( 'button', 'tbt-notes-listitem__main' + ( active ? ' is-active' : '' ) );
 		main.type = 'button';
+		// Lesson title only — the header is already a date, so no separate date line.
 		main.appendChild( el( 'span', 'tbt-notes-listitem__title', lesson.header || t( 'untitledLesson', 'Untitled lesson' ) ) );
-		main.appendChild( el( 'span', 'tbt-notes-listitem__meta', fmtDate( lesson.created_at ) ) );
 		main.addEventListener( 'click', function () {
 			selectLesson( lesson );
 		} );

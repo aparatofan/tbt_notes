@@ -1,19 +1,15 @@
 /**
  * TBT Notes — front-end styles.
  *
- * A full-screen notes page that slides in from the left, below the WordPress
- * admin bar. Inside a class: a collapsible lessons sidebar (left) + the selected
- * lesson (right). Solid white, Roboto Slab, TBT blue. Content is left-aligned so
- * it works in a split-screen half-window.
+ * Design system first: a shared type scale, role-based styles (one rule per
+ * role: labels, buttons, cards, icon buttons), and a 4px spacing scale — all as
+ * variables/shared selectors so the UI stays consistent. Specific tweaks build
+ * on top.
+ *
+ * Layout: a full-screen notes page that slides in from the left, below the WP
+ * admin bar. Inside a class it's master/detail — a collapsible lessons list on
+ * the left, the selected lesson on the right.
  */
-
-@font-face {
-	font-family: "Roboto Slab";
-	font-style: normal;
-	font-weight: 300;
-	font-display: swap;
-	src: url("../vendor/fonts/roboto-slab-latin-300-normal.woff2") format("woff2");
-}
 
 @font-face {
 	font-family: "Roboto Slab";
@@ -32,6 +28,7 @@
 }
 
 .tbt-notes-app {
+	/* Colour */
 	--tbt-accent: #0856c9;
 	--tbt-accent-hover: #0746a6;
 	--tbt-accent-soft: #e7f0fd;
@@ -42,13 +39,30 @@
 	--tbt-border: #d8dee9;
 	--tbt-hover: #eef3fb;
 	--tbt-danger: #c0392b;
+
+	/* Type scale (importance encoded by size). */
+	--tbt-fs-classname: 40px;
+	--tbt-fs-lessontitle: 30px;
+	--tbt-fs-topbar: 22px;
+	--tbt-fs-listitem: 16px;
+	--tbt-fs-body: 17px;
+	--tbt-fs-label: 13px;
+	--tbt-fw-body: 400;
+
+	/* Spacing scale (multiples of 4). */
+	--tbt-s1: 8px;
+	--tbt-s2: 12px;
+	--tbt-s3: 16px;
+	--tbt-s4: 24px;
+	--tbt-radius: 10px;
+
 	--tbt-admin-offset: 0px;
-	--tbt-reading-width: 1000px;
 	--tbt-z: 99990;
 
 	--tbt-hl-blue: #bcdcff;
 	--tbt-hl-yellow: #fff2a8;
 	--tbt-hl-red: #ffc2c2;
+	--tbt-hl-green: #c6efc3;
 
 	font-family: "Roboto Slab", Georgia, "Times New Roman", serif;
 	color: var(--tbt-text);
@@ -60,8 +74,93 @@
 	box-sizing: border-box;
 }
 
+/* ====================================================== Shared role styles == */
+
+/* Section labels: one quiet, uppercase, muted style for ALL of them. */
+.tbt-notes-field__label,
+.tbt-notes-sidebar__title {
+	display: block;
+	font-size: var(--tbt-fs-label);
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+	color: var(--tbt-muted);
+	margin: 0;
+}
+
+/* Primary buttons: one style for "New class", "+ NEW", etc. */
+.tbt-notes-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: var(--tbt-s1);
+	padding: var(--tbt-s2) var(--tbt-s4);
+	border-radius: var(--tbt-radius);
+	border: 1px solid var(--tbt-accent);
+	background: var(--tbt-accent);
+	color: var(--tbt-accent-contrast);
+	font: inherit;
+	font-weight: 700;
+	cursor: pointer;
+	line-height: 1.2;
+}
+
+.tbt-notes-btn:hover {
+	background: var(--tbt-accent-hover);
+	border-color: var(--tbt-accent-hover);
+}
+
+.tbt-notes-btn--ghost {
+	background: transparent;
+	color: var(--tbt-accent);
+}
+
+.tbt-notes-btn--ghost:hover {
+	background: var(--tbt-hover);
+}
+
+.tbt-notes-btn--danger {
+	border-color: var(--tbt-danger);
+	background: transparent;
+	color: var(--tbt-danger);
+}
+
+.tbt-notes-btn--danger:hover {
+	background: #fdecea;
+}
+
+.tbt-notes-btn--block {
+	width: 100%;
+}
+
+/* Icon buttons: one size + hover for all of them (close, back, trash…). */
+.tbt-notes-iconbtn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 40px;
+	height: 40px;
+	border: 1px solid transparent;
+	border-radius: var(--tbt-radius);
+	background: transparent;
+	color: var(--tbt-text);
+	cursor: pointer;
+	font-size: 22px;
+	line-height: 1;
+	flex: 0 0 auto;
+	font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+.tbt-notes-iconbtn:hover {
+	background: var(--tbt-hover);
+}
+
+.tbt-notes-iconbtn:focus-visible {
+	outline: 2px solid var(--tbt-accent);
+	outline-offset: 1px;
+}
+
 /* ------------------------------------------------------------------ Launcher */
-/* Bottom-left corner, just inside the edge. */
 
 .tbt-notes-launcher {
 	position: fixed;
@@ -72,10 +171,10 @@
 	display: inline-flex;
 	flex-direction: row;
 	align-items: center;
-	gap: 8px;
+	gap: var(--tbt-s1);
 	padding: 11px 16px;
 	border: 0;
-	border-radius: 10px;
+	border-radius: var(--tbt-radius);
 	background: var(--tbt-accent);
 	color: var(--tbt-accent-contrast);
 	cursor: pointer;
@@ -160,23 +259,23 @@
 /* --------------------------------------------------------------- Panel chrome */
 
 .tbt-notes-topbar {
-	display: flex;
-	align-items: center;
-	padding: 10px 18px;
-	border-bottom: 2px solid var(--tbt-accent);
 	flex: 0 0 auto;
 	background: #fff;
+	border-bottom: 2px solid var(--tbt-accent);
+	padding: var(--tbt-s2) var(--tbt-s4);
 }
 
 .tbt-notes-topbar__inner {
+	position: relative;
 	display: flex;
 	align-items: center;
-	gap: 10px;
+	gap: var(--tbt-s2);
 	width: 100%;
+	min-height: 48px;
 }
 
 .tbt-notes-topbar__title {
-	font-size: 22px;
+	font-size: var(--tbt-fs-topbar);
 	font-weight: 700;
 	margin: 0;
 	flex: 1 1 auto;
@@ -186,30 +285,29 @@
 	white-space: nowrap;
 }
 
-.tbt-notes-iconbtn {
-	display: inline-flex;
+/* Class name: largest text, Roboto Slab, centred both ways in the bar. */
+.tbt-notes-topbar--centered {
+	min-height: 64px;
+}
+
+.tbt-notes-topbar__title--class {
+	position: absolute;
+	inset: 0;
+	display: flex;
 	align-items: center;
 	justify-content: center;
-	width: 40px;
-	height: 40px;
-	border: 1px solid transparent;
-	border-radius: 8px;
-	background: transparent;
-	color: var(--tbt-text);
-	cursor: pointer;
-	font-size: 22px;
-	line-height: 1;
-	flex: 0 0 auto;
-	font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+	font-family: "Roboto Slab", Georgia, serif;
+	font-size: var(--tbt-fs-classname);
+	font-weight: 700;
+	letter-spacing: 1px;
+	text-transform: uppercase;
+	padding: 0 140px;
+	pointer-events: none;
 }
 
-.tbt-notes-iconbtn:hover {
-	background: var(--tbt-hover);
-}
-
-.tbt-notes-iconbtn:focus-visible {
-	outline: 2px solid var(--tbt-accent);
-	outline-offset: 1px;
+/* With an absolute title, push the trailing controls to the right. */
+.tbt-notes-topbar--centered .tbt-notes-topbar__title + .tbt-notes-iconbtn {
+	margin-left: auto;
 }
 
 /* Non-split views (classes list, settings, empty) — left-aligned column. */
@@ -220,7 +318,11 @@
 	width: 100%;
 	max-width: 760px;
 	margin: 0;
-	padding: 22px 24px 48px;
+	padding: var(--tbt-s4);
+}
+
+.tbt-notes-classsearch {
+	margin-bottom: var(--tbt-s3);
 }
 
 /* ----------------------------------------------------------- Master / detail */
@@ -236,7 +338,7 @@
 	width: 300px;
 	border-right: 1px solid var(--tbt-border);
 	overflow-y: auto;
-	padding: 14px 12px;
+	padding: var(--tbt-s3) var(--tbt-s2);
 	background: #fbfcfe;
 }
 
@@ -248,16 +350,8 @@
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
-	gap: 8px;
-	margin-bottom: 10px;
-}
-
-.tbt-notes-sidebar__title {
-	font-weight: 700;
-	font-size: 14px;
-	text-transform: uppercase;
-	letter-spacing: 0.05em;
-	color: var(--tbt-muted);
+	gap: var(--tbt-s1);
+	margin-bottom: var(--tbt-s3);
 }
 
 .tbt-notes-lesson-nav {
@@ -266,7 +360,7 @@
 	padding: 0;
 	display: flex;
 	flex-direction: column;
-	gap: 6px;
+	gap: var(--tbt-s1);
 }
 
 .tbt-notes-detail {
@@ -281,13 +375,12 @@
 	flex: 1 1 auto;
 	min-height: 0;
 	overflow-y: auto;
-	padding: 24px 28px 56px;
+	padding: var(--tbt-s4) var(--tbt-s4) 56px;
 	width: 100%;
-	max-width: var(--tbt-reading-width);
-	margin: 0;
+	max-width: none;
 }
 
-/* --------------------------------------------------------------------- Lists */
+/* --------------------------------------------------------------------- Cards */
 
 .tbt-notes-list {
 	list-style: none;
@@ -295,15 +388,15 @@
 	padding: 0;
 	display: flex;
 	flex-direction: column;
-	gap: 8px;
+	gap: var(--tbt-s1);
 }
 
 .tbt-notes-listitem {
 	display: flex;
 	align-items: center;
-	gap: 6px;
+	gap: var(--tbt-s1);
 	border: 1px solid var(--tbt-border);
-	border-radius: 10px;
+	border-radius: var(--tbt-radius);
 	background: #fff;
 	transition: background 0.12s ease, border-color 0.12s ease;
 }
@@ -319,11 +412,11 @@
 	border: 0;
 	background: transparent;
 	cursor: pointer;
-	padding: 12px 13px;
+	padding: var(--tbt-s2) var(--tbt-s3);
 	font: inherit;
 	color: inherit;
 	min-width: 0;
-	border-radius: 10px;
+	border-radius: var(--tbt-radius);
 }
 
 .tbt-notes-listitem__main.is-active {
@@ -332,7 +425,8 @@
 }
 
 .tbt-notes-listitem__title {
-	font-weight: 700;
+	font-size: var(--tbt-fs-listitem);
+	font-weight: 600;
 	display: block;
 	overflow: hidden;
 	text-overflow: ellipsis;
@@ -343,19 +437,20 @@
 	display: block;
 	font-size: 13px;
 	color: var(--tbt-muted);
-	margin-top: 3px;
+	margin-top: 4px;
 }
 
 .tbt-notes-listitem__delete {
 	flex: 0 0 auto;
-	margin-right: 6px;
+	margin-right: var(--tbt-s1);
 	border: 0;
 	background: transparent;
 	color: var(--tbt-muted);
 	cursor: pointer;
-	font-size: 17px;
-	padding: 8px;
-	border-radius: 8px;
+	font-size: 18px;
+	width: 40px;
+	height: 40px;
+	border-radius: var(--tbt-radius);
 	line-height: 1;
 }
 
@@ -369,71 +464,22 @@
 .tbt-notes-empty,
 .tbt-notes-loading {
 	color: var(--tbt-muted);
-	font-size: 16px;
+	font-size: var(--tbt-fs-body);
 	text-align: center;
-	padding: 32px 16px;
+	padding: var(--tbt-s4) var(--tbt-s3);
 	display: flex;
 	flex-direction: column;
 	align-items: center;
-	gap: 14px;
+	gap: var(--tbt-s2);
 }
 
 /* -------------------------------------------------------------------- Buttons */
 
-.tbt-notes-btn {
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	gap: 6px;
-	padding: 11px 18px;
-	border-radius: 9px;
-	border: 1px solid var(--tbt-accent);
-	background: var(--tbt-accent);
-	color: var(--tbt-accent-contrast);
-	font: inherit;
-	font-weight: 700;
-	cursor: pointer;
-}
-
-.tbt-notes-btn:hover {
-	background: var(--tbt-accent-hover);
-	border-color: var(--tbt-accent-hover);
-}
-
-.tbt-notes-btn--small {
-	padding: 6px 10px;
-	font-size: 13px;
-	border-radius: 7px;
-}
-
-.tbt-notes-btn--ghost {
-	background: transparent;
-	color: var(--tbt-accent);
-}
-
-.tbt-notes-btn--ghost:hover {
-	background: var(--tbt-hover);
-}
-
-.tbt-notes-btn--danger {
-	border-color: var(--tbt-danger);
-	background: transparent;
-	color: var(--tbt-danger);
-}
-
-.tbt-notes-btn--danger:hover {
-	background: #fdecea;
-}
-
-.tbt-notes-btn--block {
-	width: 100%;
-}
-
 .tbt-notes-toolbar-row {
 	display: flex;
-	gap: 10px;
+	gap: var(--tbt-s2);
 	align-items: center;
-	margin-bottom: 16px;
+	margin-bottom: var(--tbt-s3);
 }
 
 .tbt-notes-toolbar-row .tbt-notes-btn {
@@ -443,26 +489,20 @@
 /* ---------------------------------------------------------------- Form fields */
 
 .tbt-notes-field {
-	margin-bottom: 18px;
+	margin-bottom: var(--tbt-s4);
 	position: relative;
 }
 
 .tbt-notes-field__label {
-	display: block;
-	font-size: 13px;
-	font-weight: 700;
-	color: var(--tbt-muted);
-	margin-bottom: 6px;
-	text-transform: uppercase;
-	letter-spacing: 0.04em;
+	margin-bottom: var(--tbt-s1);
 }
 
 .tbt-notes-input,
 .tbt-notes-select {
 	width: 100%;
-	padding: 11px 13px;
+	padding: var(--tbt-s2) var(--tbt-s2);
 	border: 1px solid var(--tbt-border);
-	border-radius: 9px;
+	border-radius: var(--tbt-radius);
 	font: inherit;
 	background: #fff;
 	color: var(--tbt-text);
@@ -480,14 +520,14 @@
 .tbt-notes-chips {
 	display: flex;
 	flex-wrap: wrap;
-	gap: 8px;
-	margin-bottom: 12px;
+	gap: var(--tbt-s1);
+	margin-bottom: var(--tbt-s2);
 }
 
 .tbt-notes-chip {
 	display: inline-flex;
 	align-items: center;
-	gap: 6px;
+	gap: var(--tbt-s1);
 	padding: 6px 6px 6px 14px;
 	border: 1px solid var(--tbt-accent);
 	border-radius: 20px;
@@ -497,7 +537,7 @@
 }
 
 .tbt-notes-chip__name {
-	font-weight: 700;
+	font-weight: 600;
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
@@ -521,10 +561,10 @@
 
 .tbt-notes-userresults {
 	list-style: none;
-	margin: 6px 0 0;
+	margin: var(--tbt-s1) 0 0;
 	padding: 4px;
 	border: 1px solid var(--tbt-border);
-	border-radius: 10px;
+	border-radius: var(--tbt-radius);
 	background: #fff;
 	box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
 	max-height: 320px;
@@ -537,7 +577,7 @@
 	border: 0;
 	background: transparent;
 	border-radius: 7px;
-	padding: 10px 12px;
+	padding: var(--tbt-s2);
 	font: inherit;
 	color: var(--tbt-text);
 	cursor: pointer;
@@ -555,7 +595,7 @@
 }
 
 .tbt-notes-userresult__user {
-	font-weight: 700;
+	font-weight: 600;
 }
 
 .tbt-notes-userresult__sub {
@@ -566,22 +606,22 @@
 .tbt-notes-hint {
 	font-size: 13px;
 	color: var(--tbt-muted);
-	margin: 6px 0 0;
+	margin: var(--tbt-s1) 0 0;
 }
 
 /* --------------------------------------------------------------- Read view */
 
 .tbt-notes-read-header {
-	font-size: 26px;
+	font-size: var(--tbt-fs-lessontitle);
 	font-weight: 700;
 	color: var(--tbt-accent);
-	margin: 0 0 18px;
+	margin: 0 0 var(--tbt-s3);
 	line-height: 1.3;
 }
 
 .tbt-notes-read {
-	font-size: 20px;
-	font-weight: 300;
+	font-size: var(--tbt-fs-body);
+	font-weight: var(--tbt-fw-body);
 	line-height: 1.6;
 	color: var(--tbt-text);
 	word-wrap: break-word;
@@ -590,7 +630,7 @@
 
 .tbt-notes-read p {
 	margin: 0 0 0.7em;
-	font-weight: 300;
+	font-weight: var(--tbt-fw-body);
 }
 
 .tbt-notes-read strong,
@@ -671,6 +711,7 @@
 }
 
 /* --------------------------------------------------------------- Editor view */
+/* Fills the full width of the detail pane (no artificial max-width). */
 
 .tbt-notes-editorwrap {
 	display: flex;
@@ -679,21 +720,21 @@
 	height: 100%;
 	min-height: 0;
 	width: 100%;
-	max-width: var(--tbt-reading-width);
+	max-width: none;
 }
 
 .tbt-notes-editor-header {
-	padding: 16px 28px 10px;
+	padding: var(--tbt-s4) var(--tbt-s4) var(--tbt-s2);
 	flex: 0 0 auto;
 }
 
-/* The lesson header / title field — large. */
+/* Lesson title / header field — large, roomy. */
 .tbt-notes-editor-headerinput {
-	font-size: 30px;
-	font-weight: 700;
-	padding: 8px 12px;
+	font-size: var(--tbt-fs-lessontitle);
+	font-weight: 600;
+	padding: 14px 18px;
 	border-color: transparent;
-	border-radius: 8px;
+	border-radius: var(--tbt-radius);
 }
 
 .tbt-notes-editor-headerinput:hover {
@@ -717,7 +758,7 @@
 	top: 0;
 	background: #fff;
 	z-index: 2;
-	padding: 8px 24px;
+	padding: var(--tbt-s1) var(--tbt-s4);
 }
 
 .tbt-notes-editor-quillwrap .ql-container.ql-snow {
@@ -727,14 +768,14 @@
 	overflow-y: auto;
 }
 
-/* Editor typography matches the read view: 20px, light. */
+/* Editor body matches read view: 17px, weight 400. */
 .tbt-notes-app .ql-editor {
 	font-family: "Roboto Slab", Georgia, "Times New Roman", serif;
-	font-size: 20px;
-	font-weight: 300;
+	font-size: var(--tbt-fs-body);
+	font-weight: var(--tbt-fw-body);
 	line-height: 1.6;
 	color: var(--tbt-text);
-	padding: 18px 28px 48px;
+	padding: var(--tbt-s3) var(--tbt-s4) 48px;
 }
 
 .tbt-notes-app .ql-editor strong,
@@ -742,7 +783,6 @@
 	font-weight: 700;
 }
 
-/* H2 in the editor: Roboto Slab + TBT blue. */
 .tbt-notes-app .ql-editor h1,
 .tbt-notes-app .ql-editor h2,
 .tbt-notes-app .ql-editor h3 {
@@ -755,8 +795,8 @@
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
-	gap: 10px;
-	padding: 10px 28px;
+	gap: var(--tbt-s2);
+	padding: var(--tbt-s2) var(--tbt-s4);
 	border-top: 1px solid var(--tbt-border);
 	flex: 0 0 auto;
 }
@@ -768,7 +808,7 @@
 	color: var(--tbt-muted);
 	display: inline-flex;
 	align-items: center;
-	gap: 6px;
+	gap: var(--tbt-s1);
 }
 
 .tbt-notes-saveind::before {
@@ -797,21 +837,28 @@
 .tbt-notes-app .tbt-hl-blue,
 .tbt-notes-read .tbt-hl-blue,
 .ql-editor .tbt-hl-blue {
-	background-color: #bcdcff;
+	background-color: var(--tbt-hl-blue);
 	border-radius: 2px;
 }
 
 .tbt-notes-app .tbt-hl-yellow,
 .tbt-notes-read .tbt-hl-yellow,
 .ql-editor .tbt-hl-yellow {
-	background-color: #fff2a8;
+	background-color: var(--tbt-hl-yellow);
 	border-radius: 2px;
 }
 
 .tbt-notes-app .tbt-hl-red,
 .tbt-notes-read .tbt-hl-red,
 .ql-editor .tbt-hl-red {
-	background-color: #ffc2c2;
+	background-color: var(--tbt-hl-red);
+	border-radius: 2px;
+}
+
+.tbt-notes-app .tbt-hl-green,
+.tbt-notes-read .tbt-hl-green,
+.ql-editor .tbt-hl-green {
+	background-color: var(--tbt-hl-green);
 	border-radius: 2px;
 }
 
@@ -825,15 +872,19 @@
 }
 
 .tbt-notes-editor-quillwrap .ql-toolbar .tbt-hl-btn[data-color="blue"] {
-	background: #bcdcff;
+	background: var(--tbt-hl-blue);
 }
 
 .tbt-notes-editor-quillwrap .ql-toolbar .tbt-hl-btn[data-color="yellow"] {
-	background: #fff2a8;
+	background: var(--tbt-hl-yellow);
 }
 
 .tbt-notes-editor-quillwrap .ql-toolbar .tbt-hl-btn[data-color="red"] {
-	background: #ffc2c2;
+	background: var(--tbt-hl-red);
+}
+
+.tbt-notes-editor-quillwrap .ql-toolbar .tbt-hl-btn[data-color="green"] {
+	background: var(--tbt-hl-green);
 }
 
 .tbt-notes-editor-quillwrap .ql-toolbar .tbt-hl-clear {
@@ -847,9 +898,9 @@
 
 .tbt-notes-inlinemsg {
 	font-size: 14px;
-	padding: 9px 11px;
+	padding: var(--tbt-s1) var(--tbt-s2);
 	border-radius: 8px;
-	margin-bottom: 10px;
+	margin-bottom: var(--tbt-s2);
 }
 
 .tbt-notes-inlinemsg--error {
@@ -857,14 +908,13 @@
 	color: var(--tbt-danger);
 }
 
-/* Shortcode trigger button. */
 .tbt-notes-shortcode-btn {
 	display: inline-flex;
 	align-items: center;
-	gap: 6px;
-	padding: 8px 14px;
+	gap: var(--tbt-s1);
+	padding: var(--tbt-s1) 14px;
 	border: 1px solid var(--tbt-accent);
-	border-radius: 9px;
+	border-radius: var(--tbt-radius);
 	background: var(--tbt-accent);
 	color: var(--tbt-accent-contrast);
 	font: inherit;
@@ -883,18 +933,8 @@
 		flex-basis: 230px;
 		width: 230px;
 	}
-	.tbt-notes-detail__scroll,
-	.tbt-notes-editor-header,
-	.tbt-notes-editor-footer {
-		padding-left: 16px;
-		padding-right: 16px;
-	}
-	.tbt-notes-app .ql-editor {
-		padding-left: 16px;
-		padding-right: 16px;
-	}
-	.tbt-notes-editor-quillwrap .ql-toolbar.ql-snow {
-		padding-left: 16px;
-		padding-right: 16px;
+	.tbt-notes-topbar__title--class {
+		font-size: 26px;
+		padding: 0 96px;
 	}
 }
