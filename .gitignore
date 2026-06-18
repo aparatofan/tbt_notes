@@ -1,0 +1,14 @@
+# Dependencies / build artifacts
+node_modules/
+vendor/composer/
+*.log
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# Local env
+.env
