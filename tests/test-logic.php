@@ -118,6 +118,8 @@ function test_allowlist() {
 	ok( isset( $allowed['span']['class'] ), 'span allows class (for highlights)' );
 	ok( isset( $allowed['ol'], $allowed['ul'], $allowed['li'] ), 'lists are allowed' );
 	ok( isset( $allowed['strong'], $allowed['em'], $allowed['h2'] ), 'bold/italic/heading allowed' );
+	ok( isset( $allowed['u'], $allowed['s'] ), 'underline + strikethrough allowed' );
+	ok( isset( $allowed['blockquote'] ), 'blockquote allowed' );
 
 	$classes = TBT_Notes_Sanitizer::allowed_classes();
 	ok( $classes === array( 'tbt-hl-blue', 'tbt-hl-red', 'tbt-hl-yellow', 'tbt-hl-pink', 'tbt-hl-green' ), 'five highlight classes (blue/red/yellow/pink/green)' );

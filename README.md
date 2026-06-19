@@ -46,7 +46,7 @@ the `tbt_notes_managing_roles` filter still works for code-level control.
 
 The lesson body supports exactly what v1 requires (and nothing more):
 
-- **Bold**, *italic*
+- **Bold**, *italic*, underline, strikethrough
 - **Semantic highlights** in five teacher-defined categories (stored as
   colour-based classes such as `tbt-hl-blue`, not inline styles):
   - Useful expression — blue
@@ -55,10 +55,12 @@ The lesson body supports exactly what v1 requires (and nothing more):
   - Pronunciation — pink
   - Grammar — green
 - **Highlight filtering** in the lesson view: show the full note, all
-  highlights grouped by category, or one selected category extracted as a list
+  highlights grouped by category, or one selected category extracted as a list.
+  In the teacher editor the filter lives in the toolbar; for students it sits
+  above the read-only note
 - **Links** that always open in a new tab (`target="_blank" rel="noopener noreferrer"`)
 - **Numbered and bulleted lists, including nesting** (1 → a → i …)
-- One heading level (H2)
+- One heading level (H2) and **blockquotes**
 
 Saved HTML is sanitised on the server with a tight `wp_kses` allowlist plus a
 normalisation pass (safe links, highlight-only classes). No images, no inline

@@ -478,12 +478,18 @@
 		if ( state.loadingLessons ) {
 			detail.appendChild( el( 'div', 'tbt-notes-loading', t( 'loading', 'Loading…' ) ) );
 		} else if ( state.currentLesson ) {
-			// Filter bar + a content area that swaps between the full lesson and
-			// an extracted-highlights list, without re-rendering the whole view.
-			var contentArea = el( 'div', 'tbt-notes-lesson-content' );
-			detail.appendChild( buildFilterBar( state.currentLesson, contentArea, isTeacher, headerInput ) );
-			detail.appendChild( contentArea );
-			renderLessonContent( contentArea, state.currentLesson, isTeacher, headerInput );
+			if ( isTeacher ) {
+				// The filter lives inside the Quill toolbar; the editor stays
+				// mounted and we toggle the extracted summary over it.
+				renderEditorInto( detail, state.currentLesson, headerInput );
+			} else {
+				// Students have no toolbar, so keep a simple filter bar above the
+				// read-only note and swap the content below it.
+				var contentArea = el( 'div', 'tbt-notes-lesson-content' );
+				detail.appendChild( buildFilterBar( state.currentLesson, contentArea ) );
+				detail.appendChild( contentArea );
+				renderLessonContent( contentArea, state.currentLesson );
+			}
 		} else if ( isTeacher ) {
 			var prompt = el( 'div', 'tbt-notes-empty' );
 			prompt.appendChild( el( 'p', null, t( 'noLessons', 'No lessons yet.' ) ) );
@@ -585,15 +591,16 @@
 	}
 
 	/**
-	 * The "Show: [Full note ▼]" control. Options come from cfg.highlightColors so
-	 * the dropdown always matches the toolbar's semantic categories.
+	 * Reusable "Show: [Full note ▼]" control. Options come from cfg.highlightColors
+	 * so the dropdown always matches the toolbar's semantic categories. The select
+	 * is a plain custom control (no ql-* class) so Quill leaves it alone when it
+	 * sits inside the editor toolbar. `onChange` runs after state is updated.
 	 */
-	function buildFilterBar( lesson, contentArea, isTeacher, headerInput ) {
-		var bar = el( 'div', 'tbt-notes-filterbar' );
-		var label = el( 'label' );
-		label.appendChild( el( 'span', null, t( 'show', 'Show' ) + ':' ) );
+	function buildHighlightFilterSelect( onChange ) {
+		var wrap = el( 'label', 'tbt-notes-filter-inline' );
+		wrap.appendChild( el( 'span', null, t( 'show', 'Show' ) + ':' ) );
 
-		var select = el( 'select' );
+		var select = el( 'select', 'tbt-notes-filter-select' );
 		var options = [
 			{ value: 'full', label: t( 'fullNote', 'Full note' ) },
 			{ value: 'all', label: t( 'allHighlights', 'All highlights' ) },
@@ -604,42 +611,46 @@
 		options.forEach( function ( o ) {
 			var opt = el( 'option', null, o.label );
 			opt.value = o.value;
-			if ( o.value === state.highlightFilter ) {
+			if ( o.value === ( state.highlightFilter || 'full' ) ) {
 				opt.selected = true;
 			}
 			select.appendChild( opt );
 		} );
 		select.addEventListener( 'change', function () {
 			state.highlightFilter = select.value;
-			renderLessonContent( contentArea, lesson, isTeacher, headerInput );
+			if ( onChange ) {
+				onChange();
+			}
 		} );
 
-		label.appendChild( select );
-		bar.appendChild( label );
+		wrap.appendChild( select );
+		return wrap;
+	}
+
+	/**
+	 * Student-only filter bar: the filter select above the read-only note.
+	 */
+	function buildFilterBar( lesson, contentArea ) {
+		var bar = el( 'div', 'tbt-notes-filterbar' );
+		bar.appendChild( buildHighlightFilterSelect( function () {
+			renderLessonContent( contentArea, lesson );
+		} ) );
 		return bar;
 	}
 
 	/**
-	 * Render the lesson content area for the current filter: the full lesson
-	 * (editor or read view) when 'full', otherwise an extracted-highlights list.
+	 * Render the read-only lesson content for the current filter: the full note
+	 * when 'full', otherwise an extracted-highlights list. (Students only — the
+	 * teacher editor toggles its summary in place without re-rendering Quill.)
 	 */
-	function renderLessonContent( container, lesson, isTeacher, headerInput ) {
+	function renderLessonContent( container, lesson ) {
 		clear( container );
 		var filter = state.highlightFilter || 'full';
 		if ( filter === 'full' ) {
-			if ( isTeacher ) {
-				renderEditorInto( container, lesson, headerInput );
-			} else {
-				renderReadInto( container, lesson );
-			}
-			return;
+			renderReadInto( container, lesson );
+		} else {
+			renderHighlightSummaryInto( container, lesson, filter );
 		}
-		// Leaving the editor to show a summary: persist any pending edits and
-		// detach the saver so the extracted list reflects the saved body.
-		if ( isTeacher ) {
-			flushActiveSaver();
-		}
-		renderHighlightSummaryInto( container, lesson, filter );
 	}
 
 	/**
@@ -961,11 +972,20 @@
 	function renderEditorInto( container, lesson, headerInput ) {
 		var wrap = el( 'div', 'tbt-notes-editorwrap' );
 
-		// Quill toolbar + editor.
+		// Quill toolbar + (summary panel | editor). The summary panel sits below
+		// the toolbar and overlays the editor when a highlight filter is active;
+		// the editor stays mounted so Quill is never re-initialised.
 		var quillWrap = el( 'div', 'tbt-notes-editor-quillwrap' );
-		var toolbar = buildToolbar();
+		var summaryPanel = el( 'div', 'tbt-notes-filter-summary' );
+		summaryPanel.hidden = true;
 		var editorEl = el( 'div' );
+
+		var toolbar = buildToolbar( function () {
+			applyTeacherFilter( lesson, editorEl, summaryPanel );
+		} );
+
 		quillWrap.appendChild( toolbar );
+		quillWrap.appendChild( summaryPanel );
 		quillWrap.appendChild( editorEl );
 		wrap.appendChild( quillWrap );
 
@@ -984,9 +1004,31 @@
 		container.appendChild( wrap );
 
 		initEditor( editorEl, toolbar, headerInput, lesson, indicator );
+
+		// Honour any pre-selected filter (normally reset to 'full' per lesson).
+		applyTeacherFilter( lesson, editorEl, summaryPanel );
 	}
 
-	function buildToolbar() {
+	/**
+	 * Teacher view: toggle between the live editor and the extracted-highlights
+	 * summary without tearing Quill down. 'full' shows the editor; any other
+	 * filter shows a summary rebuilt from the latest lesson.body.
+	 */
+	function applyTeacherFilter( lesson, editorEl, summaryPanel ) {
+		var filter = state.highlightFilter || 'full';
+		if ( filter === 'full' ) {
+			summaryPanel.hidden = true;
+			clear( summaryPanel );
+			editorEl.style.display = '';
+			return;
+		}
+		clear( summaryPanel );
+		renderHighlightSummaryInto( summaryPanel, lesson, filter );
+		summaryPanel.hidden = false;
+		editorEl.style.display = 'none';
+	}
+
+	function buildToolbar( onFilterChange ) {
 		var bar = el( 'div', 'tbt-notes-quill-toolbar' );
 
 		function group() {
@@ -1006,11 +1048,13 @@
 			return b;
 		}
 
-		var g1 = group();
-		g1.appendChild( qbtn( 'ql-bold', null, t( 'bold', 'Bold' ) ) );
-		g1.appendChild( qbtn( 'ql-italic', null, t( 'italic', 'Italic' ) ) );
-		bar.appendChild( g1 );
+		// 1. Highlight filter dropdown (custom, non-Quill control).
+		var gf = group();
+		gf.className = 'ql-formats tbt-filter-group';
+		gf.appendChild( buildHighlightFilterSelect( onFilterChange ) );
+		bar.appendChild( gf );
 
+		// 2. Highlight colours + clear.
 		var gh = group();
 		gh.className = 'ql-formats tbt-hl-group';
 		( cfg.highlightColors || [] ).forEach( function ( c ) {
@@ -1030,10 +1074,20 @@
 		gh.appendChild( clearBtn );
 		bar.appendChild( gh );
 
+		// 3. Inline text tools.
+		var g1 = group();
+		g1.appendChild( qbtn( 'ql-bold', null, t( 'bold', 'Bold' ) ) );
+		g1.appendChild( qbtn( 'ql-italic', null, t( 'italic', 'Italic' ) ) );
+		g1.appendChild( qbtn( 'ql-underline', null, t( 'underline', 'Underline' ) ) );
+		g1.appendChild( qbtn( 'ql-strike', null, t( 'strike', 'Strikethrough' ) ) );
+		bar.appendChild( g1 );
+
+		// 4. Link.
 		var g2 = group();
 		g2.appendChild( qbtn( 'ql-link', null, t( 'link', 'Link' ) ) );
 		bar.appendChild( g2 );
 
+		// 5. Lists + indentation.
 		var g3 = group();
 		g3.appendChild( qbtn( 'ql-list', 'ordered', t( 'orderedList', 'Numbered list' ) ) );
 		g3.appendChild( qbtn( 'ql-list', 'bullet', t( 'bulletList', 'Bulleted list' ) ) );
@@ -1041,8 +1095,10 @@
 		g3.appendChild( qbtn( 'ql-indent', '+1', t( 'indent', 'Increase indent' ) ) );
 		bar.appendChild( g3 );
 
+		// 6. Structure: heading + blockquote.
 		var g4 = group();
 		g4.appendChild( qbtn( 'ql-header', '2', t( 'heading', 'Heading' ) ) );
+		g4.appendChild( qbtn( 'ql-blockquote', null, t( 'blockquote', 'Quote' ) ) );
 		bar.appendChild( g4 );
 
 		return bar;
@@ -1075,7 +1131,18 @@
 		var quill = new window.Quill( editorEl, {
 			theme: 'snow',
 			modules: { toolbar: toolbar },
-			formats: [ 'bold', 'italic', 'link', 'list', 'indent', 'header', 'highlight' ],
+			formats: [
+				'bold',
+				'italic',
+				'underline',
+				'strike',
+				'link',
+				'list',
+				'indent',
+				'header',
+				'blockquote',
+				'highlight',
+			],
 		} );
 
 		if ( lesson.body && lesson.body.trim() ) {
