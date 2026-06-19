@@ -818,6 +818,47 @@
 	background: #fff;
 }
 
+/* Reusable inline filter control — used both in the student filter bar and,
+   in teacher view, inside the Quill editor toolbar. */
+.tbt-notes-filter-inline {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	margin-right: 8px;
+	font-size: 14px;
+	font-weight: 700;
+	color: var(--tbt-muted);
+	vertical-align: middle;
+}
+
+.tbt-notes-filter-select {
+	min-width: 180px;
+	max-width: 240px;
+	padding: 5px 28px 5px 10px;
+	border: 1px solid var(--tbt-border);
+	border-radius: 8px;
+	background: #fff;
+	color: var(--tbt-text);
+	font: inherit;
+	font-weight: 700;
+}
+
+/* The filter group sits inside the Quill toolbar, ahead of the colours. */
+.tbt-notes-editor-quillwrap .ql-toolbar .tbt-filter-group {
+	display: inline-flex;
+	align-items: center;
+	vertical-align: middle;
+}
+
+/* Teacher view: the extracted-highlights summary overlays the editor area
+   while keeping Quill mounted underneath. */
+.tbt-notes-filter-summary {
+	flex: 1 1 auto;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+}
+
 /* Extracted-highlights list, grouped by semantic category. */
 .tbt-notes-highlight-summary {
 	font-size: var(--tbt-fs-body);
@@ -904,6 +945,14 @@
 	font-family: "Roboto Slab", Georgia, serif;
 	color: var(--tbt-text);
 	font-weight: 700;
+}
+
+/* Match the read view's blockquote styling in the editor. */
+.tbt-notes-app .ql-editor blockquote {
+	border-left: 4px solid var(--tbt-border);
+	margin: 0.6em 0;
+	padding-left: 14px;
+	color: var(--tbt-muted);
 }
 
 .tbt-notes-editor-footer {
@@ -1071,6 +1120,16 @@
 	}
 	.tbt-notes-topbar__inner {
 		min-height: 64px;
+	}
+	/* Let the in-toolbar filter take its own line instead of overflowing. */
+	.tbt-notes-editor-quillwrap .ql-toolbar .tbt-filter-group {
+		display: flex;
+		width: 100%;
+		margin-bottom: var(--tbt-s1);
+	}
+	.tbt-notes-filter-select {
+		flex: 1 1 auto;
+		max-width: none;
 	}
 }
 
