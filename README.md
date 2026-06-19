@@ -68,6 +68,58 @@ Saved HTML is sanitised on the server with a tight `wp_kses` allowlist plus a
 normalisation pass (safe links, highlight-only classes). No images, no inline
 styles, no script.
 
+### Highlight keyboard shortcuts (editor)
+
+While the Quill editor has focus, highlight the selection without leaving the
+keyboard:
+
+| Shortcut | Highlight                  |
+| -------- | -------------------------- |
+| `Alt+1`  | Useful expression (blue)   |
+| `Alt+2`  | Mistake / correction (red) |
+| `Alt+3`  | Important idea (yellow)    |
+| `Alt+4`  | Pronunciation (pink)       |
+| `Alt+5`  | Grammar (green)            |
+| `Alt+0`  | Clear highlight            |
+
+Shortcuts only fire inside the editor — they never interfere with the lesson
+title, search fields, the filter dropdown, or anything else on the page.
+
+### Pronunciation audio (ElevenLabs)
+
+Pink **Pronunciation** highlights can have spoken audio. Under **Show:
+Pronunciation**, the teacher sees each pink phrase with a **Generate audio**
+button; clicking it calls a server-side WordPress REST route that asks
+ElevenLabs to synthesise the phrase, saves the MP3 under
+`wp-content/uploads/tbt-notes-pronunciation/`, and returns a Play button.
+Students viewing the same filter see **only** phrases that already have audio,
+with a Play button — they can never trigger generation. Audio appears solely in
+the Pronunciation filter, never in the full note.
+
+Generation is deliberately conservative: it is teacher-only and manual,
+already-generated audio is cached and reused (keyed by lesson + voice + text),
+the requested text must currently be highlighted pink in that lesson, phrases
+over 200 characters are rejected, and each teacher is capped at 30 generations
+per hour.
+
+**Configure the API key server-side** (it is never exposed to the browser).
+Either define a constant in `wp-config.php`:
+
+```php
+define( 'TBT_NOTES_ELEVENLABS_API_KEY', 'your-key-here' );
+```
+
+…or return it from a filter (handy with a Code Snippets plugin):
+
+```php
+add_filter( 'tbt_notes_elevenlabs_api_key', function () {
+    return 'your-key-here';
+} );
+```
+
+Without a key, generation reports "ElevenLabs API key is not configured." and no
+request is made.
+
 ## Installation
 
 1. Copy this repository's contents into `wp-content/plugins/tbt-notes/` (the repo
@@ -89,6 +141,7 @@ includes/
   class-tbt-notes-db.php          Custom tables + all queries ($wpdb->prepare)
   class-tbt-notes-capabilities.php Capability (role-based) management
   class-tbt-notes-sanitizer.php   Body/text sanitisation (the kses allowlist)
+  class-tbt-notes-pronunciation.php  Pink-highlight ElevenLabs audio (extract/cache/generate)
   class-tbt-notes-rest.php        REST API + permission/ownership checks
   class-tbt-notes-frontend.php    Asset loading + panel markup
 assets/

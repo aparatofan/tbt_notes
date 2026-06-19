@@ -900,6 +900,53 @@
 	margin: 0.25em 0;
 }
 
+/* ------------------------------------------------------ Pronunciation audio */
+
+.tbt-pronunciation-list {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+}
+
+.tbt-pronunciation-item {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--tbt-s2);
+	flex-wrap: wrap;
+	margin: 0.35em 0;
+	padding: 0.3em 0;
+	border-bottom: 1px solid var(--tbt-border);
+}
+
+.tbt-pronunciation-text {
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
+.tbt-pronunciation-actions {
+	flex: 0 0 auto;
+	display: inline-flex;
+	align-items: center;
+	gap: var(--tbt-s1);
+}
+
+/* Compact action buttons sized down from the standard plugin button. */
+.tbt-pronunciation-generate,
+.tbt-pronunciation-play {
+	padding: 6px 12px;
+	font-size: 14px;
+}
+
+.tbt-pronunciation-play {
+	white-space: nowrap;
+}
+
+.tbt-pronunciation-error {
+	color: var(--tbt-danger);
+	font-size: 14px;
+}
+
 /* --------------------------------------------------------------- Editor view */
 /* Fills the full width of the detail pane (no artificial max-width). */
 

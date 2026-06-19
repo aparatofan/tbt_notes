@@ -77,6 +77,7 @@ function user_can( $user_id, $cap ) {
 
 require_once dirname( __DIR__ ) . '/includes/class-tbt-notes-capabilities.php';
 require_once dirname( __DIR__ ) . '/includes/class-tbt-notes-sanitizer.php';
+require_once dirname( __DIR__ ) . '/includes/class-tbt-notes-pronunciation.php';
 require_once dirname( __DIR__ ) . '/includes/class-tbt-notes-rest.php';
 
 /* ------------------------------------------------------------- Tiny test kit */
@@ -230,6 +231,65 @@ function test_visibility() {
 	ok( TBT_Notes_REST::user_can_view_class( array( 'id' => 9, 'student_ids' => array( $plain_id ) ), $plain_id ) === true, 'plain user can view their own class' );
 }
 test_visibility();
+
+echo "Pronunciation — pink extraction:\n";
+function test_pink_extraction() {
+	$html = '<p>Say <span class="tbt-hl-pink">moment of levity</span> and '
+		. '<span class="tbt-hl-blue">find your bearings</span>.</p>'
+		. '<p><span class="tbt-hl-pink">moment of levity</span> again, plus '
+		. '<span class="tbt-hl-pink">  read   the room </span> and '
+		. '<span class="tbt-hl-red">I am agree</span>.</p>'
+		. '<p><span class="tbt-hl-pink">   </span></p>';
+
+	$items = TBT_Notes_Pronunciation::extract_pink_highlights( $html );
+
+	ok( in_array( 'moment of levity', $items, true ), 'extracts pink text' );
+	ok( in_array( 'read the room', $items, true ), 'normalises whitespace inside pink text' );
+	ok( ! in_array( 'find your bearings', $items, true ), 'ignores blue highlights' );
+	ok( ! in_array( 'I am agree', $items, true ), 'ignores red highlights' );
+
+	// Deduplicated: "moment of levity" appears twice but should be listed once.
+	$count = 0;
+	foreach ( $items as $i ) {
+		if ( 'moment of levity' === $i ) {
+			$count++;
+		}
+	}
+	ok( 1 === $count, 'deduplicates repeated pink text' );
+
+	// Empty/whitespace-only pink spans are dropped.
+	foreach ( $items as $i ) {
+		ok( '' !== trim( $i ), 'no empty items: "' . $i . '"' );
+	}
+
+	ok( array() === TBT_Notes_Pronunciation::extract_pink_highlights( '' ), 'empty html yields no items' );
+}
+test_pink_extraction();
+
+echo "Pronunciation — text hash consistency:\n";
+function test_text_hash() {
+	$a = TBT_Notes_Pronunciation::text_hash( 'moment of levity' );
+	$b = TBT_Notes_Pronunciation::text_hash( '  moment   of  levity  ' );
+	ok( $a === $b, 'same normalised text gives same hash' );
+	ok( 64 === strlen( $a ), 'hash is a 64-char sha-256 hex string' );
+
+	$c = TBT_Notes_Pronunciation::text_hash( 'read the room' );
+	ok( $a !== $c, 'different text gives a different hash' );
+}
+test_text_hash();
+
+echo "Pronunciation — length validation:\n";
+function test_length_validation() {
+	$short = 'a perfectly normal phrase';
+	ok( ! TBT_Notes_Pronunciation::exceeds_length_limit( $short ), 'short text is accepted' );
+
+	$long = str_repeat( 'a', 201 );
+	ok( TBT_Notes_Pronunciation::exceeds_length_limit( $long ), 'overlong text is rejected' );
+
+	$boundary = str_repeat( 'a', 200 );
+	ok( ! TBT_Notes_Pronunciation::exceeds_length_limit( $boundary ), 'text at the 200-char limit is accepted' );
+}
+test_length_validation();
 
 /* ----------------------------------------------------------------- Summary */
 

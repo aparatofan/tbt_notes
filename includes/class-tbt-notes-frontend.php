@@ -254,6 +254,13 @@ class TBT_Notes_Frontend {
 			'allHighlights'     => __( 'All highlights', 'tbt-notes' ),
 			'noHighlightsFound' => __( 'No highlighted items in this category.', 'tbt-notes' ),
 			'highlightsFromNote' => __( 'Highlights from this lesson', 'tbt-notes' ),
+			'pronunciation'     => __( 'Pronunciation', 'tbt-notes' ),
+			'generateAudio'     => __( 'Generate audio', 'tbt-notes' ),
+			'generating'        => __( 'Generating…', 'tbt-notes' ),
+			'play'              => __( 'Play', 'tbt-notes' ),
+			'playing'           => __( 'Playing…', 'tbt-notes' ),
+			'noPronAudio'       => __( 'No pronunciation audio has been added yet.', 'tbt-notes' ),
+			'audioError'        => __( 'Could not generate audio. Please try again.', 'tbt-notes' ),
 		);
 	}
 

@@ -16,13 +16,34 @@ if ( ! defined( 'WP_UNINSTALL_PLUGIN' ) ) {
 
 global $wpdb;
 
-$classes_table = $wpdb->prefix . 'tbt_classes';
-$lessons_table = $wpdb->prefix . 'tbt_lessons';
+$classes_table       = $wpdb->prefix . 'tbt_classes';
+$lessons_table       = $wpdb->prefix . 'tbt_lessons';
+$members_table       = $wpdb->prefix . 'tbt_class_students';
+$pronunciation_table = $wpdb->prefix . 'tbt_note_pronunciations';
 
 // phpcs:disable WordPress.DB.PreparedSQL.NotPrepared -- table names cannot be parameterised.
+$wpdb->query( "DROP TABLE IF EXISTS {$pronunciation_table}" );
+$wpdb->query( "DROP TABLE IF EXISTS {$members_table}" );
 $wpdb->query( "DROP TABLE IF EXISTS {$lessons_table}" );
 $wpdb->query( "DROP TABLE IF EXISTS {$classes_table}" );
 // phpcs:enable WordPress.DB.PreparedSQL.NotPrepared
+
+// Remove generated pronunciation audio files (and their folder).
+$upload = wp_upload_dir();
+if ( empty( $upload['error'] ) && ! empty( $upload['basedir'] ) ) {
+	$dir = trailingslashit( $upload['basedir'] ) . 'tbt-notes-pronunciation';
+	if ( is_dir( $dir ) ) {
+		$files = glob( $dir . '/*' );
+		if ( is_array( $files ) ) {
+			foreach ( $files as $file ) {
+				if ( is_file( $file ) ) {
+					@unlink( $file ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged, WordPress.WP.AlternativeFunctions.unlink_unlink
+				}
+			}
+		}
+		@rmdir( $dir ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged, WordPress.WP.AlternativeFunctions.rmdir_rmdir
+	}
+}
 
 delete_option( 'tbt_notes_db_version' );
 delete_option( 'tbt_notes_show_launcher' );

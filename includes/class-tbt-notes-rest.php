@@ -133,6 +133,25 @@ class TBT_Notes_REST {
 				),
 			)
 		);
+
+		// Pronunciation audio for pink highlights. Reads follow the lesson's
+		// class visibility rule; generation is teacher/admin only.
+		register_rest_route(
+			$ns,
+			'/lessons/(?P<id>\d+)/pronunciations',
+			array(
+				array(
+					'methods'             => WP_REST_Server::READABLE,
+					'callback'            => array( $this, 'get_pronunciations' ),
+					'permission_callback' => array( $this, 'can_read_lesson' ),
+				),
+				array(
+					'methods'             => WP_REST_Server::CREATABLE,
+					'callback'            => array( $this, 'create_pronunciation' ),
+					'permission_callback' => array( $this, 'require_manage' ),
+				),
+			)
+		);
 	}
 
 	/* --------------------------------------------------------------------- *
@@ -189,6 +208,36 @@ class TBT_Notes_REST {
 
 		if ( ! self::user_can_view_class( $class, get_current_user_id() ) ) {
 			return new WP_Error( 'tbt_notes_forbidden', __( 'You are not allowed to view this class.', 'tbt-notes' ), array( 'status' => 403 ) );
+		}
+
+		return true;
+	}
+
+	/**
+	 * Can the current user read the lesson named in the route? Resolves the
+	 * lesson's class and applies the same visibility rule as can_read_class.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return true|WP_Error
+	 */
+	public function can_read_lesson( WP_REST_Request $request ) {
+		if ( ! is_user_logged_in() ) {
+			return new WP_Error( 'tbt_notes_unauthenticated', __( 'You must be logged in.', 'tbt-notes' ), array( 'status' => 401 ) );
+		}
+
+		$lesson = TBT_Notes_DB::get_lesson( (int) $request['id'] );
+		if ( ! $lesson ) {
+			return new WP_Error( 'tbt_notes_not_found', __( 'Lesson not found.', 'tbt-notes' ), array( 'status' => 404 ) );
+		}
+
+		$class = TBT_Notes_DB::get_class( (int) $lesson['class_id'] );
+		if ( ! $class ) {
+			return new WP_Error( 'tbt_notes_not_found', __( 'Class not found.', 'tbt-notes' ), array( 'status' => 404 ) );
+		}
+		$class['student_ids'] = TBT_Notes_DB::get_student_ids_for_class( (int) $lesson['class_id'] );
+
+		if ( ! self::user_can_view_class( $class, get_current_user_id() ) ) {
+			return new WP_Error( 'tbt_notes_forbidden', __( 'You are not allowed to view this lesson.', 'tbt-notes' ), array( 'status' => 403 ) );
 		}
 
 		return true;
@@ -533,6 +582,67 @@ class TBT_Notes_REST {
 		}
 
 		return rest_ensure_response( array( 'deleted' => true, 'id' => $lesson_id ) );
+	}
+
+	/* --------------------------------------------------------------------- *
+	 * Handlers — pronunciation audio
+	 * --------------------------------------------------------------------- */
+
+	/**
+	 * List pronunciation items for a lesson. Teachers get every current pink
+	 * highlight (with a has_audio flag); students get only generated ones.
+	 * Ownership already verified in the permission callback.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response
+	 */
+	public function get_pronunciations( WP_REST_Request $request ) {
+		$lesson_id  = (int) $request['id'];
+		$is_teacher = TBT_Notes_Capabilities::user_can_manage();
+
+		$response = array(
+			'lesson_id'    => $lesson_id,
+			'items'        => TBT_Notes_Pronunciation::list_for_lesson( $lesson_id, $is_teacher ),
+			'can_generate' => $is_teacher,
+		);
+
+		// Surface key-configuration status to teachers only (never the key).
+		if ( $is_teacher ) {
+			$response['api_key_configured'] = TBT_Notes_Pronunciation::has_api_key();
+		}
+
+		return rest_ensure_response( $response );
+	}
+
+	/**
+	 * Generate (or reuse cached) audio for one pink-highlight item.
+	 * Teacher/admin only (enforced by the permission callback). All validation,
+	 * the pink-membership check, caching and the ElevenLabs call live in the
+	 * pronunciation service.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function create_pronunciation( WP_REST_Request $request ) {
+		$lesson_id = (int) $request['id'];
+		$text      = (string) $request->get_param( 'text' );
+
+		$record = TBT_Notes_Pronunciation::generate( $lesson_id, $text );
+		if ( is_wp_error( $record ) ) {
+			return $record;
+		}
+
+		return rest_ensure_response(
+			array(
+				'item' => array(
+					'text'         => $record['text'],
+					'has_audio'    => true,
+					'audio_id'     => (int) $record['id'],
+					'audio_url'    => $record['audio_url'],
+					'can_generate' => true,
+				),
+			)
+		);
 	}
 
 	/* --------------------------------------------------------------------- *

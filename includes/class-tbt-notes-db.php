@@ -51,6 +51,16 @@ class TBT_Notes_DB {
 	}
 
 	/**
+	 * Pronunciation audio table name.
+	 *
+	 * @return string
+	 */
+	public static function table_pronunciations() {
+		global $wpdb;
+		return $wpdb->prefix . 'tbt_note_pronunciations';
+	}
+
+	/**
 	 * Create or update the database schema.
 	 */
 	public static function install() {
@@ -62,6 +72,7 @@ class TBT_Notes_DB {
 		$classes         = self::table_classes();
 		$lessons         = self::table_lessons();
 		$members         = self::table_class_students();
+		$pronunciations  = self::table_pronunciations();
 
 		$sql_classes = "CREATE TABLE {$classes} (
   id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
@@ -94,9 +105,29 @@ class TBT_Notes_DB {
   KEY class_id (class_id)
 ) {$charset_collate};";
 
+		// Generated ElevenLabs audio for pink ("Pronunciation") highlights. One
+		// row per (lesson, voice, normalised-text hash); the unique key both
+		// enforces and powers the cache lookup.
+		$sql_pronunciations = "CREATE TABLE {$pronunciations} (
+  id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  lesson_id bigint(20) unsigned NOT NULL,
+  voice_id varchar(64) NOT NULL,
+  text_hash varchar(64) NOT NULL,
+  text text NOT NULL,
+  audio_rel_path text NOT NULL,
+  audio_url text NOT NULL,
+  mime_type varchar(100) NOT NULL DEFAULT 'audio/mpeg',
+  created_at datetime NOT NULL,
+  updated_at datetime NOT NULL,
+  PRIMARY KEY  (id),
+  UNIQUE KEY lesson_voice_text (lesson_id, voice_id, text_hash),
+  KEY lesson_id (lesson_id)
+) {$charset_collate};";
+
 		dbDelta( $sql_classes );
 		dbDelta( $sql_lessons );
 		dbDelta( $sql_members );
+		dbDelta( $sql_pronunciations );
 	}
 
 	/**
@@ -226,6 +257,10 @@ class TBT_Notes_DB {
 		$class_id = (int) $class_id;
 		if ( $class_id <= 0 ) {
 			return false;
+		}
+		// Clean up pronunciation audio (rows + files) for every lesson first.
+		foreach ( self::get_lessons_for_class( $class_id ) as $lesson ) {
+			self::delete_pronunciations_for_lesson( $lesson['id'] );
 		}
 		$wpdb->delete( self::table_lessons(), array( 'class_id' => $class_id ), array( '%d' ) );
 		$wpdb->delete( self::table_class_students(), array( 'class_id' => $class_id ), array( '%d' ) );
@@ -495,8 +530,134 @@ class TBT_Notes_DB {
 		if ( $lesson_id <= 0 ) {
 			return false;
 		}
+		self::delete_pronunciations_for_lesson( $lesson_id );
 		$result = $wpdb->delete( self::table_lessons(), array( 'id' => $lesson_id ), array( '%d' ) );
 		return false !== $result;
+	}
+
+	/* --------------------------------------------------------------------- *
+	 * Pronunciation audio
+	 * --------------------------------------------------------------------- */
+
+	/**
+	 * Fetch one pronunciation record by its natural key (the cache lookup).
+	 *
+	 * @param int    $lesson_id Lesson ID.
+	 * @param string $voice_id  Voice ID.
+	 * @param string $text_hash Normalised-text hash.
+	 * @return array|null
+	 */
+	public static function get_pronunciation( $lesson_id, $voice_id, $text_hash ) {
+		global $wpdb;
+		$lesson_id = (int) $lesson_id;
+		if ( $lesson_id <= 0 ) {
+			return null;
+		}
+		$table = self::table_pronunciations();
+		$row   = $wpdb->get_row(
+			$wpdb->prepare(
+				"SELECT * FROM {$table} WHERE lesson_id = %d AND voice_id = %s AND text_hash = %s",
+				$lesson_id,
+				(string) $voice_id,
+				(string) $text_hash
+			),
+			ARRAY_A
+		);
+		return $row ? self::shape_pronunciation( $row ) : null;
+	}
+
+	/**
+	 * Fetch one pronunciation record by ID.
+	 *
+	 * @param int $id Record ID.
+	 * @return array|null
+	 */
+	public static function get_pronunciation_by_id( $id ) {
+		global $wpdb;
+		$id = (int) $id;
+		if ( $id <= 0 ) {
+			return null;
+		}
+		$table = self::table_pronunciations();
+		$row   = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$table} WHERE id = %d", $id ), ARRAY_A );
+		return $row ? self::shape_pronunciation( $row ) : null;
+	}
+
+	/**
+	 * All pronunciation records for a lesson.
+	 *
+	 * @param int $lesson_id Lesson ID.
+	 * @return array[]
+	 */
+	public static function get_pronunciations_for_lesson( $lesson_id ) {
+		global $wpdb;
+		$lesson_id = (int) $lesson_id;
+		if ( $lesson_id <= 0 ) {
+			return array();
+		}
+		$table = self::table_pronunciations();
+		$rows  = $wpdb->get_results(
+			$wpdb->prepare( "SELECT * FROM {$table} WHERE lesson_id = %d ORDER BY id ASC", $lesson_id ),
+			ARRAY_A
+		);
+		return array_map( array( __CLASS__, 'shape_pronunciation' ), $rows ? $rows : array() );
+	}
+
+	/**
+	 * Insert a pronunciation record.
+	 *
+	 * @param array $data lesson_id, voice_id, text_hash, text, audio_rel_path,
+	 *                    audio_url, mime_type.
+	 * @return int|false New ID or false.
+	 */
+	public static function insert_pronunciation( array $data ) {
+		global $wpdb;
+		$now = self::now();
+		$ok  = $wpdb->insert(
+			self::table_pronunciations(),
+			array(
+				'lesson_id'      => (int) $data['lesson_id'],
+				'voice_id'       => (string) $data['voice_id'],
+				'text_hash'      => (string) $data['text_hash'],
+				'text'           => (string) $data['text'],
+				'audio_rel_path' => (string) $data['audio_rel_path'],
+				'audio_url'      => (string) $data['audio_url'],
+				'mime_type'      => isset( $data['mime_type'] ) ? (string) $data['mime_type'] : 'audio/mpeg',
+				'created_at'     => $now,
+				'updated_at'     => $now,
+			),
+			array( '%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s' )
+		);
+		return $ok ? (int) $wpdb->insert_id : false;
+	}
+
+	/**
+	 * Delete all pronunciation records for a lesson, removing the audio files
+	 * too. Used when a lesson (or its class) is deleted.
+	 *
+	 * @param int $lesson_id Lesson ID.
+	 * @return void
+	 */
+	public static function delete_pronunciations_for_lesson( $lesson_id ) {
+		global $wpdb;
+		$lesson_id = (int) $lesson_id;
+		if ( $lesson_id <= 0 ) {
+			return;
+		}
+		$records = self::get_pronunciations_for_lesson( $lesson_id );
+		if ( $records && function_exists( 'wp_upload_dir' ) ) {
+			$upload = wp_upload_dir();
+			$base   = ( ! empty( $upload['basedir'] ) ) ? trailingslashit( $upload['basedir'] ) : '';
+			foreach ( $records as $rec ) {
+				if ( $base && ! empty( $rec['audio_rel_path'] ) ) {
+					$path = $base . ltrim( $rec['audio_rel_path'], '/' );
+					if ( is_file( $path ) ) {
+						@unlink( $path ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged, WordPress.WP.AlternativeFunctions.unlink_unlink
+					}
+				}
+			}
+		}
+		$wpdb->delete( self::table_pronunciations(), array( 'lesson_id' => $lesson_id ), array( '%d' ) );
 	}
 
 	/* --------------------------------------------------------------------- *
@@ -532,6 +693,27 @@ class TBT_Notes_DB {
 			'body'       => (string) $row['body'],
 			'created_at' => (string) $row['created_at'],
 			'updated_at' => (string) $row['updated_at'],
+		);
+	}
+
+	/**
+	 * Normalise a pronunciation row.
+	 *
+	 * @param array $row Raw row.
+	 * @return array
+	 */
+	protected static function shape_pronunciation( array $row ) {
+		return array(
+			'id'             => (int) $row['id'],
+			'lesson_id'      => (int) $row['lesson_id'],
+			'voice_id'       => (string) $row['voice_id'],
+			'text_hash'      => (string) $row['text_hash'],
+			'text'           => (string) $row['text'],
+			'audio_rel_path' => (string) $row['audio_rel_path'],
+			'audio_url'      => (string) $row['audio_url'],
+			'mime_type'      => (string) $row['mime_type'],
+			'created_at'     => (string) $row['created_at'],
+			'updated_at'     => (string) $row['updated_at'],
 		);
 	}
 }

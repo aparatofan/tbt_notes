@@ -649,15 +649,21 @@
 		if ( filter === 'full' ) {
 			renderReadInto( container, lesson );
 		} else {
-			renderHighlightSummaryInto( container, lesson, filter );
+			renderHighlightSummaryInto( container, lesson, filter, false );
 		}
 	}
 
 	/**
 	 * Render the extracted highlights as a grouped list. `filter` is either 'all'
-	 * (every category) or a single category key.
+	 * (every category) or a single category key. The 'pink' (Pronunciation)
+	 * category is special: it shows a playable audio list instead of plain text.
 	 */
-	function renderHighlightSummaryInto( container, lesson, filter ) {
+	function renderHighlightSummaryInto( container, lesson, filter, isTeacher ) {
+		if ( filter === 'pink' ) {
+			renderPronunciationInto( container, lesson, !! isTeacher );
+			return;
+		}
+
 		var wrap = el( 'div', 'tbt-notes-detail__scroll' );
 		var summary = el( 'div', 'tbt-notes-highlight-summary' );
 		var groups = extractHighlights( lesson.body || '' );
@@ -693,6 +699,119 @@
 
 		wrap.appendChild( summary );
 		container.appendChild( wrap );
+	}
+
+	/* ------------------------------------------------------ Pronunciation audio */
+
+	/**
+	 * Pronunciation (pink) view. Fetches the lesson's pronunciation items from
+	 * the server (teacher: every pink item with audio flags; student: only
+	 * generated ones) and renders a playable list. Audio is never shown in the
+	 * full note — only here, under the Pronunciation filter.
+	 */
+	function renderPronunciationInto( container, lesson, isTeacher ) {
+		var wrap = el( 'div', 'tbt-notes-detail__scroll' );
+		var summary = el( 'div', 'tbt-notes-highlight-summary' );
+		var section = el( 'section', 'tbt-notes-highlight-group' );
+		section.appendChild( el( 'h2', null, t( 'pronunciation', 'Pronunciation' ) ) );
+		var list = el( 'ul', 'tbt-pronunciation-list' );
+		section.appendChild( list );
+		summary.appendChild( section );
+		wrap.appendChild( summary );
+		container.appendChild( wrap );
+
+		list.appendChild( el( 'li', 'tbt-notes-empty', t( 'loading', 'Loading…' ) ) );
+
+		api( 'GET', 'lessons/' + lesson.id + '/pronunciations' ).then( function ( data ) {
+			clear( list );
+			var items = ( data && data.items ) || [];
+			if ( ! items.length ) {
+				var msg = isTeacher
+					? t( 'noHighlightsFound', 'No highlighted items in this category.' )
+					: t( 'noPronAudio', 'No pronunciation audio has been added yet.' );
+				list.appendChild( el( 'li', 'tbt-notes-empty', msg ) );
+				return;
+			}
+			items.forEach( function ( item ) {
+				list.appendChild( pronunciationItem( lesson, item, isTeacher ) );
+			} );
+		} ).catch( function ( err ) {
+			clear( list );
+			var li = el( 'li' );
+			li.appendChild( errorBlock( err.message ) );
+			list.appendChild( li );
+		} );
+	}
+
+	/**
+	 * One row in the pronunciation list: the pink-highlighted text plus either a
+	 * Play button (audio exists) or, for teachers only, a Generate audio button.
+	 */
+	function pronunciationItem( lesson, item, isTeacher ) {
+		var li = el( 'li', 'tbt-pronunciation-item' );
+		li.appendChild( el( 'span', 'tbt-pronunciation-text tbt-hl-pink', item.text ) );
+		var actions = el( 'span', 'tbt-pronunciation-actions' );
+		li.appendChild( actions );
+
+		function renderPlay( url ) {
+			clear( actions );
+			var btn = el( 'button', 'tbt-notes-btn tbt-notes-btn--ghost tbt-pronunciation-play' );
+			btn.type = 'button';
+			btn.textContent = '▶ ' + t( 'play', 'Play' );
+			var audio = null;
+			btn.addEventListener( 'click', function () {
+				if ( ! audio ) {
+					audio = new Audio( url );
+					audio.addEventListener( 'ended', function () {
+						btn.textContent = '▶ ' + t( 'play', 'Play' );
+					} );
+					audio.addEventListener( 'error', function () {
+						btn.textContent = '▶ ' + t( 'play', 'Play' );
+					} );
+				}
+				if ( ! audio.paused ) {
+					audio.pause();
+					audio.currentTime = 0;
+					btn.textContent = '▶ ' + t( 'play', 'Play' );
+					return;
+				}
+				btn.textContent = t( 'playing', 'Playing…' );
+				audio.play().catch( function () {
+					btn.textContent = '▶ ' + t( 'play', 'Play' );
+				} );
+			} );
+			actions.appendChild( btn );
+		}
+
+		function renderGenerate() {
+			clear( actions );
+			var btn = el( 'button', 'tbt-notes-btn tbt-pronunciation-generate' );
+			btn.type = 'button';
+			btn.textContent = t( 'generateAudio', 'Generate audio' );
+			btn.addEventListener( 'click', function () {
+				btn.disabled = true;
+				btn.textContent = t( 'generating', 'Generating…' );
+				api( 'POST', 'lessons/' + lesson.id + '/pronunciations', { text: item.text } ).then( function ( data ) {
+					if ( data && data.item && data.item.audio_url ) {
+						renderPlay( data.item.audio_url );
+					} else {
+						throw new Error( t( 'audioError', 'Could not generate audio. Please try again.' ) );
+					}
+				} ).catch( function ( err ) {
+					btn.disabled = false;
+					btn.textContent = t( 'generateAudio', 'Generate audio' );
+					actions.appendChild( el( 'span', 'tbt-pronunciation-error', err.message ) );
+				} );
+			} );
+			actions.appendChild( btn );
+		}
+
+		if ( item.has_audio && item.audio_url ) {
+			renderPlay( item.audio_url );
+		} else if ( isTeacher ) {
+			renderGenerate();
+		}
+		return li;
 	}
 
 	/* ---------------------------------------------------------- Class settings */
@@ -1036,7 +1155,7 @@
 			return;
 		}
 		clear( summaryPanel );
-		renderHighlightSummaryInto( summaryPanel, lesson, filter );
+		renderHighlightSummaryInto( summaryPanel, lesson, filter, true );
 		summaryPanel.hidden = false;
 		editorEl.style.display = 'none';
 	}
@@ -1065,20 +1184,22 @@
 		//    after this group once Quill has initialised — see renderEditorInto.)
 		var gh = group();
 		gh.className = 'ql-formats tbt-hl-group';
-		( cfg.highlightColors || [] ).forEach( function ( c ) {
+		( cfg.highlightColors || [] ).forEach( function ( c, i ) {
 			var b = el( 'button', 'tbt-hl-btn' );
 			b.type = 'button';
 			b.setAttribute( 'data-color', c.key );
-			b.setAttribute( 'aria-label', t( 'highlight', 'Highlight' ) + ': ' + c.label );
-			b.title = t( 'highlight', 'Highlight' ) + ': ' + c.label;
+			// Swatches map to Alt+1..Alt+5 in config order; surface the hint.
+			var hint = c.label + ' — Alt+' + ( i + 1 );
+			b.setAttribute( 'aria-label', t( 'highlight', 'Highlight' ) + ': ' + hint );
+			b.title = t( 'highlight', 'Highlight' ) + ': ' + hint;
 			gh.appendChild( b );
 		} );
 		var clearBtn = el( 'button', 'tbt-hl-clear' );
 		clearBtn.type = 'button';
 		clearBtn.textContent = '✕';
 		clearBtn.setAttribute( 'data-color', '' );
-		clearBtn.setAttribute( 'aria-label', t( 'removeHighlight', 'No highlight' ) );
-		clearBtn.title = t( 'removeHighlight', 'No highlight' );
+		clearBtn.setAttribute( 'aria-label', t( 'removeHighlight', 'No highlight' ) + ' — Alt+0' );
+		clearBtn.title = t( 'removeHighlight', 'No highlight' ) + ' — Alt+0';
 		gh.appendChild( clearBtn );
 		bar.appendChild( gh );
 
@@ -1130,6 +1251,30 @@
 		highlightRegistered = true;
 	}
 
+	/**
+	 * Apply (or toggle off) a highlight colour over a range, exactly as a swatch
+	 * click does. Shared by the toolbar swatches and the Alt+number shortcuts.
+	 * `color` '' clears the highlight.
+	 */
+	function applyHighlightFormat( quill, color, range ) {
+		if ( ! range ) {
+			return;
+		}
+		if ( range.length > 0 ) {
+			var value = color ? color : false;
+			if ( color ) {
+				var fmt = quill.getFormat( range.index, range.length );
+				if ( fmt.highlight === color ) {
+					value = false; // Re-applying the same colour toggles it off.
+				}
+			}
+			quill.formatText( range.index, range.length, 'highlight', value, 'user' );
+			quill.setSelection( range.index, range.length, 'silent' );
+		} else {
+			quill.format( 'highlight', color ? color : false, 'user' );
+		}
+	}
+
 	function initEditor( editorEl, toolbar, headerInput, lesson, indicator ) {
 		if ( typeof window.Quill === 'undefined' ) {
 			editorEl.appendChild( errorBlock( t( 'genericError', 'Editor failed to load.' ) ) );
@@ -1168,35 +1313,45 @@
 			}
 		} );
 
+		function highlightWithFallbackRange( color ) {
+			var range = quill.getSelection() || lastRange;
+			if ( ! range ) {
+				quill.focus();
+				range = quill.getSelection();
+			}
+			applyHighlightFormat( quill, color, range );
+		}
+
 		var swatches = toolbar.querySelectorAll( '.tbt-hl-btn, .tbt-hl-clear' );
 		Array.prototype.forEach.call( swatches, function ( btn ) {
 			btn.addEventListener( 'mousedown', function ( e ) {
 				e.preventDefault();
 			} );
 			btn.addEventListener( 'click', function () {
-				var color = btn.getAttribute( 'data-color' );
-				var range = quill.getSelection() || lastRange;
-				if ( ! range ) {
-					quill.focus();
-					range = quill.getSelection();
-				}
-				if ( ! range ) {
-					return;
-				}
-				if ( range.length > 0 ) {
-					var value = color ? color : false;
-					if ( color ) {
-						var fmt = quill.getFormat( range.index, range.length );
-						if ( fmt.highlight === color ) {
-							value = false;
-						}
-					}
-					quill.formatText( range.index, range.length, 'highlight', value, 'user' );
-					quill.setSelection( range.index, range.length, 'silent' );
-				} else {
-					quill.format( 'highlight', color ? color : false, 'user' );
-				}
+				highlightWithFallbackRange( btn.getAttribute( 'data-color' ) );
 			} );
+		} );
+
+		// Keyboard shortcuts: Alt+1..5 apply highlight colours, Alt+0 clears.
+		// Keyed off e.code (physical key) so they work whatever character Alt
+		// produces, and bound to the editor root so they never fire in other
+		// inputs/selects or elsewhere on the site.
+		var shortcutMap = {};
+		( cfg.highlightColors || [] ).forEach( function ( c, i ) {
+			shortcutMap[ 'Digit' + ( i + 1 ) ] = c.key;
+			shortcutMap[ 'Numpad' + ( i + 1 ) ] = c.key;
+		} );
+		shortcutMap.Digit0 = '';
+		shortcutMap.Numpad0 = '';
+		quill.root.addEventListener( 'keydown', function ( e ) {
+			if ( ! e.altKey || e.ctrlKey || e.metaKey ) {
+				return;
+			}
+			if ( ! Object.prototype.hasOwnProperty.call( shortcutMap, e.code ) ) {
+				return;
+			}
+			e.preventDefault();
+			highlightWithFallbackRange( shortcutMap[ e.code ] );
 		} );
 
 		quill.on( 'text-change', function ( delta, old, source ) {
