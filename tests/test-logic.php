@@ -120,7 +120,7 @@ function test_allowlist() {
 	ok( isset( $allowed['strong'], $allowed['em'], $allowed['h2'] ), 'bold/italic/heading allowed' );
 
 	$classes = TBT_Notes_Sanitizer::allowed_classes();
-	ok( $classes === array( 'tbt-hl-blue', 'tbt-hl-yellow', 'tbt-hl-red', 'tbt-hl-green' ), 'four highlight classes (blue/yellow/red/green)' );
+	ok( $classes === array( 'tbt-hl-blue', 'tbt-hl-red', 'tbt-hl-yellow', 'tbt-hl-pink', 'tbt-hl-green' ), 'five highlight classes (blue/red/yellow/pink/green)' );
 }
 test_allowlist();
 
@@ -149,6 +149,14 @@ function test_classes() {
 
 	$out3 = call_normalize( '<span class="tbt-hl-yellow">h</span>' );
 	ok( contains( $out3, 'tbt-hl-yellow' ), 'keeps yellow highlight' );
+
+	// Pink is a real semantic category and must survive normalisation.
+	$out_pink = call_normalize( '<span class="tbt-hl-pink">pronunciation</span>' );
+	ok( contains( $out_pink, 'tbt-hl-pink' ), 'keeps pink highlight (pronunciation)' );
+
+	// A fake colour outside the allowlist must be stripped.
+	$out_purple = call_normalize( '<span class="tbt-hl-purple">bad</span>' );
+	ok( ! contains( $out_purple, 'tbt-hl-purple' ), 'drops fake tbt-hl-purple class' );
 
 	// An injected fake highlight value is not in the allowlist.
 	$out4 = call_normalize( '<span class="tbt-hl-evil">h</span>' );

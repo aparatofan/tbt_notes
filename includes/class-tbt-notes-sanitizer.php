@@ -7,7 +7,7 @@
  * standard inline tags). We never trust that HTML: it is run through a strict
  * wp_kses allowlist (which also blocks dangerous URL protocols and inline
  * styles) and then normalised so every link opens safely in a new tab and only
- * the three approved highlight classes survive.
+ * the five approved highlight classes survive.
  *
  * @package TBT_Notes
  */
@@ -22,13 +22,20 @@ if ( ! defined( 'ABSPATH' ) ) {
 class TBT_Notes_Sanitizer {
 
 	/**
-	 * CSS classes allowed to remain on body elements. These back the three
-	 * highlight colours required by the spec; nothing else is permitted.
+	 * CSS classes allowed to remain on body elements. These back the five
+	 * semantic highlight categories required by the spec; nothing else is
+	 * permitted.
 	 *
 	 * @return string[]
 	 */
 	public static function allowed_classes() {
-		return array( 'tbt-hl-blue', 'tbt-hl-yellow', 'tbt-hl-red', 'tbt-hl-green' );
+		return array(
+			'tbt-hl-blue',
+			'tbt-hl-red',
+			'tbt-hl-yellow',
+			'tbt-hl-pink',
+			'tbt-hl-green',
+		);
 	}
 
 	/**

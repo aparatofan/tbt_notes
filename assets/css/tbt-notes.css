@@ -66,6 +66,7 @@
 	--tbt-hl-blue: #bcdcff;
 	--tbt-hl-yellow: #fff2a8;
 	--tbt-hl-red: #ffc2c2;
+	--tbt-hl-pink: #ffd1e8;
 	--tbt-hl-green: #c6efc3;
 
 	font-family: "Roboto Slab", Georgia, "Times New Roman", serif;
@@ -777,6 +778,71 @@
 	list-style-type: square;
 }
 
+/* ------------------------------------------------------- Highlight filtering */
+
+/* Swappable content area below the filter bar: holds either the full lesson
+   (editor/read view) or the extracted-highlights list. Fills the detail pane. */
+.tbt-notes-lesson-content {
+	flex: 1 1 auto;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+}
+
+/* Compact "Show: [Full note ▼]" control above the lesson content. */
+.tbt-notes-filterbar {
+	display: flex;
+	align-items: center;
+	gap: var(--tbt-s1);
+	padding: var(--tbt-s2) var(--tbt-s4);
+	border-bottom: 1px solid var(--tbt-border);
+	background: #fff;
+	flex: 0 0 auto;
+}
+
+.tbt-notes-filterbar label {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--tbt-s1);
+	font-size: 14px;
+	color: var(--tbt-muted);
+	font-weight: 700;
+}
+
+.tbt-notes-filterbar select {
+	font: inherit;
+	color: var(--tbt-text);
+	border: 1px solid var(--tbt-border);
+	border-radius: var(--tbt-radius);
+	padding: 6px 10px;
+	background: #fff;
+}
+
+/* Extracted-highlights list, grouped by semantic category. */
+.tbt-notes-highlight-summary {
+	font-size: var(--tbt-fs-body);
+	line-height: 1.6;
+	color: var(--tbt-text);
+}
+
+.tbt-notes-highlight-group {
+	margin-bottom: var(--tbt-s4);
+}
+
+.tbt-notes-highlight-group h2 {
+	font-size: 1.1em;
+	margin: 0 0 var(--tbt-s1);
+}
+
+.tbt-notes-highlight-group ul {
+	margin: 0;
+	padding-left: 1.4em;
+}
+
+.tbt-notes-highlight-group li {
+	margin: 0.25em 0;
+}
+
 /* --------------------------------------------------------------- Editor view */
 /* Fills the full width of the detail pane (no artificial max-width). */
 
@@ -904,6 +970,13 @@
 	border-radius: 2px;
 }
 
+.tbt-notes-app .tbt-hl-pink,
+.tbt-notes-read .tbt-hl-pink,
+.ql-editor .tbt-hl-pink {
+	background-color: var(--tbt-hl-pink);
+	border-radius: 2px;
+}
+
 .tbt-notes-app .tbt-hl-green,
 .tbt-notes-read .tbt-hl-green,
 .ql-editor .tbt-hl-green {
@@ -930,6 +1003,10 @@
 
 .tbt-notes-editor-quillwrap .ql-toolbar .tbt-hl-btn[data-color="red"] {
 	background: var(--tbt-hl-red);
+}
+
+.tbt-notes-editor-quillwrap .ql-toolbar .tbt-hl-btn[data-color="pink"] {
+	background: var(--tbt-hl-pink);
 }
 
 .tbt-notes-editor-quillwrap .ql-toolbar .tbt-hl-btn[data-color="green"] {
@@ -1030,6 +1107,7 @@
 	.tbt-notes-overlay,
 	.tbt-notes-topbar,
 	.tbt-notes-sidebar,
+	.tbt-notes-filterbar,
 	.tbt-notes-editor-quillwrap .ql-toolbar.ql-snow {
 		display: none !important;
 	}
@@ -1040,6 +1118,7 @@
 	.tbt-notes-split,
 	.tbt-notes-detail,
 	.tbt-notes-detail__scroll,
+	.tbt-notes-lesson-content,
 	.tbt-notes-editor-quillwrap .ql-container.ql-snow,
 	.tbt-notes-app .ql-editor {
 		display: block !important;

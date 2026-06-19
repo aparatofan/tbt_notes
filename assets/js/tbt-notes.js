@@ -40,6 +40,7 @@
 		loadingLessons: false,
 		currentLesson: null,
 		sidebarFolded: false,
+		highlightFilter: 'full',
 		error: '',
 	};
 
@@ -372,6 +373,7 @@
 		state.currentClass = cls;
 		state.lessons = [];
 		state.currentLesson = null;
+		state.highlightFilter = 'full';
 		state.view = 'class';
 		state.loadingLessons = true;
 		render();
@@ -476,11 +478,12 @@
 		if ( state.loadingLessons ) {
 			detail.appendChild( el( 'div', 'tbt-notes-loading', t( 'loading', 'Loading…' ) ) );
 		} else if ( state.currentLesson ) {
-			if ( isTeacher ) {
-				renderEditorInto( detail, state.currentLesson, headerInput );
-			} else {
-				renderReadInto( detail, state.currentLesson );
-			}
+			// Filter bar + a content area that swaps between the full lesson and
+			// an extracted-highlights list, without re-rendering the whole view.
+			var contentArea = el( 'div', 'tbt-notes-lesson-content' );
+			detail.appendChild( buildFilterBar( state.currentLesson, contentArea, isTeacher, headerInput ) );
+			detail.appendChild( contentArea );
+			renderLessonContent( contentArea, state.currentLesson, isTeacher, headerInput );
 		} else if ( isTeacher ) {
 			var prompt = el( 'div', 'tbt-notes-empty' );
 			prompt.appendChild( el( 'p', null, t( 'noLessons', 'No lessons yet.' ) ) );
@@ -530,6 +533,7 @@
 		}
 		flushActiveSaver();
 		state.currentLesson = lesson;
+		state.highlightFilter = 'full';
 		render();
 	}
 
@@ -540,6 +544,143 @@
 		var read = el( 'div', 'tbt-notes-read' );
 		read.innerHTML = lesson.body || ''; // Server-sanitised semantic HTML.
 		wrap.appendChild( read );
+		container.appendChild( wrap );
+	}
+
+	/* ----------------------------------------------------- Highlight filtering */
+
+	/**
+	 * Pull the highlighted fragments out of a lesson body, grouped by semantic
+	 * category. Duplicates within a category are collapsed (keyed by normalised
+	 * text) so a phrase highlighted twice only appears once.
+	 *
+	 * @param {string} html Lesson body HTML.
+	 * @return {Object} Map of category key → { key, label, className, items }.
+	 */
+	function extractHighlights( html ) {
+		var tmp = document.createElement( 'div' );
+		tmp.innerHTML = html || '';
+		var groups = {};
+		( cfg.highlightColors || [] ).forEach( function ( c ) {
+			groups[ c.key ] = {
+				key: c.key,
+				label: c.label,
+				className: 'tbt-hl-' + c.key,
+				items: [],
+			};
+		} );
+		Object.keys( groups ).forEach( function ( key ) {
+			var group = groups[ key ];
+			var nodes = tmp.querySelectorAll( '.' + group.className );
+			var seen = {};
+			Array.prototype.forEach.call( nodes, function ( node ) {
+				var text = ( node.textContent || '' ).replace( /\s+/g, ' ' ).trim();
+				if ( text && ! Object.prototype.hasOwnProperty.call( seen, text ) ) {
+					seen[ text ] = true;
+					group.items.push( text );
+				}
+			} );
+		} );
+		return groups;
+	}
+
+	/**
+	 * The "Show: [Full note ▼]" control. Options come from cfg.highlightColors so
+	 * the dropdown always matches the toolbar's semantic categories.
+	 */
+	function buildFilterBar( lesson, contentArea, isTeacher, headerInput ) {
+		var bar = el( 'div', 'tbt-notes-filterbar' );
+		var label = el( 'label' );
+		label.appendChild( el( 'span', null, t( 'show', 'Show' ) + ':' ) );
+
+		var select = el( 'select' );
+		var options = [
+			{ value: 'full', label: t( 'fullNote', 'Full note' ) },
+			{ value: 'all', label: t( 'allHighlights', 'All highlights' ) },
+		];
+		( cfg.highlightColors || [] ).forEach( function ( c ) {
+			options.push( { value: c.key, label: c.label } );
+		} );
+		options.forEach( function ( o ) {
+			var opt = el( 'option', null, o.label );
+			opt.value = o.value;
+			if ( o.value === state.highlightFilter ) {
+				opt.selected = true;
+			}
+			select.appendChild( opt );
+		} );
+		select.addEventListener( 'change', function () {
+			state.highlightFilter = select.value;
+			renderLessonContent( contentArea, lesson, isTeacher, headerInput );
+		} );
+
+		label.appendChild( select );
+		bar.appendChild( label );
+		return bar;
+	}
+
+	/**
+	 * Render the lesson content area for the current filter: the full lesson
+	 * (editor or read view) when 'full', otherwise an extracted-highlights list.
+	 */
+	function renderLessonContent( container, lesson, isTeacher, headerInput ) {
+		clear( container );
+		var filter = state.highlightFilter || 'full';
+		if ( filter === 'full' ) {
+			if ( isTeacher ) {
+				renderEditorInto( container, lesson, headerInput );
+			} else {
+				renderReadInto( container, lesson );
+			}
+			return;
+		}
+		// Leaving the editor to show a summary: persist any pending edits and
+		// detach the saver so the extracted list reflects the saved body.
+		if ( isTeacher ) {
+			flushActiveSaver();
+		}
+		renderHighlightSummaryInto( container, lesson, filter );
+	}
+
+	/**
+	 * Render the extracted highlights as a grouped list. `filter` is either 'all'
+	 * (every category) or a single category key.
+	 */
+	function renderHighlightSummaryInto( container, lesson, filter ) {
+		var wrap = el( 'div', 'tbt-notes-detail__scroll' );
+		var summary = el( 'div', 'tbt-notes-highlight-summary' );
+		var groups = extractHighlights( lesson.body || '' );
+
+		var keys = filter === 'all'
+			? ( cfg.highlightColors || [] ).map( function ( c ) {
+				return c.key;
+			} )
+			: [ filter ];
+
+		var any = false;
+		keys.forEach( function ( key ) {
+			var group = groups[ key ];
+			if ( ! group || ! group.items.length ) {
+				return;
+			}
+			any = true;
+			var section = el( 'section', 'tbt-notes-highlight-group' );
+			section.appendChild( el( 'h2', null, group.label ) );
+			var ul = el( 'ul' );
+			group.items.forEach( function ( text ) {
+				var li = el( 'li' );
+				li.appendChild( el( 'span', group.className, text ) );
+				ul.appendChild( li );
+			} );
+			section.appendChild( ul );
+			summary.appendChild( section );
+		} );
+
+		if ( ! any ) {
+			summary.appendChild( emptyBlock( t( 'noHighlightsFound', 'No highlighted items in this category.' ) ) );
+		}
+
+		wrap.appendChild( summary );
 		container.appendChild( wrap );
 	}
 

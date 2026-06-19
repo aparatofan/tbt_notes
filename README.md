@@ -47,8 +47,15 @@ the `tbt_notes_managing_roles` filter still works for code-level control.
 The lesson body supports exactly what v1 requires (and nothing more):
 
 - **Bold**, *italic*
-- **Highlight** in three fixed colours: light blue, yellow, red (stored as
-  `tbt-hl-blue` / `tbt-hl-yellow` / `tbt-hl-red` classes, not inline styles)
+- **Semantic highlights** in five teacher-defined categories (stored as
+  colour-based classes such as `tbt-hl-blue`, not inline styles):
+  - Useful expression — blue
+  - Mistake / correction — red
+  - Important idea — yellow
+  - Pronunciation — pink
+  - Grammar — green
+- **Highlight filtering** in the lesson view: show the full note, all
+  highlights grouped by category, or one selected category extracted as a list
 - **Links** that always open in a new tab (`target="_blank" rel="noopener noreferrer"`)
 - **Numbered and bulleted lists, including nesting** (1 → a → i …)
 - One heading level (H2)
