@@ -60,7 +60,9 @@ The lesson body supports exactly what v1 requires (and nothing more):
   above the read-only note
 - **Links** that always open in a new tab (`target="_blank" rel="noopener noreferrer"`)
 - **Numbered and bulleted lists, including nesting** (1 → a → i …)
-- One heading level (H2) and **blockquotes**
+- **H2 headings and H3 subheadings** (clean sans-serif), plus **blockquotes**
+- **Spacious body text** with generous line height — easy to read and to print
+  with room for students' handwritten notes between lines
 
 Saved HTML is sanitised on the server with a tight `wp_kses` allowlist plus a
 normalisation pass (safe links, highlight-only classes). No images, no inline

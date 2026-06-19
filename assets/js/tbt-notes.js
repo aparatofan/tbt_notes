@@ -1103,9 +1103,10 @@
 		g3.appendChild( qbtn( 'ql-indent', '+1', t( 'indent', 'Increase indent' ) ) );
 		bar.appendChild( g3 );
 
-		// 5. Structure: heading + blockquote.
+		// 5. Structure: headings + blockquote.
 		var g4 = group();
-		g4.appendChild( qbtn( 'ql-header', '2', t( 'heading', 'Heading' ) ) );
+		g4.appendChild( qbtn( 'ql-header', '2', t( 'heading2', 'H2' ) ) );
+		g4.appendChild( qbtn( 'ql-header', '3', t( 'heading3', 'H3' ) ) );
 		g4.appendChild( qbtn( 'ql-blockquote', null, t( 'blockquote', 'Quote' ) ) );
 		bar.appendChild( g4 );
 
