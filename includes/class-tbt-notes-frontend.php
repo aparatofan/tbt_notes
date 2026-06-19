@@ -161,19 +161,23 @@ class TBT_Notes_Frontend {
 			'highlightColors' => array(
 				array(
 					'key'   => 'blue',
-					'label' => __( 'Light blue', 'tbt-notes' ),
-				),
-				array(
-					'key'   => 'yellow',
-					'label' => __( 'Yellow', 'tbt-notes' ),
+					'label' => __( 'Useful expression', 'tbt-notes' ),
 				),
 				array(
 					'key'   => 'red',
-					'label' => __( 'Red', 'tbt-notes' ),
+					'label' => __( 'Mistake / correction', 'tbt-notes' ),
+				),
+				array(
+					'key'   => 'yellow',
+					'label' => __( 'Important idea', 'tbt-notes' ),
+				),
+				array(
+					'key'   => 'pink',
+					'label' => __( 'Pronunciation', 'tbt-notes' ),
 				),
 				array(
 					'key'   => 'green',
-					'label' => __( 'Green', 'tbt-notes' ),
+					'label' => __( 'Grammar', 'tbt-notes' ),
 				),
 			),
 			'i18n'            => $this->strings(),
@@ -241,6 +245,11 @@ class TBT_Notes_Frontend {
 			'outdent'           => __( 'Decrease indent', 'tbt-notes' ),
 			'heading'           => __( 'Heading', 'tbt-notes' ),
 			'removeHighlight'   => __( 'No highlight', 'tbt-notes' ),
+			'show'              => __( 'Show', 'tbt-notes' ),
+			'fullNote'          => __( 'Full note', 'tbt-notes' ),
+			'allHighlights'     => __( 'All highlights', 'tbt-notes' ),
+			'noHighlightsFound' => __( 'No highlighted items in this category.', 'tbt-notes' ),
+			'highlightsFromNote' => __( 'Highlights from this lesson', 'tbt-notes' ),
 		);
 	}
 
