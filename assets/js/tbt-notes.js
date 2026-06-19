@@ -980,9 +980,7 @@
 		summaryPanel.hidden = true;
 		var editorEl = el( 'div' );
 
-		var toolbar = buildToolbar( function () {
-			applyTeacherFilter( lesson, editorEl, summaryPanel );
-		} );
+		var toolbar = buildToolbar();
 
 		quillWrap.appendChild( toolbar );
 		quillWrap.appendChild( summaryPanel );
@@ -1004,6 +1002,21 @@
 		container.appendChild( wrap );
 
 		initEditor( editorEl, toolbar, headerInput, lesson, indicator );
+
+		// Insert the filter control AFTER Quill is built: the Snow theme runs
+		// buildPickers() over every <select> in the toolbar at construction time
+		// and would turn our native filter select into a broken, empty picker.
+		// Adding it now (right after the highlight colours) keeps it untouched.
+		var filterGroup = el( 'span', 'ql-formats tbt-filter-group' );
+		filterGroup.appendChild( buildHighlightFilterSelect( function () {
+			applyTeacherFilter( lesson, editorEl, summaryPanel );
+		} ) );
+		var hlGroup = toolbar.querySelector( '.tbt-hl-group' );
+		if ( hlGroup ) {
+			toolbar.insertBefore( filterGroup, hlGroup.nextSibling );
+		} else {
+			toolbar.insertBefore( filterGroup, toolbar.firstChild );
+		}
 
 		// Honour any pre-selected filter (normally reset to 'full' per lesson).
 		applyTeacherFilter( lesson, editorEl, summaryPanel );
@@ -1028,7 +1041,7 @@
 		editorEl.style.display = 'none';
 	}
 
-	function buildToolbar( onFilterChange ) {
+	function buildToolbar() {
 		var bar = el( 'div', 'tbt-notes-quill-toolbar' );
 
 		function group() {
@@ -1048,13 +1061,8 @@
 			return b;
 		}
 
-		// 1. Highlight filter dropdown (custom, non-Quill control).
-		var gf = group();
-		gf.className = 'ql-formats tbt-filter-group';
-		gf.appendChild( buildHighlightFilterSelect( onFilterChange ) );
-		bar.appendChild( gf );
-
-		// 2. Highlight colours + clear.
+		// 1. Highlight colours + clear. (The filter dropdown is inserted right
+		//    after this group once Quill has initialised — see renderEditorInto.)
 		var gh = group();
 		gh.className = 'ql-formats tbt-hl-group';
 		( cfg.highlightColors || [] ).forEach( function ( c ) {
@@ -1074,7 +1082,7 @@
 		gh.appendChild( clearBtn );
 		bar.appendChild( gh );
 
-		// 3. Inline text tools.
+		// 2. Inline text tools.
 		var g1 = group();
 		g1.appendChild( qbtn( 'ql-bold', null, t( 'bold', 'Bold' ) ) );
 		g1.appendChild( qbtn( 'ql-italic', null, t( 'italic', 'Italic' ) ) );
@@ -1082,12 +1090,12 @@
 		g1.appendChild( qbtn( 'ql-strike', null, t( 'strike', 'Strikethrough' ) ) );
 		bar.appendChild( g1 );
 
-		// 4. Link.
+		// 3. Link.
 		var g2 = group();
 		g2.appendChild( qbtn( 'ql-link', null, t( 'link', 'Link' ) ) );
 		bar.appendChild( g2 );
 
-		// 5. Lists + indentation.
+		// 4. Lists + indentation.
 		var g3 = group();
 		g3.appendChild( qbtn( 'ql-list', 'ordered', t( 'orderedList', 'Numbered list' ) ) );
 		g3.appendChild( qbtn( 'ql-list', 'bullet', t( 'bulletList', 'Bulleted list' ) ) );
@@ -1095,7 +1103,7 @@
 		g3.appendChild( qbtn( 'ql-indent', '+1', t( 'indent', 'Increase indent' ) ) );
 		bar.appendChild( g3 );
 
-		// 6. Structure: heading + blockquote.
+		// 5. Structure: heading + blockquote.
 		var g4 = group();
 		g4.appendChild( qbtn( 'ql-header', '2', t( 'heading', 'Heading' ) ) );
 		g4.appendChild( qbtn( 'ql-blockquote', null, t( 'blockquote', 'Quote' ) ) );
