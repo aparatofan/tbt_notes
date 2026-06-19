@@ -40,6 +40,7 @@
 	--tbt-border: #d3ddec;
 	--tbt-hover: #eef3fb;
 	--tbt-danger: #c0392b;
+	--tbt-brand-blue: #0856c9;       /* heading blue (H3) — distinct from the softer brand accent */
 	--tbt-header-image: url("https://thebluetree.pl/wp-content/uploads/2026/06/tbt-notes-header.png");
 
 	/* Type scale (importance encoded by size). */
@@ -50,6 +51,7 @@
 	--tbt-fs-body: 22px;
 	--tbt-fs-label: 13px;
 	--tbt-fw-body: 400;
+	--tbt-lh-body: 1.8;               /* generous body line-height (room for handwritten notes when printed) */
 
 	/* Spacing scale (multiples of 4). */
 	--tbt-s1: 8px;
@@ -689,14 +691,14 @@
 .tbt-notes-read {
 	font-size: var(--tbt-fs-body);
 	font-weight: var(--tbt-fw-body);
-	line-height: 1.6;
+	line-height: var(--tbt-lh-body);
 	color: var(--tbt-text);
 	word-wrap: break-word;
 	overflow-wrap: anywhere;
 }
 
 .tbt-notes-read p {
-	margin: 0 0 0.7em;
+	margin: 0 0 0.85em;
 	font-weight: var(--tbt-fw-body);
 }
 
@@ -705,26 +707,40 @@
 	font-weight: 700;
 }
 
+/* Headings: one shared sans-serif style across read + editor views, so the two
+   stay visually consistent. H2/H3 then get their own size, spacing and colour. */
 .tbt-notes-read h1,
 .tbt-notes-read h2,
-.tbt-notes-read h3 {
-	font-family: "Roboto Slab", Georgia, serif;
-	color: var(--tbt-text);
+.tbt-notes-read h3,
+.tbt-notes-app .ql-editor h1,
+.tbt-notes-app .ql-editor h2,
+.tbt-notes-app .ql-editor h3 {
+	font-family: Roboto, Arial, Helvetica, sans-serif;
 	font-weight: 700;
-	line-height: 1.3;
-	margin: 1em 0 0.4em;
 }
 
-.tbt-notes-read h1 {
+.tbt-notes-read h1,
+.tbt-notes-app .ql-editor h1 {
 	font-size: 1.5em;
+	line-height: 1.3;
+	margin: 1.5em 0 0.7em;
+	color: var(--tbt-text);
 }
 
-.tbt-notes-read h2 {
-	font-size: 1.3em;
+.tbt-notes-read h2,
+.tbt-notes-app .ql-editor h2 {
+	font-size: 1.35em;
+	line-height: 1.3;
+	margin: 1.5em 0 0.7em;
+	color: var(--tbt-text);
 }
 
-.tbt-notes-read h3 {
-	font-size: 1.12em;
+.tbt-notes-read h3,
+.tbt-notes-app .ql-editor h3 {
+	font-size: 1.15em;
+	line-height: 1.35;
+	margin: 1.25em 0 0.55em;
+	color: var(--tbt-brand-blue);
 }
 
 .tbt-notes-read a {
@@ -924,14 +940,18 @@
 	overflow-y: auto;
 }
 
-/* Editor body matches read view: 17px, weight 400. */
+/* Editor body matches read view: same size, weight and spacious line-height. */
 .tbt-notes-app .ql-editor {
 	font-family: "Roboto Slab", Georgia, "Times New Roman", serif;
 	font-size: var(--tbt-fs-body);
 	font-weight: var(--tbt-fw-body);
-	line-height: 1.6;
+	line-height: var(--tbt-lh-body);
 	color: var(--tbt-text);
 	padding: var(--tbt-s3) var(--tbt-s4) 48px;
+}
+
+.tbt-notes-app .ql-editor p {
+	margin: 0 0 0.85em;
 }
 
 .tbt-notes-app .ql-editor strong,
@@ -939,13 +959,7 @@
 	font-weight: 700;
 }
 
-.tbt-notes-app .ql-editor h1,
-.tbt-notes-app .ql-editor h2,
-.tbt-notes-app .ql-editor h3 {
-	font-family: "Roboto Slab", Georgia, serif;
-	color: var(--tbt-text);
-	font-weight: 700;
-}
+/* Heading typography (h1/h2/h3) is shared with the read view — see above. */
 
 /* Match the read view's blockquote styling in the editor. */
 .tbt-notes-app .ql-editor blockquote {
