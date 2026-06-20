@@ -643,89 +643,20 @@ class TBT_Notes_Expression_Cards {
 
 		if ( is_wp_error( $response ) ) {
 			$transport = $response->get_error_message();
-			// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log -- temporary debug.
+			// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log -- diagnostics only; not exposed to the browser.
 			error_log( sprintf( '[TBT Notes] OpenAI request failed (transport): model=%s error=%s', $model, $transport ) );
-			return new WP_Error(
-				'tbt_notes_expr_http',
-				__( 'Could not generate the expression card. Please try again.', 'tbt-notes' ),
-				self::debug_error_data(
-					502,
-					array(
-						'stage'           => 'transport',
-						'model'           => $model,
-						'transport_error' => $transport,
-					)
-				)
-			);
+			return new WP_Error( 'tbt_notes_expr_http', __( 'Could not generate the expression card. Please try again.', 'tbt-notes' ), array( 'status' => 502 ) );
 		}
 
 		$code = (int) wp_remote_retrieve_response_code( $response );
 		$raw  = wp_remote_retrieve_body( $response );
 		if ( 200 !== $code || '' === $raw ) {
-			// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log -- temporary debug.
+			// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log -- diagnostics only; not exposed to the browser.
 			error_log( sprintf( '[TBT Notes] OpenAI error: http_status=%d model=%s body=%s', $code, $model, $raw ) );
-			return new WP_Error(
-				'tbt_notes_expr_api',
-				__( 'Could not generate the expression card. Please try again.', 'tbt-notes' ),
-				self::debug_error_data(
-					502,
-					array(
-						'stage'              => 'http',
-						'model'              => $model,
-						'openai_http_status' => $code,
-						'openai_response'    => $raw,
-					)
-				)
-			);
+			return new WP_Error( 'tbt_notes_expr_api', __( 'Could not generate the expression card. Please try again.', 'tbt-notes' ), array( 'status' => 502 ) );
 		}
 
 		return self::parse_openai_response( $raw );
-	}
-
-	/**
-	 * Build a WP_Error data array, attaching OpenAI debug details for
-	 * teachers/admins only. The API key is never included.
-	 *
-	 * TEMPORARY DEBUG: this surfaces the raw OpenAI status/body/model to help
-	 * diagnose generation failures. Remove or soften once the issue is found.
-	 *
-	 * @param int   $status HTTP status to report to the REST client.
-	 * @param array $debug  Debug fields (model, status, raw body, …).
-	 * @return array
-	 */
-	protected static function debug_error_data( $status, array $debug ) {
-		$data = array( 'status' => (int) $status );
-
-		$can_manage = class_exists( 'TBT_Notes_Capabilities' )
-			? TBT_Notes_Capabilities::user_can_manage()
-			: false;
-
-		if ( $can_manage ) {
-			// Cap the raw body so a large HTML/error page can't bloat the response.
-			if ( isset( $debug['openai_response'] ) && is_string( $debug['openai_response'] ) ) {
-				$debug['openai_response'] = self::truncate_debug( $debug['openai_response'] );
-			}
-			$data['debug'] = $debug;
-		}
-
-		return $data;
-	}
-
-	/**
-	 * Truncate a debug string to a safe length.
-	 *
-	 * @param string $text Raw text.
-	 * @param int    $max  Max characters to keep.
-	 * @return string
-	 */
-	protected static function truncate_debug( $text, $max = 2000 ) {
-		$text = (string) $text;
-		$len  = function_exists( 'mb_strlen' ) ? mb_strlen( $text, 'UTF-8' ) : strlen( $text );
-		if ( $len <= $max ) {
-			return $text;
-		}
-		$cut = function_exists( 'mb_substr' ) ? mb_substr( $text, 0, $max, 'UTF-8' ) : substr( $text, 0, $max );
-		return $cut . '…[truncated ' . ( $len - $max ) . ' chars]';
 	}
 
 	/**
@@ -791,27 +722,16 @@ class TBT_Notes_Expression_Cards {
 	}
 
 	/**
-	 * Shared "could not read the AI response" error. Attaches the raw OpenAI body
-	 * as teacher-only debug data (TEMPORARY — see debug_error_data()).
+	 * Shared "could not read the AI response" error. The raw body is logged for
+	 * diagnostics only — it is never returned to the browser.
 	 *
 	 * @param string $raw Raw OpenAI response body, if available.
 	 * @return WP_Error
 	 */
 	protected static function parse_error( $raw = '' ) {
-		// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log -- temporary debug.
+		// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log -- diagnostics only; not exposed to the browser.
 		error_log( sprintf( '[TBT Notes] OpenAI response could not be parsed: model=%s body=%s', self::openai_model(), (string) $raw ) );
-		return new WP_Error(
-			'tbt_notes_expr_parse',
-			__( 'Could not read the AI response. Please try again.', 'tbt-notes' ),
-			self::debug_error_data(
-				502,
-				array(
-					'stage'           => 'parse',
-					'model'           => self::openai_model(),
-					'openai_response' => (string) $raw,
-				)
-			)
-		);
+		return new WP_Error( 'tbt_notes_expr_parse', __( 'Could not read the AI response. Please try again.', 'tbt-notes' ), array( 'status' => 502 ) );
 	}
 
 	/* --------------------------------------------------------------------- *
