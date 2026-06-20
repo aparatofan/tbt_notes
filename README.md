@@ -120,6 +120,53 @@ add_filter( 'tbt_notes_elevenlabs_api_key', function () {
 Without a key, generation reports "ElevenLabs API key is not configured." and no
 request is made.
 
+### AI expression cards — OpenAI
+
+Blue **Useful expression** highlights can become small editable English–Polish
+flashcards. Under **Show: Useful expression**, the teacher sees each blue phrase
+with a **Generate card** button; clicking it calls a server-side WordPress REST
+route that asks OpenAI to produce a natural Polish translation plus one clear
+B1/B2 English example, then stores the result as a **draft** card.
+
+The teacher stays the quality-control gate. A draft card can be **edited** (both
+the Polish translation and the example are editable text fields), **regenerated**
+(a fresh OpenAI call that resets the card to draft), and **approved**. Students
+viewing the same filter see **only approved cards** — never drafts, never the
+generation controls, and never anything in the full note view. If an expression
+is no longer highlighted blue, it drops out of the current list.
+
+Generation is deliberately conservative and mirrors the pronunciation feature: it
+is teacher-only and manual, the requested text must currently be highlighted blue
+in that lesson, expressions over 200 characters are rejected, each teacher is
+capped at 50 generations per hour, and the OpenAI key is **server-side only** —
+it is never exposed to the browser. No AI generation ever happens for students.
+
+The call uses the OpenAI **Responses API** with **Structured Outputs** (a strict
+JSON schema), defaulting to the small `gpt-5.4-nano` model.
+
+**Configure the key and (optionally) the model server-side.** The preferred setup
+is a Code Snippets plugin:
+
+```php
+add_filter( 'tbt_notes_openai_api_key', function () {
+    return 'your-key-here';
+} );
+
+add_filter( 'tbt_notes_openai_model', function () {
+    return 'gpt-5.4-nano';
+} );
+```
+
+…or define constants in `wp-config.php`:
+
+```php
+define( 'TBT_NOTES_OPENAI_API_KEY', 'your-key-here' );
+define( 'TBT_NOTES_OPENAI_MODEL', 'gpt-5.4-nano' );
+```
+
+Without a key, generation reports "OpenAI API key is not configured." and no
+request is made.
+
 ## Installation
 
 1. Copy this repository's contents into `wp-content/plugins/tbt-notes/` (the repo
@@ -142,13 +189,14 @@ includes/
   class-tbt-notes-capabilities.php Capability (role-based) management
   class-tbt-notes-sanitizer.php   Body/text sanitisation (the kses allowlist)
   class-tbt-notes-pronunciation.php  Pink-highlight ElevenLabs audio (extract/cache/generate)
+  class-tbt-notes-expression-cards.php  Blue-highlight OpenAI expression cards (extract/generate/approve)
   class-tbt-notes-rest.php        REST API + permission/ownership checks
   class-tbt-notes-frontend.php    Asset loading + panel markup
 assets/
   css/tbt-notes.css               Panel, read view, editor chrome, highlights
   js/tbt-notes.js                 The panel app (vanilla JS) + autosave
   vendor/quill/                   Self-hosted Quill 2 (BSD-3-Clause)
-tests/test-logic.php              Sanitiser + visibility-rule tests
+tests/test-logic.php              Sanitiser, visibility, pronunciation + expression-card tests
 ```
 
 ## Data model

@@ -664,6 +664,11 @@
 			return;
 		}
 
+		if ( filter === 'blue' ) {
+			renderExpressionCardsInto( container, lesson, !! isTeacher );
+			return;
+		}
+
 		var wrap = el( 'div', 'tbt-notes-detail__scroll' );
 		var summary = el( 'div', 'tbt-notes-highlight-summary' );
 		var groups = extractHighlights( lesson.body || '' );
@@ -811,6 +816,256 @@
 		} else if ( isTeacher ) {
 			renderGenerate();
 		}
+		return li;
+	}
+
+	/* ------------------------------------------------------ Expression cards */
+
+	/**
+	 * Expression-card (blue) view. Fetches the lesson's blue "Useful expression"
+	 * items from the server (teacher: every blue item with card flags; student:
+	 * only approved cards) and renders them. Cards never appear in the full note —
+	 * only here, under the Useful expression filter.
+	 */
+	function renderExpressionCardsInto( container, lesson, isTeacher ) {
+		var wrap = el( 'div', 'tbt-notes-detail__scroll' );
+		var summary = el( 'div', 'tbt-notes-highlight-summary' );
+		var section = el( 'section', 'tbt-notes-highlight-group' );
+		section.appendChild( el( 'h2', null, t( 'usefulExpression', 'Useful expression' ) ) );
+		var list = el( 'ul', 'tbt-expression-list' );
+		section.appendChild( list );
+		summary.appendChild( section );
+		wrap.appendChild( summary );
+		container.appendChild( wrap );
+
+		list.appendChild( el( 'li', 'tbt-notes-empty', t( 'loading', 'Loading…' ) ) );
+
+		api( 'GET', 'lessons/' + lesson.id + '/expression-cards' ).then( function ( data ) {
+			clear( list );
+			var items = ( data && data.items ) || [];
+			if ( ! items.length ) {
+				var msg = isTeacher
+					? t( 'noHighlightsFound', 'No highlighted items in this category.' )
+					: t( 'noExpressionCards', 'No useful expression cards have been added yet.' );
+				list.appendChild( el( 'li', 'tbt-notes-empty', msg ) );
+				return;
+			}
+			items.forEach( function ( item ) {
+				list.appendChild( expressionCardItem( lesson, item, isTeacher ) );
+			} );
+		} ).catch( function ( err ) {
+			clear( list );
+			var li = el( 'li' );
+			li.appendChild( errorBlock( err.message ) );
+			list.appendChild( li );
+		} );
+	}
+
+	/**
+	 * One row in the expression-card list.
+	 *
+	 * Teacher: the blue text plus either a "Generate card" button (no card yet) or
+	 * an editable card (Polish + example textareas, status, Save/Approve/
+	 * Regenerate). Student: a static, read-only approved card.
+	 */
+	function expressionCardItem( lesson, item, isTeacher ) {
+		var li = el( 'li', 'tbt-expression-item' );
+
+		// ---- Student: static approved card only. ----
+		if ( ! isTeacher ) {
+			li.appendChild( el( 'div', 'tbt-expression-text tbt-hl-blue', item.text ) );
+			var card = el( 'div', 'tbt-expression-card' );
+			var pRow = el( 'div', 'tbt-expression-readrow' );
+			pRow.appendChild( el( 'strong', null, t( 'polishLabel', 'Polish' ) + ': ' ) );
+			pRow.appendChild( document.createTextNode( item.polish_translation || '' ) );
+			card.appendChild( pRow );
+			var eRow = el( 'div', 'tbt-expression-readrow' );
+			eRow.appendChild( el( 'strong', null, t( 'exampleLabel', 'Example' ) + ': ' ) );
+			eRow.appendChild( document.createTextNode( item.example_sentence || '' ) );
+			card.appendChild( eRow );
+			li.appendChild( card );
+			return li;
+		}
+
+		// ---- Teacher: header (text + optional inline action) and a body. ----
+		var head = el( 'div', 'tbt-expression-head' );
+		head.appendChild( el( 'span', 'tbt-expression-text tbt-hl-blue', item.text ) );
+		var headActions = el( 'span', 'tbt-expression-actions' );
+		head.appendChild( headActions );
+		li.appendChild( head );
+
+		var body = el( 'div', 'tbt-expression-body' );
+		li.appendChild( body );
+
+		// Re-render the row's body for the given item state.
+		function paint( current ) {
+			clear( headActions );
+			clear( body );
+			if ( current.has_card ) {
+				renderCard( current );
+			} else {
+				renderGenerate();
+			}
+		}
+
+		function renderGenerate() {
+			var btn = el( 'button', 'tbt-notes-btn tbt-expression-generate' );
+			btn.type = 'button';
+			btn.textContent = t( 'generateCard', 'Generate card' );
+			btn.addEventListener( 'click', function () {
+				btn.disabled = true;
+				btn.textContent = t( 'generating', 'Generating…' );
+				api( 'POST', 'lessons/' + lesson.id + '/expression-cards', { text: item.text } ).then( function ( data ) {
+					if ( data && data.item && data.item.has_card ) {
+						paint( data.item );
+					} else {
+						throw new Error( t( 'cardError', 'Could not generate the expression card. Please try again.' ) );
+					}
+				} ).catch( function ( err ) {
+					btn.disabled = false;
+					btn.textContent = t( 'generateCard', 'Generate card' );
+					headActions.appendChild( el( 'span', 'tbt-expression-error', err.message ) );
+				} );
+			} );
+			headActions.appendChild( btn );
+		}
+
+		function renderCard( current ) {
+			var card = el( 'div', 'tbt-expression-card' );
+
+			// Polish field.
+			var pField = el( 'div', 'tbt-expression-field' );
+			pField.appendChild( el( 'label', null, t( 'polishLabel', 'Polish' ) ) );
+			var pArea = el( 'textarea' );
+			pArea.value = current.polish_translation || '';
+			pField.appendChild( pArea );
+			card.appendChild( pField );
+
+			// Example field.
+			var eField = el( 'div', 'tbt-expression-field' );
+			eField.appendChild( el( 'label', null, t( 'exampleLabel', 'Example' ) ) );
+			var eArea = el( 'textarea' );
+			eArea.value = current.example_sentence || '';
+			eField.appendChild( eArea );
+			card.appendChild( eField );
+
+			// Status line.
+			var statusRow = el( 'div', 'tbt-expression-status' );
+			statusRow.appendChild( el( 'span', null, t( 'statusLabel', 'Status' ) + ': ' ) );
+			var isApproved = current.status === 'approved';
+			var badge = el(
+				'span',
+				'tbt-expression-status--' + ( isApproved ? 'approved' : 'draft' ),
+				isApproved ? t( 'statusApproved', 'Approved' ) : t( 'statusDraft', 'Draft' )
+			);
+			statusRow.appendChild( badge );
+			card.appendChild( statusRow );
+
+			// Actions.
+			var actions = el( 'div', 'tbt-expression-actions' );
+			var msgSlot = el( 'span', 'tbt-expression-msg' );
+
+			var saveBtn = el( 'button', 'tbt-notes-btn' );
+			saveBtn.type = 'button';
+			saveBtn.textContent = t( 'save', 'Save' );
+
+			var approveBtn = null;
+			if ( ! isApproved ) {
+				approveBtn = el( 'button', 'tbt-notes-btn' );
+				approveBtn.type = 'button';
+				approveBtn.textContent = t( 'approve', 'Approve' );
+			}
+
+			var regenBtn = el( 'button', 'tbt-notes-btn tbt-notes-btn--ghost' );
+			regenBtn.type = 'button';
+			regenBtn.textContent = t( 'regenerate', 'Regenerate' );
+
+			function setBusy( busy ) {
+				saveBtn.disabled = busy;
+				if ( approveBtn ) {
+					approveBtn.disabled = busy;
+				}
+				regenBtn.disabled = busy;
+			}
+
+			function showError( text ) {
+				clear( msgSlot );
+				msgSlot.className = 'tbt-expression-error';
+				msgSlot.textContent = text;
+			}
+
+			function showSaved() {
+				clear( msgSlot );
+				msgSlot.className = 'tbt-expression-msg';
+				msgSlot.textContent = t( 'cardSaved', 'Saved' );
+			}
+
+			// Save keeps the current status (preferred v1 behaviour).
+			saveBtn.addEventListener( 'click', function () {
+				setBusy( true );
+				clear( msgSlot );
+				api( 'PATCH', 'expression-cards/' + current.card_id, {
+					polish_translation: pArea.value,
+					example_sentence: eArea.value
+				} ).then( function ( data ) {
+					if ( data && data.item ) {
+						paint( data.item );
+					} else {
+						setBusy( false );
+						showSaved();
+					}
+				} ).catch( function ( err ) {
+					setBusy( false );
+					showError( err.message );
+				} );
+			} );
+
+			if ( approveBtn ) {
+				// Approve saves any edits first, then sets status=approved.
+				approveBtn.addEventListener( 'click', function () {
+					setBusy( true );
+					clear( msgSlot );
+					api( 'PATCH', 'expression-cards/' + current.card_id, {
+						polish_translation: pArea.value,
+						example_sentence: eArea.value,
+						status: 'approved'
+					} ).then( function ( data ) {
+						paint( ( data && data.item ) || current );
+					} ).catch( function ( err ) {
+						setBusy( false );
+						showError( err.message );
+					} );
+				} );
+			}
+
+			regenBtn.addEventListener( 'click', function () {
+				setBusy( true );
+				clear( msgSlot );
+				regenBtn.textContent = t( 'generating', 'Generating…' );
+				api( 'POST', 'lessons/' + lesson.id + '/expression-cards', {
+					text: item.text,
+					force: true
+				} ).then( function ( data ) {
+					paint( ( data && data.item ) || current );
+				} ).catch( function ( err ) {
+					setBusy( false );
+					regenBtn.textContent = t( 'regenerate', 'Regenerate' );
+					showError( err.message );
+				} );
+			} );
+
+			actions.appendChild( saveBtn );
+			if ( approveBtn ) {
+				actions.appendChild( approveBtn );
+			}
+			actions.appendChild( regenBtn );
+			actions.appendChild( msgSlot );
+			card.appendChild( actions );
+
+			body.appendChild( card );
+		}
+
+		paint( item );
 		return li;
 	}
 

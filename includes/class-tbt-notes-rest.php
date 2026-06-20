@@ -152,6 +152,46 @@ class TBT_Notes_REST {
 				),
 			)
 		);
+
+		// Expression cards for blue ("Useful expression") highlights. Reads follow
+		// the lesson's class visibility rule; generation/edit/approve are
+		// teacher/admin only.
+		register_rest_route(
+			$ns,
+			'/lessons/(?P<id>\d+)/expression-cards',
+			array(
+				array(
+					'methods'             => WP_REST_Server::READABLE,
+					'callback'            => array( $this, 'get_expression_cards' ),
+					'permission_callback' => array( $this, 'can_read_lesson' ),
+				),
+				array(
+					'methods'             => WP_REST_Server::CREATABLE,
+					'callback'            => array( $this, 'create_expression_card' ),
+					'permission_callback' => array( $this, 'require_manage' ),
+				),
+			)
+		);
+
+		register_rest_route(
+			$ns,
+			'/expression-cards/(?P<id>\d+)',
+			array(
+				'methods'             => WP_REST_Server::EDITABLE,
+				'callback'            => array( $this, 'update_expression_card' ),
+				'permission_callback' => array( $this, 'require_manage' ),
+			)
+		);
+
+		register_rest_route(
+			$ns,
+			'/expression-cards/(?P<id>\d+)/approve',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'approve_expression_card' ),
+				'permission_callback' => array( $this, 'require_manage' ),
+			)
+		);
 	}
 
 	/* --------------------------------------------------------------------- *
@@ -646,8 +686,125 @@ class TBT_Notes_REST {
 	}
 
 	/* --------------------------------------------------------------------- *
+	 * Handlers — expression cards
+	 * --------------------------------------------------------------------- */
+
+	/**
+	 * List expression-card items for a lesson. Teachers get every current blue
+	 * highlight (each flagged with whether a card exists and its contents);
+	 * students get only currently-blue highlights with an approved card.
+	 * Ownership already verified in the permission callback.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response
+	 */
+	public function get_expression_cards( WP_REST_Request $request ) {
+		$lesson_id  = (int) $request['id'];
+		$is_teacher = TBT_Notes_Capabilities::user_can_manage();
+
+		$response = array(
+			'lesson_id'    => $lesson_id,
+			'items'        => TBT_Notes_Expression_Cards::list_for_lesson( $lesson_id, $is_teacher ),
+			'can_generate' => $is_teacher,
+		);
+
+		// Surface key-configuration status to teachers only (never the key).
+		if ( $is_teacher ) {
+			$response['api_key_configured'] = TBT_Notes_Expression_Cards::has_api_key();
+		}
+
+		return rest_ensure_response( $response );
+	}
+
+	/**
+	 * Generate (or reuse/regenerate) an expression card for one blue-highlight
+	 * item. Teacher/admin only. All validation, the blue-membership check and the
+	 * OpenAI call live in the expression-card service.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function create_expression_card( WP_REST_Request $request ) {
+		$lesson_id = (int) $request['id'];
+		$text      = (string) $request->get_param( 'text' );
+		$force     = (bool) $request->get_param( 'force' );
+
+		$record = TBT_Notes_Expression_Cards::generate( $lesson_id, $text, $force );
+		if ( is_wp_error( $record ) ) {
+			return $record;
+		}
+
+		return rest_ensure_response( array( 'item' => $this->present_expression_card( $record ) ) );
+	}
+
+	/**
+	 * Update an expression card (translation, example, and/or status). Status is
+	 * validated to draft|approved in the service. Teacher/admin only.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function update_expression_card( WP_REST_Request $request ) {
+		$card_id = (int) $request['id'];
+
+		$fields = array();
+		if ( null !== $request->get_param( 'polish_translation' ) ) {
+			$fields['polish_translation'] = (string) $request->get_param( 'polish_translation' );
+		}
+		if ( null !== $request->get_param( 'example_sentence' ) ) {
+			$fields['example_sentence'] = (string) $request->get_param( 'example_sentence' );
+		}
+		if ( null !== $request->get_param( 'status' ) ) {
+			$fields['status'] = (string) $request->get_param( 'status' );
+		}
+
+		$record = TBT_Notes_Expression_Cards::update_card( $card_id, $fields );
+		if ( is_wp_error( $record ) ) {
+			return $record;
+		}
+
+		return rest_ensure_response( array( 'item' => $this->present_expression_card( $record ) ) );
+	}
+
+	/**
+	 * Approve an expression card (status = approved). Teacher/admin only.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function approve_expression_card( WP_REST_Request $request ) {
+		$card_id = (int) $request['id'];
+
+		$record = TBT_Notes_Expression_Cards::approve_card( $card_id );
+		if ( is_wp_error( $record ) ) {
+			return $record;
+		}
+
+		return rest_ensure_response( array( 'item' => $this->present_expression_card( $record ) ) );
+	}
+
+	/* --------------------------------------------------------------------- *
 	 * Helpers
 	 * --------------------------------------------------------------------- */
+
+	/**
+	 * Shape an expression-card record for the teacher UI.
+	 *
+	 * @param array $record Shaped card row.
+	 * @return array
+	 */
+	protected function present_expression_card( $record ) {
+		return array(
+			'text'               => $record['text'],
+			'has_card'           => true,
+			'card_id'            => (int) $record['id'],
+			'polish_translation' => $record['polish_translation'],
+			'example_sentence'   => $record['example_sentence'],
+			'level'              => $record['level'],
+			'status'             => $record['status'],
+			'can_generate'       => true,
+		);
+	}
 
 	/**
 	 * Shape a class for output. The student roster is only exposed to managers.

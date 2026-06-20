@@ -16,12 +16,14 @@ if ( ! defined( 'WP_UNINSTALL_PLUGIN' ) ) {
 
 global $wpdb;
 
-$classes_table       = $wpdb->prefix . 'tbt_classes';
-$lessons_table       = $wpdb->prefix . 'tbt_lessons';
-$members_table       = $wpdb->prefix . 'tbt_class_students';
-$pronunciation_table = $wpdb->prefix . 'tbt_note_pronunciations';
+$classes_table          = $wpdb->prefix . 'tbt_classes';
+$lessons_table          = $wpdb->prefix . 'tbt_lessons';
+$members_table          = $wpdb->prefix . 'tbt_class_students';
+$pronunciation_table    = $wpdb->prefix . 'tbt_note_pronunciations';
+$expression_cards_table = $wpdb->prefix . 'tbt_note_expression_cards';
 
 // phpcs:disable WordPress.DB.PreparedSQL.NotPrepared -- table names cannot be parameterised.
+$wpdb->query( "DROP TABLE IF EXISTS {$expression_cards_table}" );
 $wpdb->query( "DROP TABLE IF EXISTS {$pronunciation_table}" );
 $wpdb->query( "DROP TABLE IF EXISTS {$members_table}" );
 $wpdb->query( "DROP TABLE IF EXISTS {$lessons_table}" );

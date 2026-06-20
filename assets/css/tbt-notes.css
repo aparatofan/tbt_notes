@@ -947,6 +947,104 @@
 	font-size: 14px;
 }
 
+/* ------------------------------------------------------- Expression cards */
+
+.tbt-expression-list {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+}
+
+.tbt-expression-item {
+	margin: 0.6em 0;
+	padding: 0.5em 0;
+	border-bottom: 1px solid var(--tbt-border);
+}
+
+.tbt-expression-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--tbt-s2);
+	flex-wrap: wrap;
+}
+
+.tbt-expression-text {
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
+.tbt-expression-card {
+	margin-top: 0.5em;
+}
+
+.tbt-expression-readrow {
+	margin: 0.2em 0;
+}
+
+.tbt-expression-field {
+	display: flex;
+	flex-direction: column;
+	gap: 0.2em;
+	margin: 0.4em 0;
+}
+
+.tbt-expression-field label {
+	font-size: 13px;
+	font-weight: 600;
+	color: var(--tbt-muted, #555);
+}
+
+.tbt-expression-field textarea {
+	width: 100%;
+	box-sizing: border-box;
+	min-height: 2.6em;
+	resize: vertical;
+	font: inherit;
+	padding: 6px 8px;
+	border: 1px solid var(--tbt-border);
+	border-radius: 4px;
+}
+
+.tbt-expression-status {
+	margin: 0.4em 0;
+	font-size: 14px;
+}
+
+.tbt-expression-status--draft {
+	font-weight: 600;
+	color: var(--tbt-muted, #777);
+}
+
+.tbt-expression-status--approved {
+	font-weight: 600;
+	color: var(--tbt-success, #2e7d32);
+}
+
+.tbt-expression-actions {
+	flex: 0 0 auto;
+	display: inline-flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: var(--tbt-s1);
+}
+
+.tbt-expression-generate,
+.tbt-expression-actions .tbt-notes-btn {
+	padding: 6px 12px;
+	font-size: 14px;
+}
+
+.tbt-expression-error {
+	color: var(--tbt-danger);
+	font-size: 14px;
+}
+
+.tbt-expression-msg {
+	color: var(--tbt-muted, #777);
+	font-size: 14px;
+}
+
 /* --------------------------------------------------------------- Editor view */
 /* Fills the full width of the detail pane (no artificial max-width). */
 

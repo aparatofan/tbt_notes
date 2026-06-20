@@ -73,11 +73,137 @@ function user_can( $user_id, $cap ) {
 	return (bool) $val;
 }
 
+/**
+ * Minimal i18n + error stubs used by the expression-card service. WordPress is
+ * not loaded; these mimic just enough behaviour for our logic.
+ */
+function __( $text, $domain = 'default' ) {
+	return $text;
+}
+
+function wp_strip_all_tags( $str ) {
+	return trim( preg_replace( '/<[^>]*>/', '', (string) $str ) );
+}
+
+/**
+ * Tiny WP_Error stand-in: stores a code + message so tests can assert on them.
+ */
+class WP_Error {
+	public $code;
+	public $message;
+	public $data;
+	public function __construct( $code = '', $message = '', $data = array() ) {
+		$this->code    = $code;
+		$this->message = $message;
+		$this->data    = $data;
+	}
+	public function get_error_code() {
+		return $this->code;
+	}
+	public function get_error_message() {
+		return $this->message;
+	}
+}
+
+function is_wp_error( $thing ) {
+	return $thing instanceof WP_Error;
+}
+
+/**
+ * In-memory stand-in for TBT_Notes_DB, covering only the lesson + expression-card
+ * methods the service touches. Lets us exercise list/generate/delete logic
+ * without a database.
+ */
+class TBT_Notes_DB {
+	public static $lessons      = array();
+	public static $cards        = array();
+	public static $next_card_id = 1;
+
+	public static function reset() {
+		self::$lessons      = array();
+		self::$cards        = array();
+		self::$next_card_id = 1;
+	}
+
+	public static function set_lesson( $id, $header, $body ) {
+		self::$lessons[ (int) $id ] = array(
+			'id'     => (int) $id,
+			'header' => (string) $header,
+			'body'   => (string) $body,
+		);
+	}
+
+	public static function get_lesson( $id ) {
+		return isset( self::$lessons[ (int) $id ] ) ? self::$lessons[ (int) $id ] : null;
+	}
+
+	public static function get_expression_cards_for_lesson( $lesson_id ) {
+		$out = array();
+		foreach ( self::$cards as $c ) {
+			if ( (int) $c['lesson_id'] === (int) $lesson_id ) {
+				$out[] = $c;
+			}
+		}
+		return $out;
+	}
+
+	public static function get_expression_card( $lesson_id, $hash ) {
+		foreach ( self::$cards as $c ) {
+			if ( (int) $c['lesson_id'] === (int) $lesson_id && $c['text_hash'] === $hash ) {
+				return $c;
+			}
+		}
+		return null;
+	}
+
+	public static function get_expression_card_by_id( $id ) {
+		return isset( self::$cards[ (int) $id ] ) ? self::$cards[ (int) $id ] : null;
+	}
+
+	public static function insert_expression_card( array $data ) {
+		$id   = self::$next_card_id++;
+		$card = array(
+			'id'                 => $id,
+			'lesson_id'          => (int) $data['lesson_id'],
+			'text_hash'          => (string) $data['text_hash'],
+			'text'               => (string) $data['text'],
+			'context'            => isset( $data['context'] ) ? (string) $data['context'] : '',
+			'polish_translation' => (string) $data['polish_translation'],
+			'example_sentence'   => (string) $data['example_sentence'],
+			'level'              => isset( $data['level'] ) ? (string) $data['level'] : 'B1/B2',
+			'status'             => isset( $data['status'] ) ? (string) $data['status'] : 'draft',
+			'provider'           => isset( $data['provider'] ) ? (string) $data['provider'] : 'openai',
+			'model'              => isset( $data['model'] ) ? (string) $data['model'] : '',
+		);
+		self::$cards[ $id ] = $card;
+		return $id;
+	}
+
+	public static function update_expression_card( $id, array $fields ) {
+		if ( ! isset( self::$cards[ (int) $id ] ) ) {
+			return false;
+		}
+		foreach ( $fields as $k => $v ) {
+			self::$cards[ (int) $id ][ $k ] = $v;
+		}
+		return true;
+	}
+
+	public static function delete_expression_cards_for_lesson( $lesson_id ) {
+		foreach ( self::$cards as $id => $c ) {
+			if ( (int) $c['lesson_id'] === (int) $lesson_id ) {
+				unset( self::$cards[ $id ] );
+			}
+		}
+	}
+}
+
 /* ----------------------------------------------------------------- Load code */
 
 require_once dirname( __DIR__ ) . '/includes/class-tbt-notes-capabilities.php';
 require_once dirname( __DIR__ ) . '/includes/class-tbt-notes-sanitizer.php';
 require_once dirname( __DIR__ ) . '/includes/class-tbt-notes-pronunciation.php';
+require_once dirname( __DIR__ ) . '/includes/class-tbt-notes-expression-cards.php';
 require_once dirname( __DIR__ ) . '/includes/class-tbt-notes-rest.php';
 
 /* ------------------------------------------------------------- Tiny test kit */
@@ -290,6 +416,164 @@ function test_length_validation() {
 	ok( ! TBT_Notes_Pronunciation::exceeds_length_limit( $boundary ), 'text at the 200-char limit is accepted' );
 }
 test_length_validation();
+
+echo "Expression cards — blue extraction:\n";
+function test_blue_extraction() {
+	$html = '<p>Use <span class="tbt-hl-blue">in the zone</span> and '
+		. '<span class="tbt-hl-pink">moment of levity</span>.</p>'
+		. '<p><span class="tbt-hl-blue">in the zone</span> again, plus '
+		. '<span class="tbt-hl-blue">  find   your bearings </span> and '
+		. '<span class="tbt-hl-red">I am agree</span>.</p>'
+		. '<p><span class="tbt-hl-blue">   </span></p>';
+
+	$items = TBT_Notes_Expression_Cards::extract_blue_highlights( $html );
+
+	ok( in_array( 'in the zone', $items, true ), 'extracts blue text' );
+	ok( in_array( 'find your bearings', $items, true ), 'normalises whitespace inside blue text' );
+	ok( ! in_array( 'moment of levity', $items, true ), 'ignores pink highlights' );
+	ok( ! in_array( 'I am agree', $items, true ), 'ignores red highlights' );
+
+	$count = 0;
+	foreach ( $items as $i ) {
+		if ( 'in the zone' === $i ) {
+			$count++;
+		}
+	}
+	ok( 1 === $count, 'deduplicates repeated blue text' );
+
+	foreach ( $items as $i ) {
+		ok( '' !== trim( $i ), 'no empty items: "' . $i . '"' );
+	}
+
+	ok( array() === TBT_Notes_Expression_Cards::extract_blue_highlights( '' ), 'empty html yields no items' );
+}
+test_blue_extraction();
+
+echo "Expression cards — normalisation + hashing:\n";
+function test_expr_normalize() {
+	ok( 'in the zone' === TBT_Notes_Expression_Cards::normalize_text( "  in   the\tzone  " ), 'collapses whitespace runs' );
+
+	$a = TBT_Notes_Expression_Cards::text_hash( 'in the zone' );
+	$b = TBT_Notes_Expression_Cards::text_hash( '  in   the  zone ' );
+	ok( $a === $b, 'same normalised text gives same hash' );
+	ok( 64 === strlen( $a ), 'hash is a 64-char sha-256 hex string' );
+
+	ok( ! TBT_Notes_Expression_Cards::exceeds_length_limit( str_repeat( 'a', 200 ) ), 'text at the 200-char limit is accepted' );
+	ok( TBT_Notes_Expression_Cards::exceeds_length_limit( str_repeat( 'a', 201 ) ), 'overlong text is rejected' );
+}
+test_expr_normalize();
+
+echo "Expression cards — teacher list (all blue, with/without cards):\n";
+function test_expr_teacher_list() {
+	TBT_Notes_DB::reset();
+	$body = '<p><span class="tbt-hl-blue">in the zone</span> and '
+		. '<span class="tbt-hl-blue">find your bearings</span>.</p>';
+	TBT_Notes_DB::set_lesson( 1, 'Lesson 1', $body );
+
+	// Only one of the two blue items has a card so far.
+	TBT_Notes_DB::insert_expression_card( array(
+		'lesson_id'          => 1,
+		'text_hash'          => TBT_Notes_Expression_Cards::text_hash( 'in the zone' ),
+		'text'               => 'in the zone',
+		'context'            => 'ctx',
+		'polish_translation' => 'w rytmie pracy',
+		'example_sentence'   => 'I was in the zone.',
+		'status'             => 'draft',
+	) );
+
+	$items = TBT_Notes_Expression_Cards::list_for_lesson( 1, true );
+	ok( count( $items ) === 2, 'teacher sees every current blue highlight (2)' );
+
+	$by_text = array();
+	foreach ( $items as $it ) {
+		$by_text[ $it['text'] ] = $it;
+	}
+	ok( isset( $by_text['in the zone'] ) && $by_text['in the zone']['has_card'] === true, 'item with a card is flagged has_card=true' );
+	ok( isset( $by_text['find your bearings'] ) && $by_text['find your bearings']['has_card'] === false, 'item without a card is flagged has_card=false' );
+	ok( $by_text['find your bearings']['can_generate'] === true, 'cardless item can be generated' );
+	ok( $by_text['in the zone']['status'] === 'draft', 'card status is surfaced to the teacher' );
+}
+test_expr_teacher_list();
+
+echo "Expression cards — student list (approved only, drafts hidden):\n";
+function test_expr_student_list() {
+	TBT_Notes_DB::reset();
+	$body = '<p><span class="tbt-hl-blue">in the zone</span>, '
+		. '<span class="tbt-hl-blue">find your bearings</span>, '
+		. '<span class="tbt-hl-blue">read the room</span>.</p>';
+	TBT_Notes_DB::set_lesson( 2, 'Lesson 2', $body );
+
+	TBT_Notes_DB::insert_expression_card( array(
+		'lesson_id'          => 2,
+		'text_hash'          => TBT_Notes_Expression_Cards::text_hash( 'in the zone' ),
+		'text'               => 'in the zone',
+		'context'            => 'ctx',
+		'polish_translation' => 'w rytmie pracy',
+		'example_sentence'   => 'I was in the zone.',
+		'status'             => 'approved',
+	) );
+	TBT_Notes_DB::insert_expression_card( array(
+		'lesson_id'          => 2,
+		'text_hash'          => TBT_Notes_Expression_Cards::text_hash( 'find your bearings' ),
+		'text'               => 'find your bearings',
+		'context'            => 'ctx',
+		'polish_translation' => 'odnaleźć się',
+		'example_sentence'   => 'It took a week to find my bearings.',
+		'status'             => 'draft',
+	) );
+	// "read the room" has no card at all.
+
+	$items = TBT_Notes_Expression_Cards::list_for_lesson( 2, false );
+	ok( count( $items ) === 1, 'student sees only the one approved card' );
+	ok( $items[0]['text'] === 'in the zone', 'student sees the approved expression' );
+	ok( $items[0]['status'] === 'approved', 'student card is approved' );
+
+	$texts = array();
+	foreach ( $items as $it ) {
+		$texts[] = $it['text'];
+	}
+	ok( ! in_array( 'find your bearings', $texts, true ), 'draft cards are hidden from students' );
+	ok( ! in_array( 'read the room', $texts, true ), 'cardless blue items are hidden from students' );
+}
+test_expr_student_list();
+
+echo "Expression cards — generation requires a current blue highlight:\n";
+function test_expr_generate_guard() {
+	TBT_Notes_DB::reset();
+	$body = '<p><span class="tbt-hl-blue">in the zone</span>.</p>';
+	TBT_Notes_DB::set_lesson( 3, 'Lesson 3', $body );
+
+	// Not a blue highlight in this lesson — must be refused before any API call.
+	$err = TBT_Notes_Expression_Cards::generate( 3, 'totally unrelated phrase' );
+	ok( is_wp_error( $err ), 'generation refused for non-blue text' );
+	ok( $err->get_error_code() === 'tbt_notes_expr_not_blue', 'correct error code for non-blue text' );
+
+	// Overlong text is rejected before the blue check too.
+	$long = str_repeat( 'a', 201 );
+	$err2 = TBT_Notes_Expression_Cards::generate( 3, $long );
+	ok( is_wp_error( $err2 ) && $err2->get_error_code() === 'tbt_notes_expr_too_long', 'overlong expression rejected' );
+}
+test_expr_generate_guard();
+
+echo "Expression cards — cards deleted with their lesson:\n";
+function test_expr_delete_with_lesson() {
+	TBT_Notes_DB::reset();
+	TBT_Notes_DB::set_lesson( 4, 'Lesson 4', '<p><span class="tbt-hl-blue">in the zone</span></p>' );
+	TBT_Notes_DB::insert_expression_card( array(
+		'lesson_id'          => 4,
+		'text_hash'          => TBT_Notes_Expression_Cards::text_hash( 'in the zone' ),
+		'text'               => 'in the zone',
+		'context'            => 'ctx',
+		'polish_translation' => 'w rytmie pracy',
+		'example_sentence'   => 'I was in the zone.',
+		'status'             => 'approved',
+	) );
+
+	ok( count( TBT_Notes_DB::get_expression_cards_for_lesson( 4 ) ) === 1, 'card exists before deletion' );
+	TBT_Notes_DB::delete_expression_cards_for_lesson( 4 );
+	ok( count( TBT_Notes_DB::get_expression_cards_for_lesson( 4 ) ) === 0, 'cards removed when the lesson is deleted' );
+}
+test_expr_delete_with_lesson();
 
 /* ----------------------------------------------------------------- Summary */
 
