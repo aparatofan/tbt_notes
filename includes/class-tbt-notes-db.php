@@ -61,6 +61,16 @@ class TBT_Notes_DB {
 	}
 
 	/**
+	 * Expression cards table name.
+	 *
+	 * @return string
+	 */
+	public static function table_expression_cards() {
+		global $wpdb;
+		return $wpdb->prefix . 'tbt_note_expression_cards';
+	}
+
+	/**
 	 * Create or update the database schema.
 	 */
 	public static function install() {
@@ -68,11 +78,12 @@ class TBT_Notes_DB {
 
 		require_once ABSPATH . 'wp-admin/includes/upgrade.php';
 
-		$charset_collate = $wpdb->get_charset_collate();
-		$classes         = self::table_classes();
-		$lessons         = self::table_lessons();
-		$members         = self::table_class_students();
-		$pronunciations  = self::table_pronunciations();
+		$charset_collate  = $wpdb->get_charset_collate();
+		$classes          = self::table_classes();
+		$lessons          = self::table_lessons();
+		$members          = self::table_class_students();
+		$pronunciations   = self::table_pronunciations();
+		$expression_cards = self::table_expression_cards();
 
 		$sql_classes = "CREATE TABLE {$classes} (
   id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
@@ -124,10 +135,35 @@ class TBT_Notes_DB {
   KEY lesson_id (lesson_id)
 ) {$charset_collate};";
 
+		// AI-generated English–Polish flashcards for blue ("Useful expression")
+		// highlights. One row per (lesson, normalised-text hash); the unique key
+		// both enforces and powers the lookup. Cards start as 'draft' and are only
+		// shown to students once a teacher sets them 'approved'.
+		$sql_expression_cards = "CREATE TABLE {$expression_cards} (
+  id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  lesson_id bigint(20) unsigned NOT NULL,
+  text_hash varchar(64) NOT NULL,
+  text text NOT NULL,
+  context text NOT NULL,
+  polish_translation text NOT NULL,
+  example_sentence text NOT NULL,
+  level varchar(20) NOT NULL DEFAULT 'B1/B2',
+  status varchar(20) NOT NULL DEFAULT 'draft',
+  provider varchar(50) NOT NULL DEFAULT 'openai',
+  model varchar(100) NOT NULL DEFAULT '',
+  created_at datetime NOT NULL,
+  updated_at datetime NOT NULL,
+  PRIMARY KEY  (id),
+  UNIQUE KEY lesson_text (lesson_id, text_hash),
+  KEY lesson_id (lesson_id),
+  KEY status (status)
+) {$charset_collate};";
+
 		dbDelta( $sql_classes );
 		dbDelta( $sql_lessons );
 		dbDelta( $sql_members );
 		dbDelta( $sql_pronunciations );
+		dbDelta( $sql_expression_cards );
 	}
 
 	/**
@@ -258,9 +294,11 @@ class TBT_Notes_DB {
 		if ( $class_id <= 0 ) {
 			return false;
 		}
-		// Clean up pronunciation audio (rows + files) for every lesson first.
+		// Clean up pronunciation audio (rows + files) and expression cards for
+		// every lesson first.
 		foreach ( self::get_lessons_for_class( $class_id ) as $lesson ) {
 			self::delete_pronunciations_for_lesson( $lesson['id'] );
+			self::delete_expression_cards_for_lesson( $lesson['id'] );
 		}
 		$wpdb->delete( self::table_lessons(), array( 'class_id' => $class_id ), array( '%d' ) );
 		$wpdb->delete( self::table_class_students(), array( 'class_id' => $class_id ), array( '%d' ) );
@@ -531,6 +569,7 @@ class TBT_Notes_DB {
 			return false;
 		}
 		self::delete_pronunciations_for_lesson( $lesson_id );
+		self::delete_expression_cards_for_lesson( $lesson_id );
 		$result = $wpdb->delete( self::table_lessons(), array( 'id' => $lesson_id ), array( '%d' ) );
 		return false !== $result;
 	}
@@ -661,6 +700,164 @@ class TBT_Notes_DB {
 	}
 
 	/* --------------------------------------------------------------------- *
+	 * Expression cards
+	 * --------------------------------------------------------------------- */
+
+	/**
+	 * Fetch one expression card by its natural key (lesson + normalised-text
+	 * hash). This is the cache/lookup key.
+	 *
+	 * @param int    $lesson_id Lesson ID.
+	 * @param string $text_hash Normalised-text hash.
+	 * @return array|null
+	 */
+	public static function get_expression_card( $lesson_id, $text_hash ) {
+		global $wpdb;
+		$lesson_id = (int) $lesson_id;
+		if ( $lesson_id <= 0 ) {
+			return null;
+		}
+		$table = self::table_expression_cards();
+		$row   = $wpdb->get_row(
+			$wpdb->prepare(
+				"SELECT * FROM {$table} WHERE lesson_id = %d AND text_hash = %s",
+				$lesson_id,
+				(string) $text_hash
+			),
+			ARRAY_A
+		);
+		return $row ? self::shape_expression_card( $row ) : null;
+	}
+
+	/**
+	 * Fetch one expression card by ID.
+	 *
+	 * @param int $id Card ID.
+	 * @return array|null
+	 */
+	public static function get_expression_card_by_id( $id ) {
+		global $wpdb;
+		$id = (int) $id;
+		if ( $id <= 0 ) {
+			return null;
+		}
+		$table = self::table_expression_cards();
+		$row   = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$table} WHERE id = %d", $id ), ARRAY_A );
+		return $row ? self::shape_expression_card( $row ) : null;
+	}
+
+	/**
+	 * All expression cards for a lesson.
+	 *
+	 * @param int $lesson_id Lesson ID.
+	 * @return array[]
+	 */
+	public static function get_expression_cards_for_lesson( $lesson_id ) {
+		global $wpdb;
+		$lesson_id = (int) $lesson_id;
+		if ( $lesson_id <= 0 ) {
+			return array();
+		}
+		$table = self::table_expression_cards();
+		$rows  = $wpdb->get_results(
+			$wpdb->prepare( "SELECT * FROM {$table} WHERE lesson_id = %d ORDER BY id ASC", $lesson_id ),
+			ARRAY_A
+		);
+		return array_map( array( __CLASS__, 'shape_expression_card' ), $rows ? $rows : array() );
+	}
+
+	/**
+	 * Insert an expression card.
+	 *
+	 * @param array $data lesson_id, text_hash, text, context, polish_translation,
+	 *                    example_sentence, level, status, provider, model.
+	 * @return int|false New ID or false.
+	 */
+	public static function insert_expression_card( array $data ) {
+		global $wpdb;
+		$now = self::now();
+		$ok  = $wpdb->insert(
+			self::table_expression_cards(),
+			array(
+				'lesson_id'          => (int) $data['lesson_id'],
+				'text_hash'          => (string) $data['text_hash'],
+				'text'               => (string) $data['text'],
+				'context'            => isset( $data['context'] ) ? (string) $data['context'] : '',
+				'polish_translation' => (string) $data['polish_translation'],
+				'example_sentence'   => (string) $data['example_sentence'],
+				'level'              => isset( $data['level'] ) ? (string) $data['level'] : 'B1/B2',
+				'status'             => isset( $data['status'] ) ? (string) $data['status'] : 'draft',
+				'provider'           => isset( $data['provider'] ) ? (string) $data['provider'] : 'openai',
+				'model'              => isset( $data['model'] ) ? (string) $data['model'] : '',
+				'created_at'         => $now,
+				'updated_at'         => $now,
+			),
+			array( '%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s' )
+		);
+		return $ok ? (int) $wpdb->insert_id : false;
+	}
+
+	/**
+	 * Update an expression card. Accepts any of: text, context,
+	 * polish_translation, example_sentence, level, status, provider, model.
+	 *
+	 * @param int   $id     Card ID.
+	 * @param array $fields Fields to update.
+	 * @return bool
+	 */
+	public static function update_expression_card( $id, array $fields ) {
+		global $wpdb;
+		$id = (int) $id;
+		if ( $id <= 0 ) {
+			return false;
+		}
+
+		$allowed = array(
+			'text'               => '%s',
+			'context'            => '%s',
+			'polish_translation' => '%s',
+			'example_sentence'   => '%s',
+			'level'              => '%s',
+			'status'             => '%s',
+			'provider'           => '%s',
+			'model'              => '%s',
+		);
+
+		$data    = array();
+		$formats = array();
+		foreach ( $allowed as $key => $format ) {
+			if ( array_key_exists( $key, $fields ) ) {
+				$data[ $key ] = (string) $fields[ $key ];
+				$formats[]    = $format;
+			}
+		}
+		if ( empty( $data ) ) {
+			return true;
+		}
+		$data['updated_at'] = self::now();
+		$formats[]          = '%s';
+
+		$result = $wpdb->update( self::table_expression_cards(), $data, array( 'id' => $id ), $formats, array( '%d' ) );
+		return false !== $result;
+	}
+
+	/**
+	 * Delete all expression cards for a lesson. Used when a lesson (or its class)
+	 * is deleted.
+	 *
+	 * @param int $lesson_id Lesson ID.
+	 * @return void
+	 */
+	public static function delete_expression_cards_for_lesson( $lesson_id ) {
+		global $wpdb;
+		$lesson_id = (int) $lesson_id;
+		if ( $lesson_id <= 0 ) {
+			return;
+		}
+		$wpdb->delete( self::table_expression_cards(), array( 'lesson_id' => $lesson_id ), array( '%d' ) );
+	}
+
+	/* --------------------------------------------------------------------- *
 	 * Shaping
 	 * --------------------------------------------------------------------- */
 
@@ -714,6 +911,30 @@ class TBT_Notes_DB {
 			'mime_type'      => (string) $row['mime_type'],
 			'created_at'     => (string) $row['created_at'],
 			'updated_at'     => (string) $row['updated_at'],
+		);
+	}
+
+	/**
+	 * Normalise an expression card row.
+	 *
+	 * @param array $row Raw row.
+	 * @return array
+	 */
+	protected static function shape_expression_card( array $row ) {
+		return array(
+			'id'                 => (int) $row['id'],
+			'lesson_id'          => (int) $row['lesson_id'],
+			'text_hash'          => (string) $row['text_hash'],
+			'text'               => (string) $row['text'],
+			'context'            => (string) $row['context'],
+			'polish_translation' => (string) $row['polish_translation'],
+			'example_sentence'   => (string) $row['example_sentence'],
+			'level'              => (string) $row['level'],
+			'status'             => (string) $row['status'],
+			'provider'           => (string) $row['provider'],
+			'model'              => (string) $row['model'],
+			'created_at'         => (string) $row['created_at'],
+			'updated_at'         => (string) $row['updated_at'],
 		);
 	}
 }

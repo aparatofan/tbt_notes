@@ -261,6 +261,19 @@ class TBT_Notes_Frontend {
 			'playing'           => __( 'Playing…', 'tbt-notes' ),
 			'noPronAudio'       => __( 'No pronunciation audio has been added yet.', 'tbt-notes' ),
 			'audioError'        => __( 'Could not generate audio. Please try again.', 'tbt-notes' ),
+			'usefulExpression'  => __( 'Useful expression', 'tbt-notes' ),
+			'generateCard'      => __( 'Generate card', 'tbt-notes' ),
+			'regenerate'        => __( 'Regenerate', 'tbt-notes' ),
+			'save'              => __( 'Save', 'tbt-notes' ),
+			'approve'           => __( 'Approve', 'tbt-notes' ),
+			'polishLabel'       => __( 'Polish', 'tbt-notes' ),
+			'exampleLabel'      => __( 'Example', 'tbt-notes' ),
+			'statusLabel'       => __( 'Status', 'tbt-notes' ),
+			'statusDraft'       => __( 'Draft', 'tbt-notes' ),
+			'statusApproved'    => __( 'Approved', 'tbt-notes' ),
+			'cardError'         => __( 'Could not generate the expression card. Please try again.', 'tbt-notes' ),
+			'cardSaved'         => __( 'Saved', 'tbt-notes' ),
+			'noExpressionCards' => __( 'No useful expression cards have been added yet.', 'tbt-notes' ),
 		);
 	}
 
