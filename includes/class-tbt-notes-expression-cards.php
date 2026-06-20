@@ -642,12 +642,17 @@ class TBT_Notes_Expression_Cards {
 		);
 
 		if ( is_wp_error( $response ) ) {
+			$transport = $response->get_error_message();
+			// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log -- diagnostics only; not exposed to the browser.
+			error_log( sprintf( '[TBT Notes] OpenAI request failed (transport): model=%s error=%s', $model, $transport ) );
 			return new WP_Error( 'tbt_notes_expr_http', __( 'Could not generate the expression card. Please try again.', 'tbt-notes' ), array( 'status' => 502 ) );
 		}
 
 		$code = (int) wp_remote_retrieve_response_code( $response );
 		$raw  = wp_remote_retrieve_body( $response );
 		if ( 200 !== $code || '' === $raw ) {
+			// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log -- diagnostics only; not exposed to the browser.
+			error_log( sprintf( '[TBT Notes] OpenAI error: http_status=%d model=%s body=%s', $code, $model, $raw ) );
 			return new WP_Error( 'tbt_notes_expr_api', __( 'Could not generate the expression card. Please try again.', 'tbt-notes' ), array( 'status' => 502 ) );
 		}
 
@@ -664,7 +669,7 @@ class TBT_Notes_Expression_Cards {
 	protected static function parse_openai_response( $response ) {
 		$decoded = json_decode( (string) $response, true );
 		if ( ! is_array( $decoded ) ) {
-			return self::parse_error();
+			return self::parse_error( $response );
 		}
 
 		$json_text = '';
@@ -692,7 +697,7 @@ class TBT_Notes_Expression_Cards {
 		}
 
 		if ( '' === trim( $json_text ) ) {
-			return self::parse_error();
+			return self::parse_error( $response );
 		}
 
 		$payload = json_decode( $json_text, true );
@@ -700,14 +705,14 @@ class TBT_Notes_Expression_Cards {
 			|| ! isset( $payload['polish_translation'], $payload['example_sentence'] )
 			|| ! is_string( $payload['polish_translation'] )
 			|| ! is_string( $payload['example_sentence'] ) ) {
-			return self::parse_error();
+			return self::parse_error( $response );
 		}
 
 		$polish  = self::clean_field( $payload['polish_translation'] );
 		$example = self::clean_field( $payload['example_sentence'] );
 
 		if ( '' === $polish || '' === $example ) {
-			return self::parse_error();
+			return self::parse_error( $response );
 		}
 
 		return array(
@@ -717,11 +722,15 @@ class TBT_Notes_Expression_Cards {
 	}
 
 	/**
-	 * Shared "could not read the AI response" error.
+	 * Shared "could not read the AI response" error. The raw body is logged for
+	 * diagnostics only — it is never returned to the browser.
 	 *
+	 * @param string $raw Raw OpenAI response body, if available.
 	 * @return WP_Error
 	 */
-	protected static function parse_error() {
+	protected static function parse_error( $raw = '' ) {
+		// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log -- diagnostics only; not exposed to the browser.
+		error_log( sprintf( '[TBT Notes] OpenAI response could not be parsed: model=%s body=%s', self::openai_model(), (string) $raw ) );
 		return new WP_Error( 'tbt_notes_expr_parse', __( 'Could not read the AI response. Please try again.', 'tbt-notes' ), array( 'status' => 502 ) );
 	}
 
