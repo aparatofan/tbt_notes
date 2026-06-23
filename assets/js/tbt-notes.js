@@ -128,13 +128,13 @@
 			id: 'default-template',
 			name: 'Default Template',
 			html:
-				'<h2>LESSON PLAN</h2>' +
+				'<h3>LESSON PLAN</h3>' +
 				'<ol><li>Update on work and life<ol><li>one good thing</li></ol></li>' +
 				'<li>Warmup</li></ol>' +
-				'<h2>OPTIONS</h2><p><br></p>' +
-				'<h2>LESSON NOTES</h2><p><br></p>' +
-				'<h2>NEXT STEPS</h2><p><br></p>' +
-				'<h2>HOMEWORK</h2><p><br></p>',
+				'<h3>OPTIONS</h3><p><br></p>' +
+				'<h3>LESSON NOTES</h3><p><br></p>' +
+				'<h3>NEXT STEPS</h3><p><br></p>' +
+				'<h3>HOMEWORK</h3><p><br></p>',
 		},
 	];
 
