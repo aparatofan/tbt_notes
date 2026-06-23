@@ -3,7 +3,7 @@ Contributors: thebluetree
 Requires at least: 6.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 1.0.0
+Stable tag: 1.1.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -48,6 +48,18 @@ No. Each student is assigned to at most one class (v1 design).
 No. The editor autosaves as the teacher types.
 
 == Changelog ==
+
+= 1.1.0 =
+* Notes now open as a full-screen workspace: the background page no longer
+  scrolls while notes are open, and only the notes content scrolls.
+* New notes are pre-filled with a default lesson-notes template and a generated,
+  editable title ("[class] — Lesson Notes — [date]", or "[class] — [lesson]").
+* The browser tab title now reflects the open note so TBT Notes tabs are easy to
+  pick out when screen-sharing in Microsoft Teams.
+* Lesson Notes launcher button: white text and icon on the blue background.
+* Classes page redesigned as a responsive grid of branded gradient cards (with a
+  decorative TBT logo, class title, and student/note counts), a smaller New class
+  button near the header, and clearer spacing below the search field.
 
 = 1.0.0 =
 * Initial release: classes, lessons, single-student assignment, server-side

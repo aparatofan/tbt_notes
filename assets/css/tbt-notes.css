@@ -183,11 +183,22 @@
 	border: 0;
 	border-radius: var(--tbt-radius);
 	background: var(--tbt-accent);
-	color: var(--tbt-accent-contrast);
+	/* Clean primary action: keep the blue background, but text + icon are white. */
+	color: #ffffff;
 	cursor: pointer;
 	box-shadow: 0 3px 12px rgba(0, 0, 0, 0.28);
 	transition: background 0.15s ease;
 	font-family: "Roboto Slab", Georgia, serif;
+}
+
+/* The SVG icon inherits via currentColor; force white explicitly so it never
+   falls back to the dark navy ink if the icon markup changes. */
+.tbt-notes-launcher,
+.tbt-notes-launcher .tbt-notes-icon,
+.tbt-notes-launcher .tbt-notes-icon path,
+.tbt-notes-launcher-label {
+	color: #ffffff;
+	fill: #ffffff;
 }
 
 .tbt-notes-launcher:hover {
@@ -219,6 +230,13 @@
 }
 
 /* --------------------------------------------------------------------- Panel */
+
+/* While the notes workspace is open it behaves as a full-screen workspace: the
+   background page must not scroll (only the notes content scrolls internally).
+   Toggled from JS via document.body. */
+body.tbt-notes-open {
+	overflow: hidden;
+}
 
 .tbt-notes-panel {
 	position: fixed;
@@ -534,6 +552,157 @@
 .tbt-notes-listitem__delete:hover {
 	color: var(--tbt-danger);
 	background: #fdecea;
+}
+
+/* ====================================================== Classes page (grid) == */
+
+/* The classes view uses the available width rather than the narrow 760px column
+   the other non-split views use. */
+.tbt-notes-body--classes {
+	max-width: 1400px;
+	margin: 0 auto;
+}
+
+/* Header row above the search: the "New class" action sits near the page title
+   (the big "CLASSES" lives in the branded top bar), aligned to the right. */
+.tbt-notes-classes-head {
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	gap: var(--tbt-s2);
+	margin-bottom: var(--tbt-s3);
+}
+
+/* Smaller, lighter New class button (was a full-width heavy block before). */
+.tbt-notes-newclass-btn {
+	padding: var(--tbt-s1) 16px;
+	font-size: 15px;
+}
+
+/* Clear breathing room between the search field and the first card. */
+.tbt-notes-body--classes .tbt-notes-classsearch {
+	margin-bottom: var(--tbt-s4);
+}
+
+/* Responsive card grid: 3-up on desktop, 2-up on tablet, 1-up on mobile. */
+.tbt-notes-classes-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+	gap: 28px;
+}
+
+.tbt-notes-classcard {
+	position: relative;
+	display: flex;
+	flex-direction: column;
+	border-radius: var(--tbt-radius);
+	overflow: hidden;
+	background: #ffffff;
+	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+	transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.tbt-notes-classcard:hover {
+	transform: translateY(-3px);
+	box-shadow: 0 8px 20px rgba(0, 0, 0, 0.16);
+}
+
+/* The whole card is the clickable surface that opens the class. */
+.tbt-notes-classcard__open {
+	display: flex;
+	flex-direction: column;
+	flex: 1 1 auto;
+	border: 0;
+	margin: 0;
+	padding: 0;
+	background: transparent;
+	color: inherit;
+	font: inherit;
+	text-align: left;
+	cursor: pointer;
+	min-width: 0;
+}
+
+.tbt-notes-classcard__open:focus-visible {
+	outline: 3px solid var(--tbt-accent);
+	outline-offset: -3px;
+}
+
+/* Gradient header (deterministic per class; the inline background comes from JS).
+   The TBT logo sits decoratively on the right. */
+.tbt-notes-classcard__header {
+	position: relative;
+	min-height: 150px;
+	overflow: hidden;
+	background: var(--tbt-brand-blue); /* fallback before the inline gradient applies */
+}
+
+.tbt-notes-classcard__logo {
+	position: absolute;
+	right: -10px;
+	bottom: 0;
+	width: 150px;
+	max-width: 60%;
+	opacity: 0.75;
+	pointer-events: none;
+	user-select: none;
+}
+
+.tbt-notes-classcard__body {
+	flex: 1 1 auto;
+	padding: 22px 24px 26px;
+}
+
+.tbt-notes-classcard__title {
+	color: #0859c6;
+	font-weight: 700;
+	font-size: 20px;
+	line-height: 1.25;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	overflow-wrap: anywhere;
+}
+
+.tbt-notes-classcard__meta {
+	color: #0859c6;
+	margin-top: 20px;
+	line-height: 1.6;
+	font-size: 15px;
+}
+
+.tbt-notes-classcard__meta span {
+	display: block;
+}
+
+/* Delete action floats over the gradient header, top-right. */
+.tbt-notes-classcard__delete {
+	position: absolute;
+	top: 8px;
+	right: 8px;
+	z-index: 1;
+	width: 34px;
+	height: 34px;
+	border: 0;
+	border-radius: 8px;
+	background: rgba(255, 255, 255, 0.85);
+	color: var(--tbt-danger);
+	cursor: pointer;
+	font-size: 16px;
+	line-height: 1;
+}
+
+.tbt-notes-classcard__delete:hover {
+	background: #ffffff;
+}
+
+@media (max-width: 600px) {
+	/* Let the New class button go full width on small screens. */
+	.tbt-notes-classes-head {
+		justify-content: stretch;
+	}
+	.tbt-notes-newclass-btn {
+		flex: 1 1 auto;
+	}
 }
 
 /* --------------------------------------------------------------------- Empty */

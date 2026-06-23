@@ -494,6 +494,22 @@ class TBT_Notes_DB {
 	}
 
 	/**
+	 * Count the lessons (notes) in a class. Used for the class-card note count.
+	 *
+	 * @param int $class_id Class ID.
+	 * @return int
+	 */
+	public static function count_lessons_for_class( $class_id ) {
+		global $wpdb;
+		$class_id = (int) $class_id;
+		if ( $class_id <= 0 ) {
+			return 0;
+		}
+		$table = self::table_lessons();
+		return (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$table} WHERE class_id = %d", $class_id ) );
+	}
+
+	/**
 	 * Create a lesson.
 	 *
 	 * @param int    $class_id Class ID.
