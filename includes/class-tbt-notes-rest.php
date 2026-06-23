@@ -818,11 +818,13 @@ class TBT_Notes_REST {
 			'title' => $class['title'],
 		);
 
-		// Only teachers need to see who is in a class.
+		// Only teachers need to see who is in a class. The class-card grid is a
+		// teacher-only surface, so the student/note counts ride along here.
 		if ( TBT_Notes_Capabilities::user_can_manage() ) {
-			$students            = TBT_Notes_DB::get_students_for_class( (int) $class['id'] );
-			$out['students']     = $students;
+			$students             = TBT_Notes_DB::get_students_for_class( (int) $class['id'] );
+			$out['students']      = $students;
 			$out['student_count'] = count( $students );
+			$out['note_count']    = TBT_Notes_DB::count_lessons_for_class( (int) $class['id'] );
 		}
 
 		return $out;

@@ -85,6 +85,185 @@
 		}
 	}
 
+	var MONTHS = [
+		'January', 'February', 'March', 'April', 'May', 'June',
+		'July', 'August', 'September', 'October', 'November', 'December',
+	];
+
+	/**
+	 * Parse a stored MySQL GMT timestamp into a Date (today's date as a fallback).
+	 *
+	 * @param {string} s Timestamp like "2026-06-23 14:30:00".
+	 * @return {Date}
+	 */
+	function parseDbDate( s ) {
+		if ( ! s ) {
+			return new Date();
+		}
+		var d = new Date( s.replace( ' ', 'T' ) + 'Z' );
+		return isNaN( d.getTime() ) ? new Date() : d;
+	}
+
+	/**
+	 * Long English date, e.g. "23 June 2026". Used in default/fallback note titles
+	 * so they read the same regardless of the visitor's locale.
+	 *
+	 * @param {Date} d Date.
+	 * @return {string}
+	 */
+	function formatLongDate( d ) {
+		d = d || new Date();
+		return d.getDate() + ' ' + MONTHS[ d.getMonth() ] + ' ' + d.getFullYear();
+	}
+
+	/* ----------------------------------------------------------- Note templates */
+
+	// Default lesson-notes template, inserted into the body of a brand-new note.
+	// Hardcoded for this iteration (a template editor can come later). Once
+	// inserted the note is normal editable content — changing this template never
+	// touches existing notes. Kept as semantic HTML (the editor's native format)
+	// so headings and the nested list survive the sanitiser untouched.
+	var noteTemplates = [
+		{
+			id: 'default-template',
+			name: 'Default Template',
+			html:
+				'<h2>LESSON PLAN</h2>' +
+				'<ol><li>Update on work and life<ol><li>one good thing</li></ol></li>' +
+				'<li>Warmup</li></ol>' +
+				'<h2>OPTIONS</h2><p><br></p>' +
+				'<h2>LESSON NOTES</h2><p><br></p>' +
+				'<h2>NEXT STEPS</h2><p><br></p>' +
+				'<h2>HOMEWORK</h2><p><br></p>',
+		},
+	];
+
+	function defaultNoteTemplateHtml() {
+		return noteTemplates[ 0 ].html;
+	}
+
+	/* ---------------------------------------------------------------- Note title */
+
+	/**
+	 * The lesson-specific part of a note's title. Uses the editable header when
+	 * set; otherwise a safe, dated fallback so even untitled/legacy notes read
+	 * sensibly ("Lesson Notes — 23 June 2026").
+	 *
+	 * @param {Object} lesson Lesson object.
+	 * @return {string}
+	 */
+	function lessonTitlePart( lesson ) {
+		var header = lesson && lesson.header ? ( '' + lesson.header ).trim() : '';
+		if ( header ) {
+			return header;
+		}
+		var when = lesson && lesson.created_at ? parseDbDate( lesson.created_at ) : new Date();
+		return t( 'lessonNotesTitle', 'Lesson Notes' ) + ' — ' + formatLongDate( when );
+	}
+
+	/**
+	 * The default title generated for a brand-new note. At creation there is no
+	 * lesson title yet, so this is the dated fallback form. The teacher can edit it.
+	 *
+	 * @return {string}
+	 */
+	function defaultNoteTitle() {
+		return t( 'lessonNotesTitle', 'Lesson Notes' ) + ' — ' + formatLongDate( new Date() );
+	}
+
+	/**
+	 * The full note title: "[class] — [lesson]". The class name is composed at
+	 * display time (never stored on the note) so renaming a class keeps every note
+	 * title current.
+	 *
+	 * @param {Object} cls    Class object.
+	 * @param {Object} lesson Lesson object (optional).
+	 * @return {string}
+	 */
+	function fullNoteTitle( cls, lesson ) {
+		var className = cls && cls.title ? ( '' + cls.title ).trim() : '';
+		if ( ! className ) {
+			className = t( 'untitledClass', 'Untitled class' );
+		}
+		if ( ! lesson ) {
+			return className;
+		}
+		return className + ' — ' + lessonTitlePart( lesson );
+	}
+
+	/* ----------------------------------------------------------- Browser tab title */
+
+	// Remembered so we can restore it when notes close (helps tell TBT Notes tabs
+	// apart from other tabs when screen-sharing in Microsoft Teams).
+	var originalDocTitle = null;
+
+	/**
+	 * Site-name suffix for the tab title, reused from the host page's own title
+	 * ("… | THE BLUE TREE") so it matches the rest of the site; falls back to the
+	 * configured site name.
+	 *
+	 * @return {string}
+	 */
+	function siteTitleSuffix() {
+		if ( originalDocTitle && originalDocTitle.indexOf( '|' ) !== -1 ) {
+			var parts = originalDocTitle.split( '|' );
+			var last = parts[ parts.length - 1 ].trim();
+			if ( last ) {
+				return last;
+			}
+		}
+		return t( 'siteName', 'The Blue Tree' );
+	}
+
+	/**
+	 * Set the browser tab title to reflect the open note, e.g.
+	 * "TBT Notes — Iwona Wróbel — Gerund or Infinitive | The Blue Tree".
+	 */
+	function updateDocTitle() {
+		if ( originalDocTitle === null ) {
+			originalDocTitle = document.title;
+		}
+		var label = t( 'notesTabPrefix', 'TBT Notes' );
+		if ( state.currentClass && state.currentClass.title ) {
+			label += ' — ' + fullNoteTitle( state.currentClass, state.currentLesson );
+		}
+		document.title = label + ' | ' + siteTitleSuffix();
+	}
+
+	/**
+	 * Restore the page title captured before notes opened.
+	 */
+	function restoreDocTitle() {
+		if ( originalDocTitle !== null ) {
+			document.title = originalDocTitle;
+			originalDocTitle = null;
+		}
+	}
+
+	/* --------------------------------------------------------------- Gradients */
+
+	// Deterministic branded gradients for class-card headers, built from the
+	// official TBT colours. The same class always maps to the same gradient.
+	var classGradients = [
+		'linear-gradient(135deg, #0859C6, #663366)',
+		'linear-gradient(135deg, #008080, #0859C6)',
+		'linear-gradient(135deg, #660000, #CC9933)',
+		'linear-gradient(135deg, #006600, #008080)',
+		'linear-gradient(135deg, #663366, #660000)',
+		'linear-gradient(135deg, #CC9933, #0859C6)',
+	];
+
+	function getGradientForClass( cls ) {
+		var source = '' + ( ( cls && cls.id ) || ( cls && cls.title ) || '' );
+		var hash = 0;
+		for ( var i = 0; i < source.length; i++ ) {
+			hash += source.charCodeAt( i );
+		}
+		return classGradients[ hash % classGradients.length ];
+	}
+
+	var TBT_LOGO_URL = 'https://thebluetree.pl/wp-content/uploads/2020/12/TBT-white-logo.png';
+
 	function api( method, path, body ) {
 		var opts = {
 			method: method,
@@ -121,6 +300,10 @@
 			lastOpener = opener;
 		}
 		root.classList.add( 'is-open' );
+		// Full-screen workspace: lock the background page so only the notes
+		// content scrolls, and flag the tab so it's identifiable when shared.
+		document.body.classList.add( 'tbt-notes-open' );
+		updateDocTitle();
 		if ( launcher ) {
 			launcher.setAttribute( 'aria-expanded', 'true' );
 		}
@@ -143,6 +326,9 @@
 	function closePanel() {
 		flushActiveSaver();
 		root.classList.remove( 'is-open' );
+		// Restore normal page scrolling and the original tab title.
+		document.body.classList.remove( 'tbt-notes-open' );
+		restoreDocTitle();
 		if ( launcher ) {
 			launcher.setAttribute( 'aria-expanded', 'false' );
 		}
@@ -244,6 +430,11 @@
 	function render() {
 		clear( content );
 
+		// Keep the browser tab title in step with whatever is on screen.
+		if ( root.classList.contains( 'is-open' ) ) {
+			updateDocTitle();
+		}
+
 		if ( ! state.loaded ) {
 			content.appendChild( buildTopbar( {} ) );
 			content.appendChild( el( 'div', 'tbt-notes-loading', t( 'loading', 'Loading…' ) ) );
@@ -286,14 +477,16 @@
 
 	function renderTeacherRoot() {
 		content.appendChild( buildTopbar( { title: t( 'headerClasses', 'CLASSES' ) } ) );
-		var body = el( 'div', 'tbt-notes-body' );
+		var body = el( 'div', 'tbt-notes-body tbt-notes-body--classes' );
 
-		var newBtn = el( 'button', 'tbt-notes-btn tbt-notes-btn--block', t( 'newClass', 'New class' ) );
+		// A small "New class" action sits near the page header (the big "CLASSES"
+		// lives in the branded top bar), rather than a heavy full-width button.
+		var head = el( 'div', 'tbt-notes-classes-head' );
+		var newBtn = el( 'button', 'tbt-notes-btn tbt-notes-newclass-btn', '+ ' + t( 'newClass', 'New class' ) );
 		newBtn.type = 'button';
 		newBtn.addEventListener( 'click', createClassFlow );
-		var row = el( 'div', 'tbt-notes-toolbar-row' );
-		row.appendChild( newBtn );
-		body.appendChild( row );
+		head.appendChild( newBtn );
+		body.appendChild( head );
 
 		if ( ! state.classes.length ) {
 			body.appendChild( emptyBlock( t( 'noClassesTeacher', 'No classes yet.' ) ) );
@@ -308,50 +501,92 @@
 		search.setAttribute( 'autocomplete', 'off' );
 		body.appendChild( search );
 
-		var list = el( 'ul', 'tbt-notes-list' );
-		body.appendChild( list );
+		var grid = el( 'div', 'tbt-notes-classes-grid' );
+		body.appendChild( grid );
 
-		function renderList( term ) {
-			clear( list );
+		function renderGrid( term ) {
+			clear( grid );
 			var q = ( term || '' ).trim().toLowerCase();
 			var matches = state.classes.filter( function ( cls ) {
 				return ! q || ( cls.title || '' ).toLowerCase().indexOf( q ) !== -1;
 			} );
 			if ( ! matches.length ) {
-				var li = el( 'li' );
-				li.appendChild( el( 'div', 'tbt-notes-empty', t( 'noResults', 'No matches' ) ) );
-				list.appendChild( li );
+				grid.appendChild( el( 'div', 'tbt-notes-empty', t( 'noResults', 'No matches' ) ) );
 				return;
 			}
 			matches.forEach( function ( cls ) {
-				list.appendChild( classListItem( cls ) );
+				grid.appendChild( classCard( cls ) );
 			} );
 		}
 
 		search.addEventListener( 'input', function () {
-			renderList( search.value );
+			renderGrid( search.value );
 		} );
-		renderList( '' );
+		renderGrid( '' );
 
 		content.appendChild( body );
 	}
 
-	function classListItem( cls ) {
-		var li = el( 'li', 'tbt-notes-listitem' );
-		var main = el( 'button', 'tbt-notes-listitem__main' );
-		main.type = 'button';
-		main.appendChild( el( 'span', 'tbt-notes-listitem__title', cls.title || t( 'untitledClass', 'Untitled class' ) ) );
-		var count = cls.student_count != null ? cls.student_count : ( cls.students ? cls.students.length : 0 );
-		var meta = count === 1 ? t( 'oneStudent', '1 student' ) : ( '' + count + ' ' + t( 'nStudents', 'students' ) );
-		main.appendChild( el( 'span', 'tbt-notes-listitem__meta', meta ) );
-		main.addEventListener( 'click', function () {
+	/**
+	 * A single class card: a branded gradient header with a decorative TBT logo,
+	 * then the class title and student/note counts. The whole card opens the
+	 * class; the corner button deletes it.
+	 */
+	function classCard( cls ) {
+		var card = el( 'div', 'tbt-notes-classcard' );
+
+		var open = el( 'button', 'tbt-notes-classcard__open' );
+		open.type = 'button';
+		open.addEventListener( 'click', function () {
 			openClass( cls );
 		} );
-		li.appendChild( main );
-		li.appendChild( iconDelete( t( 'deleteClass', 'Delete class' ), function () {
+
+		// Gradient header (deterministic per class) + decorative logo.
+		var header = el( 'div', 'tbt-notes-classcard__header' );
+		header.style.background = getGradientForClass( cls );
+		var logo = el( 'img', 'tbt-notes-classcard__logo' );
+		logo.src = TBT_LOGO_URL;
+		logo.alt = '';
+		logo.setAttribute( 'aria-hidden', 'true' );
+		logo.setAttribute( 'loading', 'lazy' );
+		// If the remote logo ever fails, just drop it — the card still looks good.
+		logo.addEventListener( 'error', function () {
+			logo.style.display = 'none';
+		} );
+		header.appendChild( logo );
+		open.appendChild( header );
+
+		// Body: title + metadata on separate lines, grammatically correct.
+		var cbody = el( 'div', 'tbt-notes-classcard__body' );
+		cbody.appendChild( el( 'div', 'tbt-notes-classcard__title', cls.title || t( 'untitledClass', 'Untitled class' ) ) );
+
+		var students = cls.student_count != null ? cls.student_count : ( cls.students ? cls.students.length : 0 );
+		var notes = cls.note_count != null ? cls.note_count : 0;
+		var meta = el( 'div', 'tbt-notes-classcard__meta' );
+		meta.appendChild( el( 'span', null, students === 1
+			? t( 'oneStudent', '1 student' )
+			: ( students + ' ' + t( 'nStudents', 'students' ) ) ) );
+		meta.appendChild( el( 'span', null, notes === 1
+			? t( 'oneNote', '1 note' )
+			: ( notes + ' ' + t( 'nNotes', 'notes' ) ) ) );
+		cbody.appendChild( meta );
+		open.appendChild( cbody );
+
+		card.appendChild( open );
+
+		// Delete stays available (edit lives behind opening the class → settings).
+		var del = el( 'button', 'tbt-notes-classcard__delete' );
+		del.type = 'button';
+		del.textContent = '🗑';
+		del.title = t( 'deleteClass', 'Delete class' );
+		del.setAttribute( 'aria-label', t( 'deleteClass', 'Delete class' ) );
+		del.addEventListener( 'click', function ( e ) {
+			e.stopPropagation();
 			deleteClassFlow( cls );
-		} ) );
-		return li;
+		} );
+		card.appendChild( del );
+
+		return card;
 	}
 
 	function iconDelete( label, onClick ) {
@@ -419,7 +654,7 @@
 
 		content.appendChild( buildTopbar( {
 			title: cls ? ( cls.title || t( 'untitledClass', 'Untitled class' ) ) : '',
-			subtitle: !isTeacher && state.currentLesson ? state.currentLesson.header : null,
+			subtitle: !isTeacher && state.currentLesson ? lessonTitlePart( state.currentLesson ) : null,
 			subtitleEl: headerInput,
 			onBack: isTeacher ? function () {
 				flushActiveSaver();
@@ -520,7 +755,8 @@
 		var main = el( 'button', 'tbt-notes-listitem__main' + ( active ? ' is-active' : '' ) );
 		main.type = 'button';
 		// Lesson title only — the header is already a date, so no separate date line.
-		main.appendChild( el( 'span', 'tbt-notes-listitem__title', lesson.header || t( 'untitledLesson', 'Untitled lesson' ) ) );
+		// Untitled/legacy notes fall back to a safe dated title.
+		main.appendChild( el( 'span', 'tbt-notes-listitem__title', lessonTitlePart( lesson ) ) );
 		main.addEventListener( 'click', function () {
 			selectLesson( lesson );
 		} );
@@ -1314,10 +1550,33 @@
 		} );
 	}
 
+	/**
+	 * Keep the cached class's note count in step with the loaded lessons so the
+	 * class-card grid shows an accurate "N notes" when the teacher navigates back.
+	 */
+	function syncCurrentClassNoteCount() {
+		if ( ! state.currentClass ) {
+			return;
+		}
+		var count = state.lessons.length;
+		state.currentClass.note_count = count;
+		for ( var i = 0; i < state.classes.length; i++ ) {
+			if ( state.classes[ i ].id === state.currentClass.id ) {
+				state.classes[ i ].note_count = count;
+			}
+		}
+	}
+
 	function createLessonFlow() {
-		api( 'POST', 'classes/' + state.currentClass.id + '/lessons', { header: '', body: '' } ).then( function ( data ) {
+		// New notes start with a generated default title and the default lesson
+		// template pre-inserted. Both become normal editable content immediately.
+		api( 'POST', 'classes/' + state.currentClass.id + '/lessons', {
+			header: defaultNoteTitle(),
+			body: defaultNoteTemplateHtml(),
+		} ).then( function ( data ) {
 			state.lessons.unshift( data.lesson );
 			state.currentLesson = data.lesson;
+			syncCurrentClassNoteCount();
 			render();
 		} ).catch( function ( err ) {
 			window.alert( err.message );
@@ -1335,6 +1594,7 @@
 			if ( state.currentLesson && state.currentLesson.id === lesson.id ) {
 				state.currentLesson = state.lessons.length ? state.lessons[ 0 ] : null;
 			}
+			syncCurrentClassNoteCount();
 			render();
 		} ).catch( function ( err ) {
 			window.alert( err.message );
@@ -1624,8 +1884,10 @@
 			// Reflect the header in the sidebar nav item live.
 			var navTitle = content.querySelector( '.tbt-notes-listitem__main.is-active .tbt-notes-listitem__title' );
 			if ( navTitle ) {
-				navTitle.textContent = headerInput.value || t( 'untitledLesson', 'Untitled lesson' );
+				navTitle.textContent = lessonTitlePart( lesson );
 			}
+			// Keep the shared tab title (Teams) current as the teacher types.
+			updateDocTitle();
 		} );
 
 		window.setTimeout( function () {
