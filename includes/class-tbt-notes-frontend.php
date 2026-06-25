@@ -21,12 +21,30 @@ if ( ! defined( 'ABSPATH' ) ) {
 class TBT_Notes_Frontend {
 
 	/**
+	 * Whether the inline Page Mode workspace ([tbt_notes_page]) has been rendered
+	 * on this request. When true, the footer overlay version is suppressed so the
+	 * two never collide on duplicate IDs (#tbt-notes-app, #tbt-notes-panel).
+	 *
+	 * @var bool
+	 */
+	protected $page_mode_rendered = false;
+
+	/**
+	 * Whether assets have already been enqueued this request, so a second call
+	 * (e.g. Page Mode forcing them) does not localize the script twice.
+	 *
+	 * @var bool
+	 */
+	protected $assets_enqueued = false;
+
+	/**
 	 * Hook front-end output.
 	 */
 	public function register() {
 		add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_assets' ) );
 		add_action( 'wp_footer', array( $this, 'render_container' ) );
 		add_shortcode( 'tbt_notes', array( $this, 'render_shortcode' ) );
+		add_shortcode( 'tbt_notes_page', array( $this, 'render_page_shortcode' ) );
 	}
 
 	/**
@@ -75,6 +93,43 @@ class TBT_Notes_Frontend {
 	}
 
 	/**
+	 * Shortcode: render the full Notes workspace inline as normal page content
+	 * ("Page Mode"). Unlike [tbt_notes] (an opener button for the overlay), this
+	 * renders the app itself directly in the page so the browser window scrolls
+	 * normally — the foundation for a future student-facing app.
+	 *
+	 * Place [tbt_notes_page] on a dedicated page. The footer overlay is suppressed
+	 * on the same request so the two never share duplicate IDs, and the floating
+	 * launcher is not shown.
+	 *
+	 * @return string
+	 */
+	public function render_page_shortcode() {
+		if ( ! is_user_logged_in() ) {
+			return '';
+		}
+
+		// Suppress the footer overlay for this request (see render_container).
+		$this->page_mode_rendered = true;
+
+		// Make sure assets are present even if should_load() was filtered off. This
+		// is in time for the footer-printed script; enqueue calls are idempotent.
+		$this->enqueue_assets( true );
+
+		ob_start();
+		?>
+		<div id="tbt-notes-app" class="tbt-notes-app tbt-notes-app--page" data-tbt-notes data-tbt-mode="page">
+			<main id="tbt-notes-panel" class="tbt-notes-panel tbt-notes-panel--page" aria-label="<?php echo esc_attr__( 'Notes', 'tbt-notes' ); ?>">
+				<div class="tbt-notes-panel__inner" data-tbt-content>
+					<div class="tbt-notes-loading"><?php echo esc_html__( 'Loading…', 'tbt-notes' ); ?></div>
+				</div>
+			</main>
+		</div>
+		<?php
+		return (string) ob_get_clean();
+	}
+
+	/**
 	 * Should the notes UI load for the current request?
 	 *
 	 * Only for logged-in users on the front end. Filterable so a site could,
@@ -94,11 +149,18 @@ class TBT_Notes_Frontend {
 
 	/**
 	 * Enqueue styles and scripts.
+	 *
+	 * @param bool $force Skip the should_load() gate (used by Page Mode, which is
+	 *                    explicitly opted into by placing the shortcode).
 	 */
-	public function enqueue_assets() {
-		if ( ! $this->should_load() ) {
+	public function enqueue_assets( $force = false ) {
+		if ( $this->assets_enqueued ) {
 			return;
 		}
+		if ( ! $force && ! $this->should_load() ) {
+			return;
+		}
+		$this->assets_enqueued = true;
 
 		$is_teacher = TBT_Notes_Capabilities::user_can_manage();
 
@@ -302,6 +364,11 @@ class TBT_Notes_Frontend {
 	 * Print the launcher button and the panel mount point in the footer.
 	 */
 	public function render_container() {
+		// In Page Mode the workspace is already rendered inline; rendering the
+		// overlay too would duplicate #tbt-notes-app / #tbt-notes-panel.
+		if ( $this->page_mode_rendered ) {
+			return;
+		}
 		if ( ! $this->should_load() ) {
 			return;
 		}

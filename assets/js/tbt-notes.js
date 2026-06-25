@@ -28,6 +28,14 @@
 	var content = panel.querySelector( '[data-tbt-content]' );
 	var lastOpener = null;
 
+	// Two render modes. "overlay" (default): a fixed slide-out panel opened from a
+	// launcher, with body scroll-lock and Escape-to-close. "page": the workspace
+	// is rendered inline as normal page content ([tbt_notes_page] shortcode) so the
+	// browser window scrolls normally — no overlay, launcher, scroll-lock or modal
+	// behaviour.
+	var mode = root.getAttribute( 'data-tbt-mode' ) || 'overlay';
+	var isPageMode = mode === 'page';
+
 	/* ---------------------------------------------------------------- State */
 
 	var state = {
@@ -296,6 +304,10 @@
 	/* ---------------------------------------------------------- Panel open/close */
 
 	function openPanel( opener ) {
+		// In page mode the app is always open; opening is a no-op.
+		if ( isPageMode ) {
+			return;
+		}
 		if ( opener ) {
 			lastOpener = opener;
 		}
@@ -324,6 +336,11 @@
 	}
 
 	function closePanel() {
+		// Page mode has no overlay to close; just persist any pending edits.
+		if ( isPageMode ) {
+			flushActiveSaver();
+			return;
+		}
 		flushActiveSaver();
 		root.classList.remove( 'is-open' );
 		// Restore normal page scrolling and the original tab title.
@@ -411,7 +428,11 @@
 		( opts.buttons || [] ).forEach( function ( btn ) {
 			inner.appendChild( iconButton( btn.symbol, btn.label, btn.onClick ) );
 		} );
-		inner.appendChild( iconButton( '✕', t( 'close', 'Close' ), closePanel ) );
+		// Page mode has no overlay to dismiss, so omit the close button (the back
+		// button for class → classes navigation is added separately and stays).
+		if ( ! isPageMode ) {
+			inner.appendChild( iconButton( '✕', t( 'close', 'Close' ), closePanel ) );
+		}
 		bar.appendChild( inner );
 		
 		return bar;
@@ -2343,34 +2364,43 @@
 
 	/* ----------------------------------------------------------------- Events */
 
-	if ( launcher ) {
-		launcher.addEventListener( 'click', function () {
+	if ( isPageMode ) {
+		// The workspace is rendered inline and is always "open": mark it open and
+		// bootstrap immediately. No launcher, overlay, scroll-lock, Escape handler
+		// or focus trap — the browser window scrolls normally.
+		root.classList.add( 'is-open' );
+		panel.setAttribute( 'aria-hidden', 'false' );
+		bootstrap();
+	} else {
+		if ( launcher ) {
+			launcher.addEventListener( 'click', function () {
+				if ( root.classList.contains( 'is-open' ) ) {
+					closePanel();
+				} else {
+					openPanel( launcher );
+				}
+			} );
+		}
+
+		document.addEventListener( 'click', function ( e ) {
+			if ( ! e.target || ! e.target.closest ) {
+				return;
+			}
+			var trigger = e.target.closest( '[data-tbt-notes-open], .tbt-notes-trigger, a[href$="#tbt-notes"]' );
+			if ( ! trigger || trigger.id === 'tbt-notes-launcher' ) {
+				return;
+			}
+			e.preventDefault();
 			if ( root.classList.contains( 'is-open' ) ) {
 				closePanel();
 			} else {
-				openPanel( launcher );
+				openPanel( trigger );
 			}
 		} );
-	}
 
-	document.addEventListener( 'click', function ( e ) {
-		if ( ! e.target || ! e.target.closest ) {
-			return;
+		if ( overlay ) {
+			overlay.addEventListener( 'click', closePanel );
 		}
-		var trigger = e.target.closest( '[data-tbt-notes-open], .tbt-notes-trigger, a[href$="#tbt-notes"]' );
-		if ( ! trigger || trigger.id === 'tbt-notes-launcher' ) {
-			return;
-		}
-		e.preventDefault();
-		if ( root.classList.contains( 'is-open' ) ) {
-			closePanel();
-		} else {
-			openPanel( trigger );
-		}
-	} );
-
-	if ( overlay ) {
-		overlay.addEventListener( 'click', closePanel );
 	}
 
 	window.addEventListener( 'beforeunload', function () {

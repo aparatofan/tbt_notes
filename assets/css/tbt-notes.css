@@ -281,6 +281,63 @@ body.tbt-notes-open {
 	min-height: 0;
 }
 
+/* ----------------------------------------------------------------- Page mode */
+
+/* Page Mode ([tbt_notes_page]) renders the workspace inline as normal page
+   content instead of a fixed slide-out overlay, so the browser window scrolls
+   normally. Overlay mode is left completely untouched. */
+
+.tbt-notes-app--page {
+	width: 100%;
+	min-height: 100vh;
+}
+
+/* The panel is a normal block in the page flow — not fixed, not transformed. */
+.tbt-notes-app--page .tbt-notes-panel {
+	position: static;
+	transform: none;
+	transition: none;
+	width: 100%;
+	max-width: 100%;
+	height: auto;
+	min-height: 100vh;
+	z-index: auto;
+	background: var(--tbt-panel-bg);
+}
+
+.tbt-notes-app--page .tbt-notes-panel__inner {
+	height: auto;
+	min-height: 100vh;
+}
+
+/* Let content grow and the page (not nested flex containers) own the scrolling,
+   so a long note scrolls the window rather than an inner box. */
+.tbt-notes-app--page .tbt-notes-body,
+.tbt-notes-app--page .tbt-notes-split,
+.tbt-notes-app--page .tbt-notes-sidebar,
+.tbt-notes-app--page .tbt-notes-detail,
+.tbt-notes-app--page .tbt-notes-detail__scroll,
+.tbt-notes-app--page .tbt-notes-lesson-content,
+.tbt-notes-app--page .tbt-notes-editor-quillwrap .ql-container.ql-snow,
+.tbt-notes-app--page .ql-editor {
+	overflow: visible;
+	height: auto;
+	max-height: none;
+	min-height: 0;
+}
+
+/* Keep the editor's master/detail row at least a screen tall so it doesn't
+   collapse when empty, while still growing with the note. */
+.tbt-notes-app--page .tbt-notes-split {
+	min-height: 70vh;
+}
+
+/* The sticky Quill toolbar sticks to the top of the window in page mode; offset
+   it under the WordPress admin bar when present so it isn't hidden. */
+.tbt-notes-app--page .tbt-notes-editor-quillwrap .ql-toolbar.ql-snow {
+	top: var(--tbt-admin-offset);
+}
+
 /* --------------------------------------------------------------- Panel chrome */
 
 /* Branded header bar (this is the top bar). Background = tree header image,
