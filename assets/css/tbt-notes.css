@@ -253,7 +253,10 @@ body.tbt-notes-open {
 	flex-direction: column;
 }
 
-.tbt-notes-app.is-open .tbt-notes-panel {
+/* Slide-in is overlay-only. Excluded from page mode because *any* transform
+   (even the identity translateX(0)) on the panel creates a containing block
+   that traps the position: fixed / sticky toolbar inside it. */
+.tbt-notes-app.is-open:not( .tbt-notes-app--page ) .tbt-notes-panel {
 	transform: translateX(0);
 }
 
