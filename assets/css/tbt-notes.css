@@ -356,6 +356,15 @@ body.tbt-notes-open {
 	min-height: 0;
 }
 
+/* The JS sticky host is a bare fixed bar mounted on <body> (it reuses the app +
+   quillwrap classes so the moved toolbar keeps its styling). Neutralise the
+   app-level full-height/width sizing so it only occupies the toolbar's height. */
+.tbt-notes-sticky-host.tbt-notes-app--page {
+	min-height: 0;
+	height: auto;
+	width: auto;
+}
+
 /* Fill 100% of the available space so the surrounding page (Divi) controls the
    width/margins — drop the centred max-width columns used in overlay mode. */
 .tbt-notes-app--page .tbt-notes-body,

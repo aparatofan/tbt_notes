@@ -2291,10 +2291,15 @@
 	}
 
 	/**
-	 * Keep the editor toolbar pinned to the top of the window in page mode using
-	 * position: fixed. CSS `position: sticky` is unreliable here because a theme
-	 * wrapper (Divi sections/rows often set overflow or transforms) can trap it;
-	 * a JS-driven fixed bar with an in-flow spacer is robust to that.
+	 * Keep the editor toolbar pinned to the top of the window in page mode.
+	 *
+	 * CSS `position: sticky` (and even JS `position: fixed` left in place) is
+	 * unreliable here: a theme wrapper (Divi panels/sections often carry a CSS
+	 * transform — even an identity one — or overflow) establishes a containing
+	 * block that traps the pinned element so it scrolls away. To be immune to
+	 * that, when pinned we MOVE the toolbar into a `position: fixed` host appended
+	 * directly to <body> (which has no such trap), and move it back when unpinned.
+	 * An in-flow spacer holds the toolbar's space so content doesn't jump.
 	 *
 	 * @param {Element} toolbar The Quill toolbar element.
 	 * @param {Element} wrap    The editor wrapper the toolbar should pin within.
@@ -2305,13 +2310,26 @@
 			return;
 		}
 
-		// In-flow placeholder that holds the toolbar's space while it is fixed, so
-		// the content below doesn't jump up.
+		var originalParent = toolbar.parentNode;
+
+		// In-flow placeholder that holds the toolbar's space while it is fixed.
 		var spacer = el( 'div', 'tbt-notes-toolbar-spacer' );
 		spacer.style.display = 'none';
-		if ( toolbar.parentNode ) {
-			toolbar.parentNode.insertBefore( spacer, toolbar );
+		if ( originalParent ) {
+			originalParent.insertBefore( spacer, toolbar );
 		}
+
+		// Fixed host mounted on <body>, carrying the app + quillwrap classes so the
+		// toolbar keeps its styling and CSS variables once moved into it.
+		var host = el( 'div', 'tbt-notes-app tbt-notes-app--page tbt-notes-sticky-host' );
+		var hostInner = el( 'div', 'tbt-notes-editor-quillwrap' );
+		host.appendChild( hostInner );
+		host.style.position = 'fixed';
+		host.style.zIndex = '50';
+		host.style.background = '#fff';
+		host.style.boxSizing = 'border-box';
+		host.style.display = 'none';
+
 		var pinned = false;
 
 		function adminOffset() {
@@ -2323,38 +2341,47 @@
 		}
 
 		function pin( offset, rect, h ) {
-			pinned = true;
-			spacer.style.height = h + 'px';
-			spacer.style.display = 'block';
-			toolbar.style.position = 'fixed';
-			toolbar.style.top = offset + 'px';
-			toolbar.style.left = rect.left + 'px';
-			toolbar.style.width = rect.width + 'px';
-			toolbar.style.boxSizing = 'border-box';
-			toolbar.style.zIndex = '50';
+			if ( ! pinned ) {
+				spacer.style.height = h + 'px';
+				spacer.style.display = 'block';
+				if ( ! host.parentNode ) {
+					document.body.appendChild( host );
+				}
+				hostInner.appendChild( toolbar );
+				pinned = true;
+			}
+			host.style.top = offset + 'px';
+			host.style.left = rect.left + 'px';
+			host.style.width = rect.width + 'px';
+			host.style.display = 'block';
 		}
 
 		function unpin() {
-			pinned = false;
+			if ( pinned ) {
+				// Put the toolbar back exactly where it was (right after the spacer).
+				if ( originalParent ) {
+					originalParent.insertBefore( toolbar, spacer.nextSibling );
+				}
+				pinned = false;
+			}
 			spacer.style.display = 'none';
-			toolbar.style.position = '';
-			toolbar.style.top = '';
-			toolbar.style.left = '';
-			toolbar.style.width = '';
-			toolbar.style.boxSizing = '';
-			toolbar.style.zIndex = '';
+			host.style.display = 'none';
+			if ( host.parentNode ) {
+				host.parentNode.removeChild( host );
+			}
 		}
 
 		function update() {
-			if ( ! toolbar.isConnected ) {
+			if ( ! wrap.isConnected ) {
 				teardown();
 				return;
 			}
 			var offset = adminOffset();
 			var wrapRect = wrap.getBoundingClientRect();
-			var h = toolbar.offsetHeight;
-			// Use the in-flow spacer as the anchor while pinned so we don't feed the
-			// fixed toolbar's own position back into the decision.
+			// While pinned the spacer holds the toolbar's height; otherwise measure it.
+			var h = pinned ? spacer.offsetHeight : toolbar.offsetHeight;
+			// Anchor on the in-flow spacer/toolbar (never the fixed host) so the
+			// decision doesn't feed back on itself.
 			var anchorTop = pinned ? spacer.getBoundingClientRect().top : toolbar.getBoundingClientRect().top;
 			if ( anchorTop <= offset && wrapRect.bottom > offset + h ) {
 				pin( offset, wrapRect, h );
@@ -2363,20 +2390,13 @@
 			}
 		}
 
-		function onResize() {
-			if ( pinned ) {
-				unpin();
-			}
-			update();
-		}
-
 		// Capture phase so scrolls in any ancestor scroll container are seen too.
 		window.addEventListener( 'scroll', update, true );
-		window.addEventListener( 'resize', onResize );
+		window.addEventListener( 'resize', update );
 
 		function teardown() {
 			window.removeEventListener( 'scroll', update, true );
-			window.removeEventListener( 'resize', onResize );
+			window.removeEventListener( 'resize', update );
 			unpin();
 			if ( spacer.parentNode ) {
 				spacer.parentNode.removeChild( spacer );
