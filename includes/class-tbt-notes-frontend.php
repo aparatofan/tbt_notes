@@ -181,6 +181,10 @@ class TBT_Notes_Frontend {
 				),
 			),
 			'i18n'            => $this->strings(),
+			// AI Quick Note presets are teacher-only (it is a teacher feature). The
+			// instruction wording lives server-side; only key + label cross to JS.
+			'aiPresets'       => $is_teacher ? TBT_Notes_AI_Quick_Note::preset_choices() : array(),
+			'aiEnabled'       => (bool) $is_teacher,
 		);
 	}
 
@@ -279,6 +283,18 @@ class TBT_Notes_Frontend {
 			'cardError'         => __( 'Could not generate the expression card. Please try again.', 'tbt-notes' ),
 			'cardSaved'         => __( 'Saved', 'tbt-notes' ),
 			'noExpressionCards' => __( 'No useful expression cards have been added yet.', 'tbt-notes' ),
+			// AI Quick Note.
+			'aiAsk'             => __( 'Ask AI', 'tbt-notes' ),
+			'aiPanelTitle'      => __( 'Ask AI', 'tbt-notes' ),
+			'aiPlaceholder'     => __( 'Ask AI: define a word, explain a concept, create examples…', 'tbt-notes' ),
+			'aiSubmit'          => __( 'Ask', 'tbt-notes' ),
+			'aiThinking'        => __( 'Thinking…', 'tbt-notes' ),
+			'aiInsert'          => __( 'Insert', 'tbt-notes' ),
+			'aiRegenerate'      => __( 'Regenerate', 'tbt-notes' ),
+			'aiDiscard'         => __( 'Discard', 'tbt-notes' ),
+			'aiClose'           => __( 'Close', 'tbt-notes' ),
+			'aiError'           => __( 'AI is not available at the moment. Please try again.', 'tbt-notes' ),
+			'aiEmptyPrompt'     => __( 'Please type a prompt for the AI.', 'tbt-notes' ),
 		);
 	}
 

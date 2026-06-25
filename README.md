@@ -167,6 +167,49 @@ define( 'TBT_NOTES_OPENAI_MODEL', 'gpt-5.4-nano' );
 Without a key, generation reports "OpenAI API key is not configured." and no
 request is made.
 
+### AI Quick Note — OpenAI
+
+A small **✨ Ask AI** helper lives inside the lesson editor (teacher only). The
+teacher opens it by typing **`/ai`** in the note (the trigger text is removed
+automatically) or by clicking the **✨ Ask AI** button on the editor toolbar. A
+compact panel appears near the cursor with a prompt box, optional preset chips
+(**Define, Translate, Example, Flashcard, Questions, Simplify**), and a submit
+button.
+
+On submit, the prompt goes to a server-side WordPress REST route
+(`POST /wp-json/tbt-notes/v1/ai-quick-note`) which calls the OpenAI **Responses
+API** and returns a short, lesson-friendly answer. The answer appears in a calm
+light-blue **response card** with three actions: **Insert** (drops the answer
+into the note at the cursor, preserving line breaks), **Regenerate** (asks
+again), and **Discard**. Loading shows *Thinking…*, and any failure shows a
+friendly message without breaking the editor.
+
+Like the other AI features it is teacher-only and server-side: the request is
+gated by the `manage_tbt_notes` capability, prompts over 2000 characters are
+rejected, each teacher is capped at **20 requests per hour**, and the OpenAI key
+is **never** exposed to the browser.
+
+Per the project's API-key decision this feature reads its **own** constants from
+a server-side PHP snippet (do **not** edit `wp-config.php`):
+
+```php
+// ============================================
+// TBT AI Quick Note — Configuration
+// ============================================
+define( 'TBT_AI_QUICK_NOTE_API_KEY', 'PASTE_TBT_AI_QUICK_NOTE_KEY_HERE' );
+define( 'TBT_AI_QUICK_NOTE_MODEL', 'gpt-4.1-mini' );
+```
+
+Filters (`tbt_ai_quick_note_api_key`, `tbt_ai_quick_note_model`) are also
+available. If only the shared `TBT_NOTES_OPENAI_API_KEY` is configured (for the
+expression cards), AI Quick Note falls back to it so a single key powers every AI
+feature. Without any key, the helper reports that AI is not available and no
+request is made.
+
+> **Note awareness is intentionally minimal in this MVP.** The endpoint already
+> accepts `noteContext`, `noteTitle`, and `selectedText`, but the editor does not
+> send them yet — using the note as context is a deliberate future step.
+
 ## Installation
 
 1. Copy this repository's contents into `wp-content/plugins/tbt-notes/` (the repo
@@ -190,13 +233,14 @@ includes/
   class-tbt-notes-sanitizer.php   Body/text sanitisation (the kses allowlist)
   class-tbt-notes-pronunciation.php  Pink-highlight ElevenLabs audio (extract/cache/generate)
   class-tbt-notes-expression-cards.php  Blue-highlight OpenAI expression cards (extract/generate/approve)
+  class-tbt-notes-ai-quick-note.php  In-editor "Ask AI" prompt → OpenAI (presets/rate-limit)
   class-tbt-notes-rest.php        REST API + permission/ownership checks
   class-tbt-notes-frontend.php    Asset loading + panel markup
 assets/
   css/tbt-notes.css               Panel, read view, editor chrome, highlights
   js/tbt-notes.js                 The panel app (vanilla JS) + autosave
   vendor/quill/                   Self-hosted Quill 2 (BSD-3-Clause)
-tests/test-logic.php              Sanitiser, visibility, pronunciation + expression-card tests
+tests/test-logic.php              Sanitiser, visibility, pronunciation, expression-card + AI Quick Note tests
 ```
 
 ## Data model

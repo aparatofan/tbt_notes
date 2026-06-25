@@ -204,6 +204,7 @@ require_once dirname( __DIR__ ) . '/includes/class-tbt-notes-capabilities.php';
 require_once dirname( __DIR__ ) . '/includes/class-tbt-notes-sanitizer.php';
 require_once dirname( __DIR__ ) . '/includes/class-tbt-notes-pronunciation.php';
 require_once dirname( __DIR__ ) . '/includes/class-tbt-notes-expression-cards.php';
+require_once dirname( __DIR__ ) . '/includes/class-tbt-notes-ai-quick-note.php';
 require_once dirname( __DIR__ ) . '/includes/class-tbt-notes-rest.php';
 
 /* ------------------------------------------------------------- Tiny test kit */
@@ -574,6 +575,91 @@ function test_expr_delete_with_lesson() {
 	ok( count( TBT_Notes_DB::get_expression_cards_for_lesson( 4 ) ) === 0, 'cards removed when the lesson is deleted' );
 }
 test_expr_delete_with_lesson();
+
+/* ----------------------------------------------- AI Quick Note (logic only) */
+
+/**
+ * Invoke a protected static method on the AI Quick Note service.
+ *
+ * @param string $method Method name.
+ * @param array  $args   Positional arguments.
+ * @return mixed
+ */
+function call_ai_static( $method, array $args = array() ) {
+	$m = new ReflectionMethod( 'TBT_Notes_AI_Quick_Note', $method );
+	$m->setAccessible( true );
+	return $m->invokeArgs( null, $args );
+}
+
+echo "AI Quick Note — presets:\n";
+function test_ai_presets() {
+	$choices = TBT_Notes_AI_Quick_Note::preset_choices();
+	$keys    = array();
+	foreach ( $choices as $c ) {
+		$keys[] = $c['key'];
+	}
+	$expected = array( 'define', 'translate', 'example', 'flashcard', 'questions', 'simplify' );
+	ok( $keys === $expected, 'all six preset choices are exposed in order' );
+
+	ok( call_ai_static( 'normalize_preset', array( 'Define' ) ) === 'define', 'preset keys are case-insensitive' );
+	ok( call_ai_static( 'normalize_preset', array( '  flashcard ' ) ) === 'flashcard', 'preset keys are trimmed' );
+	ok( call_ai_static( 'normalize_preset', array( 'nonsense' ) ) === '', 'unknown presets are dropped' );
+	ok( call_ai_static( 'normalize_preset', array( '' ) ) === '', 'empty preset is dropped' );
+}
+test_ai_presets();
+
+echo "AI Quick Note — prompt + answer cleaning:\n";
+function test_ai_cleaning() {
+	ok( 'a b c' === call_ai_static( 'clean_prompt', array( "a   b\tc" ) ), 'clean_prompt collapses spaces/tabs' );
+	ok( 'hello' === call_ai_static( 'clean_prompt', array( '<b>hello</b>' ) ), 'clean_prompt strips tags' );
+	ok( "one\n\ntwo" === call_ai_static( 'clean_prompt', array( "one\n\n\n\ntwo" ) ), 'clean_prompt caps blank lines' );
+
+	$ans = call_ai_static( 'clean_answer', array( "  line1  \n\n\n\nline2  \n  " ) );
+	ok( "line1\n\nline2" === $ans, 'clean_answer trims, caps blank lines, drops trailing spaces' );
+	ok( 'plain' === call_ai_static( 'clean_answer', array( '<p>plain</p>' ) ), 'clean_answer strips markup' );
+}
+test_ai_cleaning();
+
+echo "AI Quick Note — prompt assembly:\n";
+function test_ai_build_prompt() {
+	$base = call_ai_static( 'build_user_prompt', array( array( 'prompt' => 'prolific' ) ) );
+	ok( contains( $base, 'prolific' ), 'plain prompt is included' );
+	ok( ! contains( $base, 'Define this word' ), 'no preset instruction when none chosen' );
+
+	$with = call_ai_static( 'build_user_prompt', array( array( 'prompt' => 'prolific', 'preset' => 'define' ) ) );
+	ok( contains( $with, 'Define this word or phrase' ), 'define preset prepends its instruction' );
+	ok( contains( $with, 'prolific' ), 'preset prompt still includes the teacher text' );
+
+	$ctx = call_ai_static( 'build_user_prompt', array( array(
+		'prompt'        => 'explain',
+		'note_title'    => 'Lesson 12',
+		'note_context'  => 'some surrounding text',
+		'selected_text' => 'ambition',
+	) ) );
+	ok( contains( $ctx, 'Lesson 12' ), 'note title is included as context' );
+	ok( contains( $ctx, 'some surrounding text' ), 'note context is included' );
+	ok( contains( $ctx, 'ambition' ), 'selected text is included' );
+
+	$sys = call_ai_static( 'system_instruction', array( 'B1/B2' ) );
+	ok( contains( $sys, 'The Blue Tree' ), 'system instruction is The Blue Tree flavoured' );
+	ok( contains( $sys, 'B1/B2' ), 'system instruction honours the requested level' );
+	$sys_c1 = call_ai_static( 'system_instruction', array( 'C1' ) );
+	ok( contains( $sys_c1, 'C1' ), 'system instruction reflects a custom level' );
+}
+test_ai_build_prompt();
+
+echo "AI Quick Note — request validation (before any API call):\n";
+function test_ai_validation() {
+	$empty = TBT_Notes_AI_Quick_Note::answer( array( 'prompt' => '   ' ) );
+	ok( is_wp_error( $empty ) && $empty->get_error_code() === 'tbt_ai_empty_prompt', 'empty prompt is rejected' );
+
+	$blank = TBT_Notes_AI_Quick_Note::answer( array() );
+	ok( is_wp_error( $blank ) && $blank->get_error_code() === 'tbt_ai_empty_prompt', 'missing prompt is rejected' );
+
+	$long = TBT_Notes_AI_Quick_Note::answer( array( 'prompt' => str_repeat( 'a', 2001 ) ) );
+	ok( is_wp_error( $long ) && $long->get_error_code() === 'tbt_ai_prompt_too_long', 'overlong prompt is rejected' );
+}
+test_ai_validation();
 
 /* ----------------------------------------------------------------- Summary */
 
