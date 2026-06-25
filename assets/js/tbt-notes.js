@@ -53,7 +53,6 @@
 	};
 
 	var activeSaver = null;
-	var stickyTeardown = null;
 	var unloading = false;
 
 	/* --------------------------------------------------------------- Helpers */
@@ -451,7 +450,6 @@
 
 	function render() {
 		clear( content );
-		clearStickyToolbar();
 
 		// Keep the browser tab title in step with whatever is on screen.
 		if ( root.classList.contains( 'is-open' ) ) {
@@ -1910,13 +1908,6 @@
 			highlightWithFallbackRange( shortcutMap[ e.code ] );
 		} );
 
-		// Page mode scrolls the whole window, so the CSS `position: sticky` toolbar
-		// can be trapped by an overflow/transform on a theme (e.g. Divi) ancestor.
-		// Pin it with JS (position: fixed) so it stays put regardless of wrappers.
-		if ( isPageMode ) {
-			setupStickyToolbar( toolbar, editorEl.parentNode );
-		}
-
 		var ai = cfg.aiEnabled ? createAiQuickNote( quill, editorEl.parentNode, lesson, headerInput ) : null;
 		if ( ai ) {
 			var aiBtn = toolbar.querySelector( '.tbt-ai-trigger' );
@@ -2283,54 +2274,31 @@
 
 	/* --------------------------------------------------- Sticky toolbar (page) */
 
-	function clearStickyToolbar() {
-		if ( stickyTeardown ) {
-			stickyTeardown();
-			stickyTeardown = null;
-		}
-	}
-
 	/**
-	 * Keep the editor toolbar pinned to the top of the window in page mode.
-	 *
-	 * CSS `position: sticky` (and even JS `position: fixed` left in place) is
-	 * unreliable here: a theme wrapper (Divi panels/sections often carry a CSS
-	 * transform — even an identity one — or overflow) establishes a containing
-	 * block that traps the pinned element so it scrolls away. To be immune to
-	 * that, when pinned we MOVE the toolbar into a `position: fixed` host appended
-	 * directly to <body> (which has no such trap), and move it back when unpinned.
-	 * An in-flow spacer holds the toolbar's space so content doesn't jump.
-	 *
-	 * @param {Element} toolbar The Quill toolbar element.
-	 * @param {Element} wrap    The editor wrapper the toolbar should pin within.
+	 * Page-mode sticky editor toolbar — a single, persistent controller bound at
+	 * startup. It re-finds the current toolbar on every scroll, so it does not
+	 * depend on the editor render lifecycle. When the toolbar reaches the top of
+	 * the window it is MOVED into a position:fixed host mounted on <body> (which
+	 * no theme wrapper can trap with overflow/transform), with an in-flow spacer
+	 * holding its place; it is moved back when scrolled away from the top.
 	 */
-	function setupStickyToolbar( toolbar, wrap ) {
-		clearStickyToolbar();
-		if ( ! toolbar || ! wrap ) {
-			return;
+	function initPageStickyToolbar() {
+		var host = null;
+		var hostInner = null;
+		var spacer = null;
+		var pinnedTb = null;
+		var pinnedWrap = null;
+
+		function ensureHost() {
+			if ( host ) {
+				return;
+			}
+			host = el( 'div', 'tbt-notes-app tbt-notes-app--page tbt-notes-sticky-host' );
+			hostInner = el( 'div', 'tbt-notes-editor-quillwrap' );
+			host.appendChild( hostInner );
+			host.style.cssText = 'position:fixed;z-index:50;background:#fff;box-sizing:border-box;display:none;';
+			document.body.appendChild( host );
 		}
-
-		var originalParent = toolbar.parentNode;
-
-		// In-flow placeholder that holds the toolbar's space while it is fixed.
-		var spacer = el( 'div', 'tbt-notes-toolbar-spacer' );
-		spacer.style.display = 'none';
-		if ( originalParent ) {
-			originalParent.insertBefore( spacer, toolbar );
-		}
-
-		// Fixed host mounted on <body>, carrying the app + quillwrap classes so the
-		// toolbar keeps its styling and CSS variables once moved into it.
-		var host = el( 'div', 'tbt-notes-app tbt-notes-app--page tbt-notes-sticky-host' );
-		var hostInner = el( 'div', 'tbt-notes-editor-quillwrap' );
-		host.appendChild( hostInner );
-		host.style.position = 'fixed';
-		host.style.zIndex = '50';
-		host.style.background = '#fff';
-		host.style.boxSizing = 'border-box';
-		host.style.display = 'none';
-
-		var pinned = false;
 
 		function adminOffset() {
 			var bar = document.getElementById( 'wpadminbar' );
@@ -2340,71 +2308,82 @@
 			return 0;
 		}
 
-		function pin( offset, rect, h ) {
-			if ( ! pinned ) {
-				spacer.style.height = h + 'px';
-				spacer.style.display = 'block';
-				if ( ! host.parentNode ) {
-					document.body.appendChild( host );
+		function unpin() {
+			if ( pinnedTb ) {
+				// Move the toolbar back to where the spacer is holding its place. If
+				// the spacer is gone (editor was rebuilt), just drop the orphan.
+				if ( spacer && spacer.parentNode ) {
+					spacer.parentNode.insertBefore( pinnedTb, spacer );
+					spacer.parentNode.removeChild( spacer );
+				} else if ( pinnedTb.parentNode === hostInner ) {
+					hostInner.removeChild( pinnedTb );
 				}
-				hostInner.appendChild( toolbar );
-				pinned = true;
 			}
+			pinnedTb = null;
+			pinnedWrap = null;
+			spacer = null;
+			if ( host ) {
+				host.style.display = 'none';
+			}
+		}
+
+		function place( offset, rect ) {
 			host.style.top = offset + 'px';
 			host.style.left = rect.left + 'px';
 			host.style.width = rect.width + 'px';
 			host.style.display = 'block';
 		}
 
-		function unpin() {
-			if ( pinned ) {
-				// Put the toolbar back exactly where it was (right after the spacer).
-				if ( originalParent ) {
-					originalParent.insertBefore( toolbar, spacer.nextSibling );
-				}
-				pinned = false;
-			}
-			spacer.style.display = 'none';
-			host.style.display = 'none';
-			if ( host.parentNode ) {
-				host.parentNode.removeChild( host );
-			}
-		}
-
 		function update() {
-			if ( ! wrap.isConnected ) {
-				teardown();
+			var offset = adminOffset();
+
+			if ( pinnedTb ) {
+				// If the editor was re-rendered, our spacer is detached — clean up.
+				if ( ! spacer || ! spacer.isConnected || ! pinnedWrap.isConnected ) {
+					unpin();
+					return;
+				}
+				var sRect = spacer.getBoundingClientRect();
+				var wRect = pinnedWrap.getBoundingClientRect();
+				var sh = spacer.offsetHeight;
+				if ( sRect.top <= offset && wRect.bottom > offset + sh ) {
+					place( offset, wRect );
+				} else {
+					unpin();
+				}
 				return;
 			}
-			var offset = adminOffset();
-			var wrapRect = wrap.getBoundingClientRect();
-			// While pinned the spacer holds the toolbar's height; otherwise measure it.
-			var h = pinned ? spacer.offsetHeight : toolbar.offsetHeight;
-			// Anchor on the in-flow spacer/toolbar (never the fixed host) so the
-			// decision doesn't feed back on itself.
-			var anchorTop = pinned ? spacer.getBoundingClientRect().top : toolbar.getBoundingClientRect().top;
-			if ( anchorTop <= offset && wrapRect.bottom > offset + h ) {
-				pin( offset, wrapRect, h );
-			} else if ( pinned ) {
-				unpin();
+
+			// Not pinned: look for the live editor toolbar at the top of the window.
+			var appEl = document.getElementById( 'tbt-notes-app' );
+			if ( ! appEl ) {
+				return;
+			}
+			var tb = appEl.querySelector( '.tbt-notes-editor-quillwrap .ql-toolbar' );
+			if ( ! tb ) {
+				return;
+			}
+			var wrap = tb.closest( '.tbt-notes-editor-quillwrap' );
+			if ( ! wrap ) {
+				return;
+			}
+			var tRect = tb.getBoundingClientRect();
+			var wRect2 = wrap.getBoundingClientRect();
+			var h = tb.offsetHeight;
+			if ( tRect.top <= offset && wRect2.bottom > offset + h ) {
+				ensureHost();
+				spacer = el( 'div', 'tbt-notes-toolbar-spacer' );
+				spacer.style.height = h + 'px';
+				tb.parentNode.insertBefore( spacer, tb );
+				hostInner.appendChild( tb );
+				pinnedTb = tb;
+				pinnedWrap = wrap;
+				place( offset, wRect2 );
 			}
 		}
 
-		// Capture phase so scrolls in any ancestor scroll container are seen too.
 		window.addEventListener( 'scroll', update, true );
 		window.addEventListener( 'resize', update );
-
-		function teardown() {
-			window.removeEventListener( 'scroll', update, true );
-			window.removeEventListener( 'resize', update );
-			unpin();
-			if ( spacer.parentNode ) {
-				spacer.parentNode.removeChild( spacer );
-			}
-		}
-		stickyTeardown = teardown;
-
-		update();
 	}
 
 	/* --------------------------------------------------------------- Autosave */
@@ -2503,6 +2482,9 @@
 
 	/* ----------------------------------------------------------------- Events */
 
+	// Version marker so the loaded build can be confirmed from the console.
+	window.TBT_NOTES_STICKY = 'global-1';
+
 	if ( isPageMode ) {
 		// The workspace is rendered inline and is always "open": mark it open and
 		// bootstrap immediately. No launcher, overlay, scroll-lock, Escape handler
@@ -2510,6 +2492,7 @@
 		root.classList.add( 'is-open' );
 		panel.setAttribute( 'aria-hidden', 'false' );
 		bootstrap();
+		initPageStickyToolbar();
 	} else {
 		if ( launcher ) {
 			launcher.addEventListener( 'click', function () {
