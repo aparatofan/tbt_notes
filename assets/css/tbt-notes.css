@@ -361,6 +361,33 @@ body.tbt-notes-open {
 	min-height: 0;
 }
 
+/* Compact bar: lay the class title and lesson title side by side (centred)
+   instead of stacked, so the short header doesn't clip one over the other. */
+.tbt-notes-app--page .tbt-notes-topbar__title-wrap {
+	flex-direction: row;
+	align-items: baseline;
+	justify-content: center;
+	gap: var(--tbt-s2);
+	flex-wrap: wrap;
+}
+
+.tbt-notes-app--page .tbt-notes-topbar__title {
+	width: auto;
+	max-width: 45%;
+}
+
+.tbt-notes-app--page .tbt-notes-topbar__subtitle {
+	width: auto;
+	margin-top: 0;
+}
+
+.tbt-notes-app--page .tbt-notes-topbar__subtitle-input {
+	width: auto;
+	max-width: 45%;
+	margin-top: 0;
+	text-align: left;
+}
+
 .tbt-notes-app--page .tbt-notes-topbar__title,
 .tbt-notes-app--page .tbt-notes-topbar__subtitle,
 .tbt-notes-app--page .tbt-notes-topbar__subtitle-input {
