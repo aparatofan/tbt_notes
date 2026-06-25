@@ -19,6 +19,30 @@ runtime dependency on any external CDN or service**.
   delete classes, assign a student, add/edit/delete lessons, and write notes in a
   rich-text editor that **autosaves as you type**.
 
+### Display modes: overlay vs. page
+
+The same workspace runs in two modes:
+
+- **Overlay mode (default)** — the launcher slides out a fixed, full-screen panel
+  over the current page; the background page is scroll-locked. Use the
+  `[tbt_notes]` shortcode to add an opener button anywhere.
+- **Page mode** — the workspace renders **inline as normal page content** so the
+  browser window scrolls naturally (no overlay, launcher, scroll-lock or modal
+  behaviour). Add the **`[tbt_notes_page]`** shortcode to a page.
+
+To set up page mode, create a WordPress page (suggested title **TBT Notes**, slug
+`tbt-notes`) whose content is just:
+
+```
+[tbt_notes_page]
+```
+
+On that page the floating launcher and footer overlay are automatically
+suppressed (so IDs never duplicate), the app boots already-open, and there is no
+close button. The mode is driven by `data-tbt-mode="page"` on the root element;
+the front-end script branches on it. Page mode is the foundation for a future
+student-facing / PWA app. Overlay mode keeps working on all other pages.
+
 ### The security model (visibility rule)
 
 A student can see a class **if and only if** they are the assigned student for
