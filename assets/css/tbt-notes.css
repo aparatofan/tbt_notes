@@ -338,6 +338,19 @@ body.tbt-notes-open {
 	top: var(--tbt-admin-offset);
 }
 
+/* Page mode: the editor lays out in normal document flow rather than as a
+   flex-filled, fixed-height region. That makes the whole note grow down the
+   page and gives the sticky toolbar a full-height containing block, so it stays
+   pinned to the top of the window while you scroll/edit (as it does in overlay
+   mode, where the editor scrolls internally instead). */
+.tbt-notes-app--page .tbt-notes-editorwrap,
+.tbt-notes-app--page .tbt-notes-editor-quillwrap {
+	display: block;
+	flex: none;
+	height: auto;
+	min-height: 0;
+}
+
 /* Fill 100% of the available space so the surrounding page (Divi) controls the
    width/margins — drop the centred max-width columns used in overlay mode. */
 .tbt-notes-app--page .tbt-notes-body,
