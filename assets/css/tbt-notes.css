@@ -253,7 +253,10 @@ body.tbt-notes-open {
 	flex-direction: column;
 }
 
-.tbt-notes-app.is-open .tbt-notes-panel {
+/* Slide-in is overlay-only. Excluded from page mode because *any* transform
+   (even the identity translateX(0)) on the panel creates a containing block
+   that traps the position: fixed / sticky toolbar inside it. */
+.tbt-notes-app.is-open:not( .tbt-notes-app--page ) .tbt-notes-panel {
 	transform: translateX(0);
 }
 
@@ -332,10 +335,34 @@ body.tbt-notes-open {
 	min-height: 70vh;
 }
 
-/* The sticky Quill toolbar sticks to the top of the window in page mode; offset
-   it under the WordPress admin bar when present so it isn't hidden. */
+/* In page mode the toolbar is pinned by JS (position: fixed) instead of CSS
+   sticky, because a theme wrapper (e.g. Divi overflow/transform) can trap a
+   sticky element. Drop the CSS sticky here so the two don't both add spacing. */
 .tbt-notes-app--page .tbt-notes-editor-quillwrap .ql-toolbar.ql-snow {
-	top: var(--tbt-admin-offset);
+	position: static;
+	top: auto;
+}
+
+/* Page mode: the editor lays out in normal document flow rather than as a
+   flex-filled, fixed-height region. That makes the whole note grow down the
+   page and gives the sticky toolbar a full-height containing block, so it stays
+   pinned to the top of the window while you scroll/edit (as it does in overlay
+   mode, where the editor scrolls internally instead). */
+.tbt-notes-app--page .tbt-notes-editorwrap,
+.tbt-notes-app--page .tbt-notes-editor-quillwrap {
+	display: block;
+	flex: none;
+	height: auto;
+	min-height: 0;
+}
+
+/* The JS sticky host is a bare fixed bar mounted on <body> (it reuses the app +
+   quillwrap classes so the moved toolbar keeps its styling). Neutralise the
+   app-level full-height/width sizing so it only occupies the toolbar's height. */
+.tbt-notes-sticky-host.tbt-notes-app--page {
+	min-height: 0;
+	height: auto;
+	width: auto;
 }
 
 /* Fill 100% of the available space so the surrounding page (Divi) controls the

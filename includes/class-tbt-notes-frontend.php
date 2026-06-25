@@ -193,19 +193,34 @@ class TBT_Notes_Frontend {
 			'tbt-notes',
 			TBT_NOTES_PLUGIN_URL . 'assets/css/tbt-notes.css',
 			$style_deps,
-			TBT_NOTES_VERSION
+			$this->asset_version( 'assets/css/tbt-notes.css' )
 		);
 
 		wp_register_script(
 			'tbt-notes',
 			TBT_NOTES_PLUGIN_URL . 'assets/js/tbt-notes.js',
 			$script_deps,
-			TBT_NOTES_VERSION,
+			$this->asset_version( 'assets/js/tbt-notes.js' ),
 			true
 		);
 
 		wp_localize_script( 'tbt-notes', 'TBTNotes', $this->localized_data( $is_teacher ) );
 		wp_enqueue_script( 'tbt-notes' );
+	}
+
+	/**
+	 * Cache-busting version for one of the plugin's own assets. Uses the file's
+	 * modification time so a freshly uploaded CSS/JS file is always re-fetched
+	 * (the ?ver= query changes), falling back to the plugin version if the file
+	 * cannot be stat'd.
+	 *
+	 * @param string $relative_path Path under the plugin dir, e.g. 'assets/js/tbt-notes.js'.
+	 * @return string
+	 */
+	protected function asset_version( $relative_path ) {
+		$full = TBT_NOTES_PLUGIN_DIR . ltrim( $relative_path, '/' );
+		$mtime = is_readable( $full ) ? filemtime( $full ) : false;
+		return $mtime ? (string) $mtime : TBT_NOTES_VERSION;
 	}
 
 	/**

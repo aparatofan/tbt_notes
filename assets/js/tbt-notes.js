@@ -2272,6 +2272,120 @@
 		};
 	}
 
+	/* --------------------------------------------------- Sticky toolbar (page) */
+
+	/**
+	 * Page-mode sticky editor toolbar — a single, persistent controller bound at
+	 * startup. It re-finds the current toolbar on every scroll, so it does not
+	 * depend on the editor render lifecycle. When the toolbar reaches the top of
+	 * the window it is MOVED into a position:fixed host mounted on <body> (which
+	 * no theme wrapper can trap with overflow/transform), with an in-flow spacer
+	 * holding its place; it is moved back when scrolled away from the top.
+	 */
+	function initPageStickyToolbar() {
+		var host = null;
+		var hostInner = null;
+		var spacer = null;
+		var pinnedTb = null;
+		var pinnedWrap = null;
+
+		function ensureHost() {
+			if ( host ) {
+				return;
+			}
+			host = el( 'div', 'tbt-notes-app tbt-notes-app--page tbt-notes-sticky-host' );
+			hostInner = el( 'div', 'tbt-notes-editor-quillwrap' );
+			host.appendChild( hostInner );
+			host.style.cssText = 'position:fixed;z-index:50;background:#fff;box-sizing:border-box;display:none;';
+			document.body.appendChild( host );
+		}
+
+		function adminOffset() {
+			var bar = document.getElementById( 'wpadminbar' );
+			if ( bar && window.getComputedStyle( bar ).position === 'fixed' ) {
+				return bar.getBoundingClientRect().height;
+			}
+			return 0;
+		}
+
+		function unpin() {
+			if ( pinnedTb ) {
+				// Move the toolbar back to where the spacer is holding its place. If
+				// the spacer is gone (editor was rebuilt), just drop the orphan.
+				if ( spacer && spacer.parentNode ) {
+					spacer.parentNode.insertBefore( pinnedTb, spacer );
+					spacer.parentNode.removeChild( spacer );
+				} else if ( pinnedTb.parentNode === hostInner ) {
+					hostInner.removeChild( pinnedTb );
+				}
+			}
+			pinnedTb = null;
+			pinnedWrap = null;
+			spacer = null;
+			if ( host ) {
+				host.style.display = 'none';
+			}
+		}
+
+		function place( offset, rect ) {
+			host.style.top = offset + 'px';
+			host.style.left = rect.left + 'px';
+			host.style.width = rect.width + 'px';
+			host.style.display = 'block';
+		}
+
+		function update() {
+			var offset = adminOffset();
+
+			if ( pinnedTb ) {
+				// If the editor was re-rendered, our spacer is detached — clean up.
+				if ( ! spacer || ! spacer.isConnected || ! pinnedWrap.isConnected ) {
+					unpin();
+					return;
+				}
+				var sRect = spacer.getBoundingClientRect();
+				var wRect = pinnedWrap.getBoundingClientRect();
+				var sh = spacer.offsetHeight;
+				if ( sRect.top <= offset && wRect.bottom > offset + sh ) {
+					place( offset, wRect );
+				} else {
+					unpin();
+				}
+				return;
+			}
+
+			// Not pinned: look for the live editor toolbar at the top of the window.
+			var appEl = document.getElementById( 'tbt-notes-app' );
+			if ( ! appEl ) {
+				return;
+			}
+			var tb = appEl.querySelector( '.tbt-notes-editor-quillwrap .ql-toolbar' );
+			if ( ! tb ) {
+				return;
+			}
+			var wrap = tb.closest( '.tbt-notes-editor-quillwrap' );
+			if ( ! wrap ) {
+				return;
+			}
+			var tRect = tb.getBoundingClientRect();
+			var wRect2 = wrap.getBoundingClientRect();
+			var h = tb.offsetHeight;
+			if ( tRect.top <= offset && wRect2.bottom > offset + h ) {
+				ensureHost();
+				spacer = el( 'div', 'tbt-notes-toolbar-spacer' );
+				spacer.style.height = h + 'px';
+				tb.parentNode.insertBefore( spacer, tb );
+				hostInner.appendChild( tb );
+				pinnedTb = tb;
+				pinnedWrap = wrap;
+				place( offset, wRect2 );
+			}
+		}
+
+		window.addEventListener( 'scroll', update, true );
+		window.addEventListener( 'resize', update );
+	}
+
 	/* --------------------------------------------------------------- Autosave */
 
 	function createSaver( lesson, indicator ) {
@@ -2375,6 +2489,7 @@
 		root.classList.add( 'is-open' );
 		panel.setAttribute( 'aria-hidden', 'false' );
 		bootstrap();
+		initPageStickyToolbar();
 	} else {
 		if ( launcher ) {
 			launcher.addEventListener( 'click', function () {
