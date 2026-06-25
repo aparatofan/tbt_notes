@@ -1232,6 +1232,8 @@ body.tbt-notes-open {
 	min-height: 0;
 	display: flex;
 	flex-direction: column;
+	/* Positioning context for the floating AI Quick Note panel. */
+	position: relative;
 }
 
 .tbt-notes-editor-quillwrap .ql-toolbar.ql-snow {
@@ -1395,6 +1397,198 @@ body.tbt-notes-open {
 	width: auto !important;
 	padding: 0 4px !important;
 	color: var(--tbt-muted);
+}
+
+/* ----------------------------------------------------------- AI Quick Note */
+
+/* Toolbar launcher (✨ Ask AI). Reset Quill's square button sizing so the
+   label fits next to the icon. */
+.tbt-notes-editor-quillwrap .ql-toolbar .tbt-ai-trigger {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	width: auto !important;
+	height: auto !important;
+	padding: 3px 10px !important;
+	border: 1px solid var(--tbt-accent);
+	border-radius: 999px;
+	background: var(--tbt-accent-soft);
+	color: var(--tbt-accent-contrast);
+	font-size: 13px;
+	font-weight: 600;
+	cursor: pointer;
+	line-height: 1.4;
+}
+
+.tbt-notes-editor-quillwrap .ql-toolbar .tbt-ai-trigger:hover {
+	background: var(--tbt-accent-soft-hover);
+}
+
+.tbt-ai-trigger__icon {
+	font-size: 14px;
+}
+
+/* Floating panel, anchored near the caret inside the editor wrapper. */
+.tbt-ai-panel {
+	position: absolute;
+	z-index: 5;
+	/* Wider, but never wider than the editor area or the viewport. */
+	width: min(600px, calc(100% - 24px));
+	max-width: calc(100vw - 24px);
+	box-sizing: border-box;
+	/* Stay inside the editor area; scroll internally if the content is tall. */
+	max-height: calc(100% - 16px);
+	overflow-y: auto;
+	background: var(--tbt-panel-bg);
+	border: 1px solid var(--tbt-border);
+	border-radius: var(--tbt-radius);
+	box-shadow: 0 8px 28px rgba( 17, 52, 107, 0.18 );
+	padding: var(--tbt-s2) var(--tbt-s3);
+	display: flex;
+	flex-direction: column;
+	gap: var(--tbt-s2);
+}
+
+.tbt-ai-panel[hidden] {
+	display: none;
+}
+
+.tbt-ai-panel__head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+}
+
+.tbt-ai-panel__title {
+	font-size: 14px;
+	font-weight: 700;
+	color: var(--tbt-text);
+}
+
+.tbt-ai-panel__close {
+	border: 0;
+	background: transparent;
+	color: var(--tbt-muted);
+	font-size: 15px;
+	line-height: 1;
+	cursor: pointer;
+	padding: 4px;
+	border-radius: 6px;
+}
+
+.tbt-ai-panel__close:hover {
+	background: var(--tbt-hover);
+	color: var(--tbt-text);
+}
+
+.tbt-ai-presets {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+
+.tbt-ai-preset {
+	border: 1px solid var(--tbt-border);
+	background: #fff;
+	color: var(--tbt-text);
+	font-size: 12px;
+	padding: 4px 10px;
+	border-radius: 999px;
+	cursor: pointer;
+	line-height: 1.4;
+}
+
+.tbt-ai-preset:hover {
+	background: var(--tbt-hover);
+}
+
+.tbt-ai-preset.is-active {
+	background: var(--tbt-accent);
+	border-color: var(--tbt-accent);
+	color: var(--tbt-accent-contrast);
+	font-weight: 600;
+}
+
+.tbt-ai-input-row {
+	display: flex;
+	gap: var(--tbt-s2);
+	align-items: flex-end;
+}
+
+.tbt-ai-input {
+	flex: 1 1 auto;
+	resize: vertical;
+	min-height: 40px;
+	max-height: 200px;
+	padding: var(--tbt-s1) var(--tbt-s2);
+	border: 1px solid var(--tbt-border);
+	border-radius: 8px;
+	font: inherit;
+	font-size: 14px;
+	color: var(--tbt-text);
+	background: #fff;
+}
+
+.tbt-ai-input:focus {
+	outline: none;
+	border-color: var(--tbt-accent);
+	box-shadow: 0 0 0 2px var(--tbt-accent-soft);
+}
+
+.tbt-ai-submit {
+	flex: 0 0 auto;
+	white-space: nowrap;
+}
+
+.tbt-ai-submit:disabled {
+	opacity: 0.6;
+	cursor: default;
+}
+
+.tbt-ai-status {
+	font-size: 13px;
+	color: var(--tbt-muted);
+	padding: 2px 0;
+}
+
+.tbt-ai-status.is-error {
+	color: var(--tbt-danger);
+}
+
+/* Response card — light blue, calm, matching the selected-note style. */
+.tbt-ai-response {
+	background: var(--tbt-accent-soft);
+	border: 1px solid var(--tbt-border);
+	border-radius: 8px;
+	padding: var(--tbt-s2);
+	display: flex;
+	flex-direction: column;
+	gap: var(--tbt-s2);
+}
+
+.tbt-ai-response[hidden] {
+	display: none;
+}
+
+.tbt-ai-response__text {
+	font-size: 14px;
+	line-height: 1.6;
+	color: var(--tbt-text);
+	white-space: pre-wrap;
+	word-wrap: break-word;
+	max-height: 240px;
+	overflow-y: auto;
+}
+
+.tbt-ai-response__actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+
+.tbt-ai-response__actions .tbt-notes-btn {
+	padding: 6px 14px;
+	font-size: 13px;
 }
 
 /* --------------------------------------------------------------- Inline msg */

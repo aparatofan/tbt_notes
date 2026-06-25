@@ -1746,6 +1746,20 @@
 		g4.appendChild( qbtn( 'ql-blockquote', null, t( 'blockquote', 'Quote' ) ) );
 		bar.appendChild( g4 );
 
+		// 6. AI Quick Note launcher. Plain (non-ql) button so the Snow theme
+		//    leaves it alone; wired up after Quill is built (see initEditor).
+		if ( cfg.aiEnabled ) {
+			var g5 = group();
+			var ai = el( 'button', 'tbt-ai-trigger' );
+			ai.type = 'button';
+			ai.setAttribute( 'aria-label', t( 'aiAsk', 'Ask AI' ) );
+			ai.title = t( 'aiAsk', 'Ask AI' ) + ' — /ai';
+			ai.appendChild( el( 'span', 'tbt-ai-trigger__icon', '✨' ) );
+			ai.appendChild( el( 'span', 'tbt-ai-trigger__label', t( 'aiAsk', 'Ask AI' ) ) );
+			g5.appendChild( ai );
+			bar.appendChild( g5 );
+		}
+
 		return bar;
 	}
 
@@ -1869,6 +1883,19 @@
 			highlightWithFallbackRange( shortcutMap[ e.code ] );
 		} );
 
+		var ai = cfg.aiEnabled ? createAiQuickNote( quill, editorEl.parentNode, lesson, headerInput ) : null;
+		if ( ai ) {
+			var aiBtn = toolbar.querySelector( '.tbt-ai-trigger' );
+			if ( aiBtn ) {
+				aiBtn.addEventListener( 'mousedown', function ( e ) {
+					e.preventDefault();
+				} );
+				aiBtn.addEventListener( 'click', function () {
+					ai.openFromButton();
+				} );
+			}
+		}
+
 		quill.on( 'text-change', function ( delta, old, source ) {
 			if ( source !== 'user' ) {
 				return;
@@ -1876,6 +1903,11 @@
 			var html = quill.getSemanticHTML();
 			lesson.body = html;
 			saver.queue( { body: html } );
+
+			// Typing "/ai" opens the AI Quick Note panel (and removes the trigger).
+			if ( ai ) {
+				ai.maybeTriggerSlash();
+			}
 		} );
 
 		headerInput.addEventListener( 'input', function () {
@@ -1897,6 +1929,322 @@
 				quill.focus();
 			}
 		}, 60 );
+	}
+
+	/* ----------------------------------------------------------- AI Quick Note */
+
+	/**
+	 * In-editor "Ask AI" helper. Opened by typing `/ai` or clicking the toolbar
+	 * button. The teacher types a short prompt, gets a concise answer from the
+	 * server-side endpoint, and inserts it into the note (or discards it). The
+	 * OpenAI key never touches the browser — this only talks to our REST route.
+	 *
+	 * @param {object} quill      The Quill instance.
+	 * @param {Element} quillWrap The positioned wrapper the panel is mounted in.
+	 * @param {object} lesson     The current lesson (for title context, future use).
+	 * @param {Element} headerInput The lesson header field.
+	 * @return {{ openFromButton: Function, maybeTriggerSlash: Function }}
+	 */
+	function createAiQuickNote( quill, quillWrap, lesson, headerInput ) {
+		var panel = null;
+		var input = null;
+		var statusEl = null;
+		var responseEl = null;
+		var responseText = null;
+		var submitBtn = null;
+		var presetButtons = [];
+		var insertIndex = 0;     // Where Insert will drop the answer.
+		var activePreset = '';   // Currently selected preset key, or ''.
+		var busy = false;        // A request is in flight.
+		var suppress = false;    // Guards against our own edits re-triggering /ai.
+		var lastAnswer = '';
+
+		function ensurePanel() {
+			if ( panel ) {
+				return;
+			}
+			panel = el( 'div', 'tbt-ai-panel' );
+			panel.setAttribute( 'role', 'dialog' );
+			panel.setAttribute( 'aria-label', t( 'aiPanelTitle', 'Ask AI' ) );
+
+			// Header: title + close.
+			var head = el( 'div', 'tbt-ai-panel__head' );
+			head.appendChild( el( 'span', 'tbt-ai-panel__title', '✨ ' + t( 'aiPanelTitle', 'Ask AI' ) ) );
+			var closeBtn = el( 'button', 'tbt-ai-panel__close' );
+			closeBtn.type = 'button';
+			closeBtn.textContent = '✕';
+			closeBtn.setAttribute( 'aria-label', t( 'aiClose', 'Close' ) );
+			closeBtn.title = t( 'aiClose', 'Close' );
+			closeBtn.addEventListener( 'click', close );
+			head.appendChild( closeBtn );
+			panel.appendChild( head );
+
+			// Preset chips (define, translate, …). Optional; backend keeps the wording.
+			var presets = cfg.aiPresets || [];
+			if ( presets.length ) {
+				var presetRow = el( 'div', 'tbt-ai-presets' );
+				presets.forEach( function ( p ) {
+					var b = el( 'button', 'tbt-ai-preset', p.label );
+					b.type = 'button';
+					b.setAttribute( 'data-preset', p.key );
+					b.addEventListener( 'click', function () {
+						setPreset( activePreset === p.key ? '' : p.key );
+						input.focus();
+					} );
+					presetRow.appendChild( b );
+					presetButtons.push( b );
+				} );
+				panel.appendChild( presetRow );
+			}
+
+			// Prompt input + submit.
+			var inputRow = el( 'div', 'tbt-ai-input-row' );
+			input = el( 'textarea', 'tbt-ai-input' );
+			input.rows = 2;
+			input.placeholder = t( 'aiPlaceholder', 'Ask AI…' );
+			input.addEventListener( 'keydown', function ( e ) {
+				// Enter submits; Shift+Enter inserts a newline.
+				if ( e.key === 'Enter' && ! e.shiftKey ) {
+					e.preventDefault();
+					submit();
+				}
+			} );
+			inputRow.appendChild( input );
+			submitBtn = el( 'button', 'tbt-notes-btn tbt-ai-submit', t( 'aiSubmit', 'Ask' ) );
+			submitBtn.type = 'button';
+			submitBtn.addEventListener( 'click', submit );
+			inputRow.appendChild( submitBtn );
+			panel.appendChild( inputRow );
+
+			// Status (loading / error) and response card.
+			statusEl = el( 'div', 'tbt-ai-status' );
+			statusEl.hidden = true;
+			panel.appendChild( statusEl );
+
+			responseEl = el( 'div', 'tbt-ai-response' );
+			responseEl.hidden = true;
+			responseText = el( 'div', 'tbt-ai-response__text' );
+			responseEl.appendChild( responseText );
+			var actions = el( 'div', 'tbt-ai-response__actions' );
+			var insertBtn = el( 'button', 'tbt-notes-btn', t( 'aiInsert', 'Insert' ) );
+			insertBtn.type = 'button';
+			insertBtn.addEventListener( 'click', function () {
+				insertAnswer( lastAnswer );
+			} );
+			var regenBtn = el( 'button', 'tbt-notes-btn tbt-notes-btn--ghost', t( 'aiRegenerate', 'Regenerate' ) );
+			regenBtn.type = 'button';
+			regenBtn.addEventListener( 'click', submit );
+			var discardBtn = el( 'button', 'tbt-notes-btn tbt-notes-btn--ghost', t( 'aiDiscard', 'Discard' ) );
+			discardBtn.type = 'button';
+			discardBtn.addEventListener( 'click', close );
+			actions.appendChild( insertBtn );
+			actions.appendChild( regenBtn );
+			actions.appendChild( discardBtn );
+			responseEl.appendChild( actions );
+			panel.appendChild( responseEl );
+
+			// Escape closes the AI panel only (not the whole Notes panel).
+			panel.addEventListener( 'keydown', function ( e ) {
+				if ( e.key === 'Escape' ) {
+					e.stopPropagation();
+					close();
+				}
+			} );
+
+			quillWrap.appendChild( panel );
+		}
+
+		function setPreset( key ) {
+			activePreset = key || '';
+			presetButtons.forEach( function ( b ) {
+				if ( b.getAttribute( 'data-preset' ) === activePreset ) {
+					b.classList.add( 'is-active' );
+				} else {
+					b.classList.remove( 'is-active' );
+				}
+			} );
+		}
+
+		function showStatus( msg, isError ) {
+			responseEl.hidden = true;
+			statusEl.hidden = false;
+			statusEl.textContent = msg;
+			statusEl.className = 'tbt-ai-status' + ( isError ? ' is-error' : '' );
+		}
+
+		function clearStatus() {
+			statusEl.hidden = true;
+			statusEl.textContent = '';
+		}
+
+		function showResponse( answer ) {
+			lastAnswer = answer;
+			clearStatus();
+			responseText.textContent = answer;
+			responseEl.hidden = false;
+			// The panel just grew; re-clamp so the answer doesn't push it off-screen.
+			position();
+		}
+
+		function position() {
+			// Anchor just below the caret, clamped to the wrapper on both axes so the
+			// panel never spills off the editor area. Falls back to the top-left of
+			// the editor if Quill cannot report bounds.
+			panel.style.top = '8px';
+			panel.style.left = '8px';
+			try {
+				var b = quill.getBounds( insertIndex );
+				if ( ! b ) {
+					return;
+				}
+				var contRect = quill.container.getBoundingClientRect();
+				var wrapRect = quillWrap.getBoundingClientRect();
+
+				var left = ( contRect.left - wrapRect.left ) + b.left;
+				var maxLeft = quillWrap.clientWidth - panel.offsetWidth - 12;
+				if ( left > maxLeft ) {
+					left = maxLeft;
+				}
+				if ( left < 8 ) {
+					left = 8;
+				}
+
+				var top = ( contRect.top - wrapRect.top ) + b.top + b.height + 8;
+				var maxTop = quillWrap.clientHeight - panel.offsetHeight - 12;
+				if ( top > maxTop ) {
+					top = maxTop;
+				}
+				if ( top < 8 ) {
+					top = 8;
+				}
+
+				panel.style.top = top + 'px';
+				panel.style.left = left + 'px';
+			} catch ( e ) {
+				// Keep the fallback position.
+			}
+		}
+
+		function open( index ) {
+			ensurePanel();
+			insertIndex = typeof index === 'number' ? index : quill.getLength();
+			clearStatus();
+			responseEl.hidden = true;
+			lastAnswer = '';
+			panel.hidden = false;
+			position();
+			window.setTimeout( function () {
+				input.focus();
+			}, 0 );
+		}
+
+		function close() {
+			if ( ! panel ) {
+				return;
+			}
+			panel.hidden = true;
+			busy = false;
+			setBusy( false );
+			// Return focus to the editor so the teacher keeps typing.
+			quill.focus();
+		}
+
+		function setBusy( on ) {
+			busy = on;
+			if ( submitBtn ) {
+				submitBtn.disabled = on;
+			}
+		}
+
+		function submit() {
+			if ( busy ) {
+				return;
+			}
+			var prompt = input.value.trim();
+			if ( ! prompt ) {
+				showStatus( t( 'aiEmptyPrompt', 'Please type a prompt for the AI.' ), true );
+				input.focus();
+				return;
+			}
+
+			setBusy( true );
+			showStatus( t( 'aiThinking', 'Thinking…' ), false );
+
+			// MVP sends prompt + preset only. Note title / selected text / surrounding
+			// text are accepted by the backend but intentionally not wired here yet
+			// (see spec §21 "Future features": use selected text / note title as context).
+			var payload = { prompt: prompt };
+			if ( activePreset ) {
+				payload.preset = activePreset;
+			}
+
+			api( 'POST', 'ai-quick-note', payload ).then( function ( data ) {
+				setBusy( false );
+				if ( ! data || ! data.answer ) {
+					showStatus( t( 'aiError', 'AI is not available at the moment. Please try again.' ), true );
+					return;
+				}
+				showResponse( data.answer );
+			} ).catch( function ( err ) {
+				setBusy( false );
+				showStatus( ( err && err.message ) || t( 'aiError', 'AI is not available at the moment. Please try again.' ), true );
+			} );
+		}
+
+		function insertAnswer( answer ) {
+			if ( ! answer ) {
+				return;
+			}
+			quill.focus();
+			var at = Math.min( insertIndex, quill.getLength() );
+			suppress = true;
+			// insertText preserves the answer's line breaks (\n -> new lines) and is
+			// flagged 'user' so autosave picks it up.
+			quill.insertText( at, answer, 'user' );
+			quill.setSelection( at + answer.length, 0, 'silent' );
+			suppress = false;
+			close();
+		}
+
+		function openFromButton() {
+			var range = quill.getSelection();
+			open( range ? range.index : quill.getLength() );
+		}
+
+		function maybeTriggerSlash() {
+			if ( suppress ) {
+				return;
+			}
+			var range = quill.getSelection();
+			if ( ! range || range.length !== 0 ) {
+				return;
+			}
+			var index = range.index;
+			if ( index < 3 ) {
+				return;
+			}
+			if ( quill.getText( index - 3, 3 ) !== '/ai' ) {
+				return;
+			}
+			// Only at a word boundary so it never fires mid-word (e.g. "a/air").
+			if ( index - 3 > 0 ) {
+				var before = quill.getText( index - 4, 1 );
+				if ( before && ! /\s/.test( before ) ) {
+					return;
+				}
+			}
+
+			suppress = true;
+			quill.deleteText( index - 3, 3, 'user' );
+			suppress = false;
+
+			open( index - 3 );
+		}
+
+		return {
+			openFromButton: openFromButton,
+			maybeTriggerSlash: maybeTriggerSlash,
+		};
 	}
 
 	/* --------------------------------------------------------------- Autosave */

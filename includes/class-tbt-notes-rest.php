@@ -192,6 +192,19 @@ class TBT_Notes_REST {
 				'permission_callback' => array( $this, 'require_manage' ),
 			)
 		);
+
+		// AI Quick Note: a teacher asks for short, lesson-friendly help from inside
+		// the editor. Server-side only — the OpenAI key never reaches the browser.
+		// Teacher/admin only, like every other write/generation route.
+		register_rest_route(
+			$ns,
+			'/ai-quick-note',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'ai_quick_note' ),
+				'permission_callback' => array( $this, 'require_manage' ),
+			)
+		);
 	}
 
 	/* --------------------------------------------------------------------- *
@@ -781,6 +794,42 @@ class TBT_Notes_REST {
 		}
 
 		return rest_ensure_response( array( 'item' => $this->present_expression_card( $record ) ) );
+	}
+
+	/* --------------------------------------------------------------------- *
+	 * Handlers — AI Quick Note
+	 * --------------------------------------------------------------------- */
+
+	/**
+	 * Generate a short, lesson-friendly AI answer for a teacher prompt. The
+	 * OpenAI call, validation and rate limiting all live in the service; the key
+	 * is only ever read server-side. Teacher/admin only (permission callback).
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function ai_quick_note( WP_REST_Request $request ) {
+		$result = TBT_Notes_AI_Quick_Note::answer(
+			array(
+				'prompt'        => (string) $request->get_param( 'prompt' ),
+				'preset'        => (string) $request->get_param( 'preset' ),
+				'level'         => (string) $request->get_param( 'level' ),
+				'selected_text' => (string) $request->get_param( 'selectedText' ),
+				'note_title'    => (string) $request->get_param( 'noteTitle' ),
+				'note_context'  => (string) $request->get_param( 'noteContext' ),
+			)
+		);
+
+		if ( is_wp_error( $result ) ) {
+			return $result;
+		}
+
+		return rest_ensure_response(
+			array(
+				'success' => true,
+				'answer'  => $result['answer'],
+			)
+		);
 	}
 
 	/* --------------------------------------------------------------------- *

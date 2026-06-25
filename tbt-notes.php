@@ -49,6 +49,7 @@ require_once TBT_NOTES_PLUGIN_DIR . 'includes/class-tbt-notes-capabilities.php';
 require_once TBT_NOTES_PLUGIN_DIR . 'includes/class-tbt-notes-sanitizer.php';
 require_once TBT_NOTES_PLUGIN_DIR . 'includes/class-tbt-notes-pronunciation.php';
 require_once TBT_NOTES_PLUGIN_DIR . 'includes/class-tbt-notes-expression-cards.php';
+require_once TBT_NOTES_PLUGIN_DIR . 'includes/class-tbt-notes-ai-quick-note.php';
 require_once TBT_NOTES_PLUGIN_DIR . 'includes/class-tbt-notes-rest.php';
 require_once TBT_NOTES_PLUGIN_DIR . 'includes/class-tbt-notes-frontend.php';
 require_once TBT_NOTES_PLUGIN_DIR . 'includes/class-tbt-notes-admin.php';
