@@ -338,6 +338,57 @@ body.tbt-notes-open {
 	top: var(--tbt-admin-offset);
 }
 
+/* Fill 100% of the available space so the surrounding page (Divi) controls the
+   width/margins — drop the centred max-width columns used in overlay mode. */
+.tbt-notes-app--page .tbt-notes-body,
+.tbt-notes-app--page .tbt-notes-body--classes {
+	max-width: 100%;
+	margin: 0;
+}
+
+/* Page mode header: the branded image bar becomes a clean black-on-white strip
+   showing just the class title, lesson title and navigation. Banners (logo,
+   coloured rectangle) are rendered by the surrounding page instead. */
+.tbt-notes-app--page .tbt-notes-topbar {
+	background: var(--tbt-panel-bg);
+	background-image: none;
+	box-shadow: none;
+	border-bottom: 1px solid var(--tbt-border);
+	padding: var(--tbt-s2) var(--tbt-s3);
+}
+
+.tbt-notes-app--page .tbt-notes-topbar__inner {
+	min-height: 0;
+}
+
+.tbt-notes-app--page .tbt-notes-topbar__title,
+.tbt-notes-app--page .tbt-notes-topbar__subtitle,
+.tbt-notes-app--page .tbt-notes-topbar__subtitle-input {
+	color: var(--tbt-text);
+}
+
+.tbt-notes-app--page .tbt-notes-topbar__subtitle-input::placeholder {
+	color: var(--tbt-muted);
+}
+
+.tbt-notes-app--page .tbt-notes-topbar__subtitle-input:hover,
+.tbt-notes-app--page .tbt-notes-topbar__subtitle-input:focus {
+	background: var(--tbt-hover);
+	border-color: var(--tbt-border);
+}
+
+.tbt-notes-app--page .tbt-notes-topbar .tbt-notes-iconbtn {
+	color: var(--tbt-text);
+}
+
+.tbt-notes-app--page .tbt-notes-topbar .tbt-notes-iconbtn:hover {
+	background: var(--tbt-hover);
+}
+
+.tbt-notes-app--page .tbt-notes-topbar .tbt-notes-iconbtn:focus-visible {
+	outline: 2px solid var(--tbt-accent);
+}
+
 /* --------------------------------------------------------------- Panel chrome */
 
 /* Branded header bar (this is the top bar). Background = tree header image,
@@ -989,7 +1040,15 @@ body.tbt-notes-open {
 }
 
 .tbt-notes-read li {
-	margin: 0.2em 0;
+	margin: 0.4em 0;
+	line-height: var(--tbt-lh-body);
+}
+
+/* Match the editor's list spacing to the read view so multi-line numbered items
+   don't look cramped while typing. */
+.tbt-notes-app .ql-editor li {
+	margin: 0.4em 0;
+	line-height: var(--tbt-lh-body);
 }
 
 .tbt-notes-read ol {
@@ -1123,7 +1182,15 @@ body.tbt-notes-open {
 }
 
 .tbt-notes-highlight-group li {
-	margin: 0.25em 0;
+	margin: 0.5em 0;
+	line-height: var(--tbt-lh-body);
+	font-weight: var(--tbt-fw-body);
+}
+
+/* The highlighted phrase keeps its colour but not extra weight — easier to read
+   as a scannable list. */
+.tbt-notes-highlight-group li span {
+	font-weight: var(--tbt-fw-body);
 }
 
 /* ------------------------------------------------------ Pronunciation audio */

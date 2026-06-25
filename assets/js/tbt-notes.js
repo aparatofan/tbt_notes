@@ -497,7 +497,11 @@
 	/* ------------------------------------------------------------- Teacher root */
 
 	function renderTeacherRoot() {
-		content.appendChild( buildTopbar( { title: t( 'headerClasses', 'CLASSES' ) } ) );
+		// In page mode the "CLASSES" banner (logo / title) is provided by the
+		// surrounding page (e.g. Divi), so we omit the branded in-app header here.
+		if ( ! isPageMode ) {
+			content.appendChild( buildTopbar( { title: t( 'headerClasses', 'CLASSES' ) } ) );
+		}
 		var body = el( 'div', 'tbt-notes-body tbt-notes-body--classes' );
 
 		// A small "New class" action sits near the page header (the big "CLASSES"
