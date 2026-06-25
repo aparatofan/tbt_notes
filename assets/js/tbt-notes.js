@@ -53,6 +53,7 @@
 	};
 
 	var activeSaver = null;
+	var stickyTeardown = null;
 	var unloading = false;
 
 	/* --------------------------------------------------------------- Helpers */
@@ -450,6 +451,7 @@
 
 	function render() {
 		clear( content );
+		clearStickyToolbar();
 
 		// Keep the browser tab title in step with whatever is on screen.
 		if ( root.classList.contains( 'is-open' ) ) {
@@ -1908,6 +1910,13 @@
 			highlightWithFallbackRange( shortcutMap[ e.code ] );
 		} );
 
+		// Page mode scrolls the whole window, so the CSS `position: sticky` toolbar
+		// can be trapped by an overflow/transform on a theme (e.g. Divi) ancestor.
+		// Pin it with JS (position: fixed) so it stays put regardless of wrappers.
+		if ( isPageMode ) {
+			setupStickyToolbar( toolbar, editorEl.parentNode );
+		}
+
 		var ai = cfg.aiEnabled ? createAiQuickNote( quill, editorEl.parentNode, lesson, headerInput ) : null;
 		if ( ai ) {
 			var aiBtn = toolbar.querySelector( '.tbt-ai-trigger' );
@@ -2270,6 +2279,112 @@
 			openFromButton: openFromButton,
 			maybeTriggerSlash: maybeTriggerSlash,
 		};
+	}
+
+	/* --------------------------------------------------- Sticky toolbar (page) */
+
+	function clearStickyToolbar() {
+		if ( stickyTeardown ) {
+			stickyTeardown();
+			stickyTeardown = null;
+		}
+	}
+
+	/**
+	 * Keep the editor toolbar pinned to the top of the window in page mode using
+	 * position: fixed. CSS `position: sticky` is unreliable here because a theme
+	 * wrapper (Divi sections/rows often set overflow or transforms) can trap it;
+	 * a JS-driven fixed bar with an in-flow spacer is robust to that.
+	 *
+	 * @param {Element} toolbar The Quill toolbar element.
+	 * @param {Element} wrap    The editor wrapper the toolbar should pin within.
+	 */
+	function setupStickyToolbar( toolbar, wrap ) {
+		clearStickyToolbar();
+		if ( ! toolbar || ! wrap ) {
+			return;
+		}
+
+		// In-flow placeholder that holds the toolbar's space while it is fixed, so
+		// the content below doesn't jump up.
+		var spacer = el( 'div', 'tbt-notes-toolbar-spacer' );
+		spacer.style.display = 'none';
+		if ( toolbar.parentNode ) {
+			toolbar.parentNode.insertBefore( spacer, toolbar );
+		}
+		var pinned = false;
+
+		function adminOffset() {
+			var bar = document.getElementById( 'wpadminbar' );
+			if ( bar && window.getComputedStyle( bar ).position === 'fixed' ) {
+				return bar.getBoundingClientRect().height;
+			}
+			return 0;
+		}
+
+		function pin( offset, rect, h ) {
+			pinned = true;
+			spacer.style.height = h + 'px';
+			spacer.style.display = 'block';
+			toolbar.style.position = 'fixed';
+			toolbar.style.top = offset + 'px';
+			toolbar.style.left = rect.left + 'px';
+			toolbar.style.width = rect.width + 'px';
+			toolbar.style.boxSizing = 'border-box';
+			toolbar.style.zIndex = '50';
+		}
+
+		function unpin() {
+			pinned = false;
+			spacer.style.display = 'none';
+			toolbar.style.position = '';
+			toolbar.style.top = '';
+			toolbar.style.left = '';
+			toolbar.style.width = '';
+			toolbar.style.boxSizing = '';
+			toolbar.style.zIndex = '';
+		}
+
+		function update() {
+			if ( ! toolbar.isConnected ) {
+				teardown();
+				return;
+			}
+			var offset = adminOffset();
+			var wrapRect = wrap.getBoundingClientRect();
+			var h = toolbar.offsetHeight;
+			// Use the in-flow spacer as the anchor while pinned so we don't feed the
+			// fixed toolbar's own position back into the decision.
+			var anchorTop = pinned ? spacer.getBoundingClientRect().top : toolbar.getBoundingClientRect().top;
+			if ( anchorTop <= offset && wrapRect.bottom > offset + h ) {
+				pin( offset, wrapRect, h );
+			} else if ( pinned ) {
+				unpin();
+			}
+		}
+
+		function onResize() {
+			if ( pinned ) {
+				unpin();
+			}
+			update();
+		}
+
+		// Capture phase so scrolls in any ancestor scroll container are seen too.
+		window.addEventListener( 'scroll', update, true );
+		window.addEventListener( 'resize', onResize );
+
+		function teardown() {
+			window.removeEventListener( 'scroll', update, true );
+			window.removeEventListener( 'resize', onResize );
+			unpin();
+			if ( spacer.parentNode ) {
+				spacer.parentNode.removeChild( spacer );
+			}
+		}
+		stickyTeardown = teardown;
+
+		update();
 	}
 
 	/* --------------------------------------------------------------- Autosave */
