@@ -2482,9 +2482,6 @@
 
 	/* ----------------------------------------------------------------- Events */
 
-	// Version marker so the loaded build can be confirmed from the console.
-	window.TBT_NOTES_STICKY = 'global-1';
-
 	if ( isPageMode ) {
 		// The workspace is rendered inline and is always "open": mark it open and
 		// bootstrap immediately. No launcher, overlay, scroll-lock, Escape handler
