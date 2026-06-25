@@ -2082,11 +2082,14 @@
 			clearStatus();
 			responseText.textContent = answer;
 			responseEl.hidden = false;
+			// The panel just grew; re-clamp so the answer doesn't push it off-screen.
+			position();
 		}
 
 		function position() {
-			// Anchor just below the caret, clamped to the wrapper. Falls back to the
-			// top-left of the editor if Quill cannot report bounds.
+			// Anchor just below the caret, clamped to the wrapper on both axes so the
+			// panel never spills off the editor area. Falls back to the top-left of
+			// the editor if Quill cannot report bounds.
 			panel.style.top = '8px';
 			panel.style.left = '8px';
 			try {
@@ -2096,16 +2099,26 @@
 				}
 				var contRect = quill.container.getBoundingClientRect();
 				var wrapRect = quillWrap.getBoundingClientRect();
-				var top = ( contRect.top - wrapRect.top ) + b.top + b.height + 8;
+
 				var left = ( contRect.left - wrapRect.left ) + b.left;
 				var maxLeft = quillWrap.clientWidth - panel.offsetWidth - 12;
 				if ( left > maxLeft ) {
-					left = Math.max( 8, maxLeft );
+					left = maxLeft;
 				}
 				if ( left < 8 ) {
 					left = 8;
 				}
-				panel.style.top = Math.max( 8, top ) + 'px';
+
+				var top = ( contRect.top - wrapRect.top ) + b.top + b.height + 8;
+				var maxTop = quillWrap.clientHeight - panel.offsetHeight - 12;
+				if ( top > maxTop ) {
+					top = maxTop;
+				}
+				if ( top < 8 ) {
+					top = 8;
+				}
+
+				panel.style.top = top + 'px';
 				panel.style.left = left + 'px';
 			} catch ( e ) {
 				// Keep the fallback position.

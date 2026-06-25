@@ -1432,8 +1432,13 @@ body.tbt-notes-open {
 .tbt-ai-panel {
 	position: absolute;
 	z-index: 5;
-	width: min(420px, calc(100% - 24px));
+	/* Wider, but never wider than the editor area or the viewport. */
+	width: min(600px, calc(100% - 24px));
+	max-width: calc(100vw - 24px);
 	box-sizing: border-box;
+	/* Stay inside the editor area; scroll internally if the content is tall. */
+	max-height: calc(100% - 16px);
+	overflow-y: auto;
 	background: var(--tbt-panel-bg);
 	border: 1px solid var(--tbt-border);
 	border-radius: var(--tbt-radius);
