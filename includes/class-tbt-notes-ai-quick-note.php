@@ -149,7 +149,7 @@ class TBT_Notes_AI_Quick_Note {
 			'example'  => 'Give 2–3 natural example sentences that use the following word or phrase at B1/B2 level. Do not add definitions or explanations.',
 			'flashcard' => 'Create one vocabulary flashcard for the following word or phrase in exactly this format:' . "\n" . 'Phonetic: Translation: Example: Keep the example at B1/B2 level.',
 			'questions' => 'Create 3 short B1/B2 discussion questions about the following topic. Return them as a numbered list with nothing else.',
-			'simplify' => 'Rewrite the following text in simpler, more natural English suitable for a B1/B2 learner while keeping the meaning. If the original had a clear mistake, add one short note after the rewrite.',
+			'compare'  => 'Compare the two words or expressions from the teacher request. Explain the difference in simple B1 English. Format the answer in Markdown. Begin with a level-2 heading "## Difference between X and Y", replacing X and Y with the actual items from the request. For each item, write a level-3 heading "### " with the item, followed by a short definition, a natural Polish translation, and one short example sentence. End with a level-3 heading "### Difference" summarising the difference in one or two sentences. Use level-3 headings (###) for all subheadings; never use bold (**) for them. Keep the answer short and practical for an English lesson. Do not add a long introduction.',
 		);
 	}
 
@@ -181,8 +181,8 @@ class TBT_Notes_AI_Quick_Note {
 				'label' => __( 'Questions', 'tbt-notes' ),
 			),
 			array(
-				'key'   => 'simplify',
-				'label' => __( 'Simplify', 'tbt-notes' ),
+				'key'   => 'compare',
+				'label' => __( 'Compare', 'tbt-notes' ),
 			),
 		);
 	}

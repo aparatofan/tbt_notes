@@ -1959,6 +1959,52 @@
 	/* ----------------------------------------------------------- AI Quick Note */
 
 	/**
+	 * HTML-escape a string for safe insertion into innerHTML / pasted markup.
+	 *
+	 * @param {string} s Raw text.
+	 * @return {string}
+	 */
+	function escapeHtml( s ) {
+		var d = document.createElement( 'div' );
+		d.textContent = String( s == null ? '' : s );
+		return d.innerHTML;
+	}
+
+	/**
+	 * Convert the small Markdown subset the AI returns into HTML so Quill renders
+	 * real formatting instead of literal "###"/"**" characters. Supported:
+	 *   - "## " / "# "  -> <h2>   (note title)
+	 *   - "### "+        -> <h3>   (subheadings)
+	 *   - "**bold**"     -> <strong>
+	 * Every other non-empty line becomes a <p>, so presets that return plain text
+	 * (define, translate, …) are unaffected beyond paragraph wrapping. The text is
+	 * escaped before the inline markers are applied, so it is safe to paste.
+	 *
+	 * @param {string} answer The AI answer text.
+	 * @return {string} HTML markup.
+	 */
+	function answerToHtml( answer ) {
+		var lines = String( answer == null ? '' : answer ).split( /\r?\n/ );
+		var html = '';
+		for ( var i = 0; i < lines.length; i++ ) {
+			var line = lines[ i ].trim();
+			if ( '' === line ) {
+				continue;
+			}
+			var tag = 'p';
+			var m = line.match( /^(#{1,6})\s+(.*)$/ );
+			if ( m ) {
+				// The note only styles two heading levels: # / ## -> h2, ### -> h3.
+				tag = m[ 1 ].length <= 2 ? 'h2' : 'h3';
+				line = m[ 2 ];
+			}
+			var content = escapeHtml( line ).replace( /\*\*([^*]+)\*\*/g, '<strong>$1</strong>' );
+			html += '<' + tag + '>' + content + '</' + tag + '>';
+		}
+		return html;
+	}
+
+	/**
 	 * In-editor "Ask AI" helper. Opened by typing `/ai` or clicking the toolbar
 	 * button. The teacher types a short prompt, gets a concise answer from the
 	 * server-side endpoint, and inserts it into the note (or discards it). The
@@ -2105,7 +2151,9 @@
 		function showResponse( answer ) {
 			lastAnswer = answer;
 			clearStatus();
-			responseText.textContent = answer;
+			// Preview the formatted result (headings/bold) so it matches what Insert
+			// will drop into the note. Safe: server-cleaned text, re-escaped here.
+			responseText.innerHTML = answerToHtml( answer );
 			responseEl.hidden = false;
 			// The panel just grew; re-clamp so the answer doesn't push it off-screen.
 			position();
@@ -2223,10 +2271,13 @@
 			quill.focus();
 			var at = Math.min( insertIndex, quill.getLength() );
 			suppress = true;
-			// insertText preserves the answer's line breaks (\n -> new lines) and is
-			// flagged 'user' so autosave picks it up.
-			quill.insertText( at, answer, 'user' );
-			quill.setSelection( at + answer.length, 0, 'silent' );
+			// Render the answer's Markdown headings/bold as real formatting (h2/h3,
+			// <strong>); plain-text presets just become paragraphs. Pasted as 'user'
+			// so autosave picks it up — mirrors how the lesson body is loaded.
+			var before = quill.getLength();
+			quill.clipboard.dangerouslyPasteHTML( at, answerToHtml( answer ), 'user' );
+			var added = Math.max( quill.getLength() - before, 0 );
+			quill.setSelection( at + added, 0, 'silent' );
 			suppress = false;
 			close();
 		}

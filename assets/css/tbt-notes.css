@@ -1758,6 +1758,29 @@ body.tbt-notes-open {
 	overflow-y: auto;
 }
 
+/* Compact heading/paragraph spacing for the formatted answer preview so the
+   rendered Markdown (h2 title, h3 subheadings) reads like the note, not like
+   oversized browser defaults. */
+.tbt-ai-response__text h2,
+.tbt-ai-response__text h3,
+.tbt-ai-response__text p {
+	margin: 0 0 8px;
+}
+
+.tbt-ai-response__text h2 {
+	font-size: 17px;
+	font-weight: 700;
+}
+
+.tbt-ai-response__text h3 {
+	font-size: 15px;
+	font-weight: 700;
+}
+
+.tbt-ai-response__text > :last-child {
+	margin-bottom: 0;
+}
+
 .tbt-ai-response__actions {
 	display: flex;
 	flex-wrap: wrap;

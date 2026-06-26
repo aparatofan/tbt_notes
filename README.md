@@ -197,7 +197,7 @@ A small **✨ Ask AI** helper lives inside the lesson editor (teacher only). The
 teacher opens it by typing **`/ai`** in the note (the trigger text is removed
 automatically) or by clicking the **✨ Ask AI** button on the editor toolbar. A
 compact panel appears near the cursor with a prompt box, optional preset chips
-(**Define, Translate, Example, Flashcard, Questions, Simplify**), and a submit
+(**Define, Translate, Example, Flashcard, Questions, Compare**), and a submit
 button.
 
 On submit, the prompt goes to a server-side WordPress REST route

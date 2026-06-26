@@ -598,7 +598,7 @@ function test_ai_presets() {
 	foreach ( $choices as $c ) {
 		$keys[] = $c['key'];
 	}
-	$expected = array( 'define', 'translate', 'example', 'flashcard', 'questions', 'simplify' );
+	$expected = array( 'define', 'translate', 'example', 'flashcard', 'questions', 'compare' );
 	ok( $keys === $expected, 'all six preset choices are exposed in order' );
 
 	ok( call_ai_static( 'normalize_preset', array( 'Define' ) ) === 'define', 'preset keys are case-insensitive' );
@@ -629,6 +629,13 @@ function test_ai_build_prompt() {
 	$with = call_ai_static( 'build_user_prompt', array( array( 'prompt' => 'prolific', 'preset' => 'define' ) ) );
 	ok( contains( $with, 'Define this word or phrase' ), 'define preset prepends its instruction' );
 	ok( contains( $with, 'prolific' ), 'preset prompt still includes the teacher text' );
+
+	$compare = call_ai_static( 'build_user_prompt', array( array(
+		'prompt' => 'rule vs principle',
+		'preset' => 'compare',
+	) ) );
+	ok( contains( $compare, 'Compare the two words or expressions' ), 'compare preset prepends its instruction' );
+	ok( contains( $compare, 'rule vs principle' ), 'compare prompt still includes the teacher text' );
 
 	$ctx = call_ai_static( 'build_user_prompt', array( array(
 		'prompt'        => 'explain',
