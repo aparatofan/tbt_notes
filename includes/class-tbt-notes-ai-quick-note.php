@@ -149,7 +149,7 @@ class TBT_Notes_AI_Quick_Note {
 			'example'  => 'Give 2–3 natural example sentences that use the following word or phrase at B1/B2 level. Do not add definitions or explanations.',
 			'flashcard' => 'Create one vocabulary flashcard for the following word or phrase in exactly this format:' . "\n" . 'Phonetic: Translation: Example: Keep the example at B1/B2 level.',
 			'questions' => 'Create 3 short B1/B2 discussion questions about the following topic. Return them as a numbered list with nothing else.',
-			'simplify' => 'Rewrite the following text in simpler, more natural English suitable for a B1/B2 learner while keeping the meaning. If the original had a clear mistake, add one short note after the rewrite.',
+			'compare'  => 'Compare the two words or expressions from the teacher request. Explain the difference in simple B1 English. Give one short example sentence for each item. Keep the answer short and practical for an English lesson. Do not add a long introduction.',
 		);
 	}
 
@@ -181,8 +181,8 @@ class TBT_Notes_AI_Quick_Note {
 				'label' => __( 'Questions', 'tbt-notes' ),
 			),
 			array(
-				'key'   => 'simplify',
-				'label' => __( 'Simplify', 'tbt-notes' ),
+				'key'   => 'compare',
+				'label' => __( 'Compare', 'tbt-notes' ),
 			),
 		);
 	}
