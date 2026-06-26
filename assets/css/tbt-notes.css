@@ -169,6 +169,9 @@
 
 /* ------------------------------------------------------------------ Launcher */
 
+/* Round icon launcher that links to the Page Mode workspace. Collapsed it is a
+   48px circle (matching the site's left-rail menu icons); on hover/focus it
+   expands into a pill and the label slides in from the left. */
 .tbt-notes-launcher {
 	position: fixed;
 	left: 14px;
@@ -178,15 +181,17 @@
 	display: inline-flex;
 	flex-direction: row;
 	align-items: center;
-	gap: var(--tbt-s1);
-	padding: 11px 16px;
+	height: 48px;
+	padding: 0 12px;
 	border: 0;
-	border-radius: var(--tbt-radius);
-	background: var(--tbt-accent);
-	/* Clean primary action: keep the blue background, but text + icon are white. */
+	border-radius: 24px;
+	background: #0859c6;
+	/* Clean primary action: blue background, white text + icon. */
 	color: #ffffff;
 	cursor: pointer;
 	box-shadow: 0 3px 12px rgba(0, 0, 0, 0.28);
+	overflow: hidden;
+	text-decoration: none;
 	transition: background 0.15s ease;
 	font-family: "Roboto Slab", Georgia, serif;
 }
@@ -202,7 +207,7 @@
 }
 
 .tbt-notes-launcher:hover {
-	background: var(--tbt-accent-hover);
+	background: #064aa6;
 }
 
 .tbt-notes-launcher:focus-visible {
@@ -210,14 +215,31 @@
 	outline-offset: 2px;
 }
 
+/* Label hidden by default; slides in from the left on hover/focus. */
 .tbt-notes-launcher-label {
+	max-width: 0;
+	margin-left: 0;
+	opacity: 0;
+	overflow: hidden;
+	white-space: nowrap;
+	transform: translateX(-8px);
+	transition: max-width 0.28s ease, margin-left 0.28s ease, opacity 0.2s ease, transform 0.28s ease;
 	font-size: 13px;
 	font-weight: 700;
 	letter-spacing: 0.05em;
 }
 
+.tbt-notes-launcher:hover .tbt-notes-launcher-label,
+.tbt-notes-launcher:focus-visible .tbt-notes-launcher-label {
+	max-width: 240px;
+	margin-left: 10px;
+	opacity: 1;
+	transform: translateX(0);
+}
+
 .tbt-notes-icon {
 	display: block;
+	flex: 0 0 auto;
 }
 
 .tbt-notes-app.is-open .tbt-notes-launcher {
@@ -272,7 +294,8 @@ body.tbt-notes-open {
 
 @media (prefers-reduced-motion: reduce) {
 	.tbt-notes-panel,
-	.tbt-notes-launcher {
+	.tbt-notes-launcher,
+	.tbt-notes-launcher-label {
 		transition: none;
 	}
 }
