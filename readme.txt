@@ -56,7 +56,9 @@ No. The editor autosaves as the teacher types.
   editable title ("[class] — Lesson Notes — [date]", or "[class] — [lesson]").
 * The browser tab title now reflects the open note so TBT Notes tabs are easy to
   pick out when screen-sharing in Microsoft Teams.
-* Lesson Notes launcher button: white text and icon on the blue background.
+* Lesson Notes launcher is now a round icon button (#0859c6, white icon) that
+  links to the Page Mode workspace and reveals its label with a slide-in-from-left
+  animation on hover.
 * Classes page redesigned as a responsive grid of branded gradient cards (with a
   decorative TBT logo, class title, and student/note counts), a smaller New class
   button near the header, and clearer spacing below the search field.

@@ -2542,15 +2542,8 @@
 		bootstrap();
 		initPageStickyToolbar();
 	} else {
-		if ( launcher ) {
-			launcher.addEventListener( 'click', function () {
-				if ( root.classList.contains( 'is-open' ) ) {
-					closePanel();
-				} else {
-					openPanel( launcher );
-				}
-			} );
-		}
+		// The launcher is a plain link to the Page Mode workspace; let the browser
+		// handle navigation. Other triggers below still open the in-page overlay.
 
 		document.addEventListener( 'click', function ( e ) {
 			if ( ! e.target || ! e.target.closest ) {

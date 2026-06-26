@@ -12,7 +12,9 @@ runtime dependency on any external CDN or service**.
 ## How it works
 
 - A **notes launcher** sits on the left edge of every front-end page (for
-  logged-in users). Clicking it slides out a panel.
+  logged-in users). It is a round icon button that links to the Page Mode
+  workspace (filterable via `tbt_notes_launcher_url`, default
+  `https://thebluetree.pl/tbt-notes/`).
 - **Students** see a read-only view: their one class → a list of lessons (newest
   on top) → a formatted, read-only lesson.
 - The **teacher** sees the same panel, but with inline management: create/rename/
@@ -23,9 +25,10 @@ runtime dependency on any external CDN or service**.
 
 The same workspace runs in two modes:
 
-- **Overlay mode (default)** — the launcher slides out a fixed, full-screen panel
-  over the current page; the background page is scroll-locked. Use the
-  `[tbt_notes]` shortcode to add an opener button anywhere.
+- **Overlay mode (default)** — a fixed, full-screen panel slides out over the
+  current page; the background page is scroll-locked. Use the `[tbt_notes]`
+  shortcode (or any `.tbt-notes-trigger` element) to add an opener button
+  anywhere.
 - **Page mode** — the workspace renders **inline as normal page content** so the
   browser window scrolls naturally (no overlay, launcher, scroll-lock or modal
   behaviour). Add the **`[tbt_notes_page]`** shortcode to a page.
