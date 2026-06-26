@@ -401,7 +401,7 @@ class TBT_Notes_Frontend {
 				 */
 				$launcher_url = apply_filters( 'tbt_notes_launcher_url', 'https://thebluetree.pl/tbt-notes/' );
 				?>
-				<a id="tbt-notes-launcher" class="tbt-notes-launcher" href="<?php echo esc_url( $launcher_url ); ?>" aria-label="<?php echo esc_attr__( 'Lesson notes', 'tbt-notes' ); ?>">
+				<a id="tbt-notes-launcher" class="tbt-notes-launcher" href="<?php echo esc_url( $launcher_url ); ?>" target="_blank" rel="noopener noreferrer" aria-label="<?php echo esc_attr__( 'Lesson notes (opens in a new tab)', 'tbt-notes' ); ?>">
 					<svg class="tbt-notes-icon" viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" focusable="false">
 						<path fill="currentColor" d="M6 2h9l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2Zm8 1.5V8h4.5L14 3.5ZM8 12h8v1.6H8V12Zm0 3.4h8V17H8v-1.6ZM8 8.6h4v1.6H8V8.6Z"/>
 					</svg>
