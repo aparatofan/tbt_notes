@@ -134,6 +134,18 @@ class TBT_Notes_REST {
 			)
 		);
 
+		// Lesson image upload (Option 1 photo notes). Teacher/admin only, like
+		// every other lesson write. Accepts a multipart `file` field.
+		register_rest_route(
+			$ns,
+			'/lessons/(?P<id>\d+)/image',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'upload_lesson_image' ),
+				'permission_callback' => array( $this, 'require_manage' ),
+			)
+		);
+
 		// Pronunciation audio for pink highlights. Reads follow the lesson's
 		// class visibility rule; generation is teacher/admin only.
 		register_rest_route(
@@ -635,6 +647,111 @@ class TBT_Notes_REST {
 		}
 
 		return rest_ensure_response( array( 'deleted' => true, 'id' => $lesson_id ) );
+	}
+
+	/**
+	 * Upload an image (JPG/PNG) for a lesson and store it in the Media Library.
+	 *
+	 * Teacher/admin only (permission callback). The uploaded URL is returned so
+	 * the editor can embed it; the body sanitiser later confirms the src really is
+	 * one of our uploads before it is allowed to persist. Kept deliberately small
+	 * and reusable so a future paste-from-clipboard flow can hit the same route.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function upload_lesson_image( WP_REST_Request $request ) {
+		$lesson_id = (int) $request['id'];
+		$lesson    = TBT_Notes_DB::get_lesson( $lesson_id );
+		if ( ! $lesson ) {
+			return new WP_Error( 'tbt_notes_not_found', __( 'Lesson not found.', 'tbt-notes' ), array( 'status' => 404 ) );
+		}
+
+		$files = $request->get_file_params();
+		$file  = isset( $files['file'] ) ? $files['file'] : null;
+
+		if ( empty( $file ) || empty( $file['tmp_name'] ) ) {
+			return new WP_Error( 'tbt_notes_no_image', __( 'Please choose a JPG or PNG image.', 'tbt-notes' ), array( 'status' => 400 ) );
+		}
+
+		// Surface PHP's own upload errors (e.g. file exceeded upload_max_filesize).
+		if ( isset( $file['error'] ) && UPLOAD_ERR_OK !== (int) $file['error'] ) {
+			$err = (int) $file['error'];
+			if ( UPLOAD_ERR_INI_SIZE === $err || UPLOAD_ERR_FORM_SIZE === $err ) {
+				return new WP_Error( 'tbt_notes_image_too_large', __( 'The image is too large. Please choose an image under 8 MB.', 'tbt-notes' ), array( 'status' => 400 ) );
+			}
+			return new WP_Error( 'tbt_notes_upload_failed', __( 'Could not upload the image. Please try again.', 'tbt-notes' ), array( 'status' => 400 ) );
+		}
+
+		// Hard size cap: 8 MB. Big enough for phone photos of paper notes.
+		$max_bytes = 8 * 1024 * 1024;
+		if ( isset( $file['size'] ) && (int) $file['size'] > $max_bytes ) {
+			return new WP_Error( 'tbt_notes_image_too_large', __( 'The image is too large. Please choose an image under 8 MB.', 'tbt-notes' ), array( 'status' => 400 ) );
+		}
+
+		// Only JPG/PNG, validated by content + extension (not the client-sent type).
+		$allowed_mimes = array(
+			'jpg|jpeg' => 'image/jpeg',
+			'png'      => 'image/png',
+		);
+		$check = wp_check_filetype_and_ext( $file['tmp_name'], $file['name'], $allowed_mimes );
+		if ( empty( $check['ext'] ) || empty( $check['type'] ) || ! in_array( $check['type'], array( 'image/jpeg', 'image/png' ), true ) ) {
+			return new WP_Error( 'tbt_notes_bad_image_type', __( 'Please choose a JPG or PNG image.', 'tbt-notes' ), array( 'status' => 400 ) );
+		}
+
+		require_once ABSPATH . 'wp-admin/includes/file.php';
+		require_once ABSPATH . 'wp-admin/includes/media.php';
+		require_once ABSPATH . 'wp-admin/includes/image.php';
+
+		$overrides = array(
+			'test_form' => false,
+			'mimes'     => $allowed_mimes,
+		);
+
+		$moved = wp_handle_upload( $file, $overrides );
+		if ( ! is_array( $moved ) || isset( $moved['error'] ) || empty( $moved['url'] ) || empty( $moved['file'] ) ) {
+			return new WP_Error( 'tbt_notes_upload_failed', __( 'Could not upload the image. Please try again.', 'tbt-notes' ), array( 'status' => 500 ) );
+		}
+
+		$title = sanitize_file_name( pathinfo( $file['name'], PATHINFO_FILENAME ) );
+		if ( '' === $title ) {
+			/* translators: %d: lesson id. */
+			$title = sprintf( __( 'Lesson %d image', 'tbt-notes' ), $lesson_id );
+		}
+
+		$attachment = array(
+			'post_mime_type' => isset( $moved['type'] ) ? $moved['type'] : $check['type'],
+			'post_title'     => $title,
+			'post_content'   => '',
+			'post_status'    => 'inherit',
+		);
+
+		// Lessons are custom DB rows, not WP posts, so there is no post parent (0).
+		$attach_id = wp_insert_attachment( $attachment, $moved['file'], 0 );
+		if ( ! $attach_id || is_wp_error( $attach_id ) ) {
+			return new WP_Error( 'tbt_notes_upload_failed', __( 'Could not upload the image. Please try again.', 'tbt-notes' ), array( 'status' => 500 ) );
+		}
+
+		$meta = wp_generate_attachment_metadata( $attach_id, $moved['file'] );
+		wp_update_attachment_metadata( $attach_id, $meta );
+
+		// Link the attachment back to its lesson for future housekeeping.
+		update_post_meta( $attach_id, '_tbt_notes_lesson_id', $lesson_id );
+
+		$width  = ( is_array( $meta ) && isset( $meta['width'] ) ) ? (int) $meta['width'] : null;
+		$height = ( is_array( $meta ) && isset( $meta['height'] ) ) ? (int) $meta['height'] : null;
+
+		return rest_ensure_response(
+			array(
+				'image' => array(
+					'id'     => (int) $attach_id,
+					'url'    => wp_get_attachment_url( $attach_id ),
+					'alt'    => '',
+					'width'  => $width,
+					'height' => $height,
+				),
+			)
+		);
 	}
 
 	/* --------------------------------------------------------------------- *

@@ -39,6 +39,19 @@ class TBT_Notes_Sanitizer {
 	}
 
 	/**
+	 * CSS classes allowed to remain on <img> elements. Images get their own,
+	 * separate allowlist so the single approved layout class survives while the
+	 * highlight classes (which are inline-text categories) never leak onto images.
+	 *
+	 * @return string[]
+	 */
+	public static function allowed_image_classes() {
+		return array(
+			'tbt-notes-image',
+		);
+	}
+
+	/**
 	 * The wp_kses tag/attribute allowlist for lesson bodies. Deliberately tight:
 	 * exactly what the editor toolbar can produce. No `style` attribute, so
 	 * highlights must be class-based and cannot smuggle arbitrary CSS.
@@ -71,6 +84,17 @@ class TBT_Notes_Sanitizer {
 			'h2'         => array(),
 			'h3'         => array(),
 			'blockquote' => array(),
+			// Uploaded lesson photos. src is further constrained in normalize()
+			// to the site's own uploads directory; no style attribute is allowed.
+			'img'        => array(
+				'src'     => true,
+				'alt'     => true,
+				'title'   => true,
+				'width'   => true,
+				'height'  => true,
+				'loading' => true,
+				'class'   => true,
+			),
 		);
 	}
 
@@ -127,7 +151,8 @@ class TBT_Notes_Sanitizer {
 			return self::normalize_fallback( $html );
 		}
 
-		$allowed_classes = self::allowed_classes();
+		$allowed_classes       = self::allowed_classes();
+		$allowed_image_classes = self::allowed_image_classes();
 
 		// Encode non-ASCII as numeric entities so DOMDocument preserves UTF-8
 		// without us having to inject an XML/meta declaration.
@@ -150,13 +175,39 @@ class TBT_Notes_Sanitizer {
 			$a->setAttribute( 'rel', 'noopener noreferrer' );
 		}
 
-		// Classes: keep only approved highlight classes.
+		// Images: only our own uploaded photos survive. Anything with an empty
+		// src, or a src outside this site's uploads directory (external images,
+		// tracking pixels, data: URLs), is removed entirely. Everything that stays
+		// is forced to lazy-load and stripped of non-numeric dimensions.
+		$uploads_base = self::uploads_base_url();
+		foreach ( iterator_to_array( $xpath->query( '//img' ) ) as $img ) {
+			/** @var DOMElement $img */
+			$src = trim( $img->getAttribute( 'src' ) );
+			if ( '' === $src || ! self::is_local_upload_url( $src, $uploads_base ) ) {
+				if ( $img->parentNode ) {
+					$img->parentNode->removeChild( $img );
+				}
+				continue;
+			}
+
+			$img->setAttribute( 'loading', 'lazy' );
+
+			foreach ( array( 'width', 'height' ) as $dim ) {
+				if ( $img->hasAttribute( $dim ) && ! ctype_digit( $img->getAttribute( $dim ) ) ) {
+					$img->removeAttribute( $dim );
+				}
+			}
+		}
+
+		// Classes: keep only approved classes. Images use their own single-class
+		// allowlist; every other element uses the highlight-class allowlist.
 		foreach ( $xpath->query( '//*[@class]' ) as $el ) {
 			/** @var DOMElement $el */
-			$classes = preg_split( '/\s+/', trim( $el->getAttribute( 'class' ) ) );
-			$kept    = array();
+			$permitted = ( 'img' === strtolower( $el->nodeName ) ) ? $allowed_image_classes : $allowed_classes;
+			$classes   = preg_split( '/\s+/', trim( $el->getAttribute( 'class' ) ) );
+			$kept      = array();
 			foreach ( (array) $classes as $class ) {
-				if ( '' !== $class && in_array( $class, $allowed_classes, true ) ) {
+				if ( '' !== $class && in_array( $class, $permitted, true ) ) {
 					$kept[] = $class;
 				}
 			}
@@ -178,6 +229,40 @@ class TBT_Notes_Sanitizer {
 		}
 
 		return trim( $inner );
+	}
+
+	/**
+	 * The site's uploads base URL, or '' if unavailable. Used to confirm an image
+	 * really is one of ours before it is allowed to remain in a lesson body.
+	 *
+	 * @return string
+	 */
+	protected static function uploads_base_url() {
+		if ( ! function_exists( 'wp_upload_dir' ) ) {
+			return '';
+		}
+		$uploads = wp_upload_dir();
+		return ( is_array( $uploads ) && ! empty( $uploads['baseurl'] ) ) ? $uploads['baseurl'] : '';
+	}
+
+	/**
+	 * Is $src a URL inside this site's uploads directory? The scheme is ignored so
+	 * an http/https mismatch (common behind proxies/CDNs) does not reject our own
+	 * images. If the uploads base URL is unknown we cannot vouch for the image, so
+	 * we treat it as not-local and let the caller drop it.
+	 *
+	 * @param string $src  Image src attribute.
+	 * @param string $base Uploads base URL (may be '').
+	 * @return bool
+	 */
+	protected static function is_local_upload_url( $src, $base ) {
+		if ( '' === $base ) {
+			return false;
+		}
+		$strip = function ( $url ) {
+			return preg_replace( '#^https?:#i', '', trim( (string) $url ) );
+		};
+		return 0 === strpos( $strip( $src ), $strip( $base ) );
 	}
 
 	/**

@@ -301,6 +301,76 @@
 		} );
 	}
 
+	/* ------------------------------------------------------------ Image upload */
+
+	var IMAGE_MAX_BYTES = 8 * 1024 * 1024; // 8 MB, matching the server cap.
+
+	/**
+	 * Upload one image file to a lesson via multipart/form-data. Kept separate
+	 * from api() (which is JSON-only) and free of a Content-Type header so the
+	 * browser sets the multipart boundary. Reusable by a future paste flow: it
+	 * only needs a lesson id and a File/Blob.
+	 *
+	 * @param {number} lessonId Lesson id.
+	 * @param {File}   file     Image file.
+	 * @return {Promise<Object>} Resolves with the parsed { image } response.
+	 */
+	function uploadLessonImage( lessonId, file ) {
+		var form = new FormData();
+		form.append( 'file', file );
+
+		return fetch( cfg.restUrl + 'lessons/' + lessonId + '/image', {
+			method: 'POST',
+			headers: {
+				'X-WP-Nonce': cfg.nonce,
+			},
+			credentials: 'same-origin',
+			body: form,
+		} ).then( function ( res ) {
+			return res.json().catch( function () {
+				return null;
+			} ).then( function ( data ) {
+				if ( ! res.ok ) {
+					var err = new Error( ( data && data.message ) || t( 'imageError', 'Could not upload the image. Please try again.' ) );
+					err.status = res.status;
+					throw err;
+				}
+				return data;
+			} );
+		} );
+	}
+
+	/**
+	 * Client-side pre-check for a chosen image. UX only — the server remains the
+	 * authority. Returns an error message string, or '' when the file looks OK.
+	 *
+	 * @param {File} file Chosen file.
+	 * @return {string}
+	 */
+	function validateImageFile( file ) {
+		if ( ! file ) {
+			return t( 'imageTypeError', 'Please choose a JPG or PNG image.' );
+		}
+		var type = ( file.type || '' ).toLowerCase();
+		var name = ( file.name || '' ).toLowerCase();
+		var extOk = /\.(jpe?g|png)$/.test( name );
+
+		if ( type ) {
+			// Trust the reported MIME type when the browser gives us one.
+			if ( type !== 'image/jpeg' && type !== 'image/png' ) {
+				return t( 'imageTypeError', 'Please choose a JPG or PNG image.' );
+			}
+		} else if ( ! extOk ) {
+			// No type (some phones) — fall back to the file extension.
+			return t( 'imageTypeError', 'Please choose a JPG or PNG image.' );
+		}
+
+		if ( file.size > IMAGE_MAX_BYTES ) {
+			return t( 'imageTooLarge', 'The image is too large. Please choose an image under 8 MB.' );
+		}
+		return '';
+	}
+
 	/* ---------------------------------------------------------- Panel open/close */
 
 	function openPanel( opener ) {
@@ -1751,9 +1821,17 @@
 		g1.appendChild( qbtn( 'ql-strike', null, t( 'strike', 'Strikethrough' ) ) );
 		bar.appendChild( g1 );
 
-		// 3. Link.
+		// 3. Link + photo upload. A custom (non-ql) image button so we never get
+		//    Quill's default "paste an image URL" prompt: uploads go through our
+		//    own file picker + REST route instead (wired up in initEditor).
 		var g2 = group();
 		g2.appendChild( qbtn( 'ql-link', null, t( 'link', 'Link' ) ) );
+		var imgBtn = el( 'button', 'tbt-image-trigger' );
+		imgBtn.type = 'button';
+		imgBtn.setAttribute( 'aria-label', t( 'addPhoto', 'Add photo' ) );
+		imgBtn.title = t( 'addPhoto', 'Add photo' );
+		imgBtn.textContent = '🖼';
+		g2.appendChild( imgBtn );
 		bar.appendChild( g2 );
 
 		// 4. Lists + indentation.
@@ -1850,6 +1928,7 @@
 				'header',
 				'blockquote',
 				'highlight',
+				'image',
 			],
 		} );
 
@@ -1935,6 +2014,8 @@
 			}
 		} );
 
+		setupImageUpload( quill, toolbar, editorEl, lesson, saver, indicator );
+
 		headerInput.addEventListener( 'input', function () {
 			lesson.header = headerInput.value;
 			saver.queue( { header: headerInput.value } );
@@ -1954,6 +2035,249 @@
 				quill.focus();
 			}
 		}, 60 );
+	}
+
+	/**
+	 * Wire the toolbar photo button to a hidden file input and the upload route,
+	 * and add a small "Replace / Delete" overlay that appears when the teacher
+	 * clicks an image in the editor. Selecting a JPG/PNG uploads it, inserts it at
+	 * the caret (or replaces the selected image), and lets the existing autosave
+	 * persist the new body. The upload path (uploadLessonImage + insertUploadedImage)
+	 * is deliberately generic so a future paste-from-clipboard feature can reuse it
+	 * with a File pulled from clipboardData.
+	 */
+	function setupImageUpload( quill, toolbar, editorEl, lesson, saver, indicator ) {
+		var imgBtn = toolbar.querySelector( '.tbt-image-trigger' );
+		var wrap = editorEl.parentNode || editorEl;
+
+		// Hidden native picker: JPG/PNG only. Lives in the editor wrapper so it is
+		// torn down with the editor.
+		var imageInput = document.createElement( 'input' );
+		imageInput.type = 'file';
+		imageInput.accept = 'image/jpeg,image/png,.jpg,.jpeg,.png';
+		imageInput.hidden = true;
+		wrap.appendChild( imageInput );
+
+		// Floating Replace/Delete controls, shown over the clicked image. Anchored
+		// inside the (position:relative) editor wrap.
+		var controls = el( 'div', 'tbt-notes-image-controls' );
+		controls.hidden = true;
+		var replaceBtn = el( 'button', 'tbt-notes-image-controls__btn', t( 'replacePhoto', 'Replace' ) );
+		replaceBtn.type = 'button';
+		var deleteBtn = el( 'button', 'tbt-notes-image-controls__btn tbt-notes-image-controls__btn--danger', t( 'deletePhoto', 'Delete' ) );
+		deleteBtn.type = 'button';
+		controls.appendChild( replaceBtn );
+		controls.appendChild( deleteBtn );
+		wrap.appendChild( controls );
+
+		var uploading = false;
+		var selectedImg = null;   // Image currently showing the controls.
+		var replaceTarget = null; // Image being replaced by the next upload.
+
+		function setBusy( busy ) {
+			uploading = busy;
+			if ( imgBtn ) {
+				imgBtn.disabled = busy;
+				imgBtn.title = busy ? t( 'imageUploading', 'Uploading…' ) : t( 'addPhoto', 'Add photo' );
+			}
+			if ( indicator && busy ) {
+				indicator.className = 'tbt-notes-saveind is-saving';
+				indicator.textContent = t( 'imageUploadingSave', 'Uploading image…' );
+			}
+		}
+
+		// Resolve an <img> DOM node to its Quill document index (or -1).
+		function imageIndex( node ) {
+			if ( ! node || typeof window.Quill === 'undefined' || ! window.Quill.find ) {
+				return -1;
+			}
+			var blot = window.Quill.find( node );
+			if ( ! blot ) {
+				return -1;
+			}
+			try {
+				return quill.getIndex( blot );
+			} catch ( e ) {
+				return -1;
+			}
+		}
+
+		function positionControls() {
+			if ( ! selectedImg ) {
+				return;
+			}
+			// Hide the controls if the image has scrolled out of the editor viewport.
+			var contRect = editorEl.getBoundingClientRect();
+			var imgRect = selectedImg.getBoundingClientRect();
+			if ( imgRect.bottom < contRect.top || imgRect.top > contRect.bottom ) {
+				controls.hidden = true;
+				return;
+			}
+			controls.hidden = false;
+			var wrapRect = wrap.getBoundingClientRect();
+			var top = Math.max( imgRect.top - wrapRect.top + 8, contRect.top - wrapRect.top + 8 );
+			var left = imgRect.right - wrapRect.left - controls.offsetWidth - 8;
+			controls.style.top = top + 'px';
+			controls.style.left = Math.max( left, 8 ) + 'px';
+		}
+
+		function selectImage( node ) {
+			if ( selectedImg && selectedImg !== node ) {
+				selectedImg.classList.remove( 'is-selected' );
+			}
+			selectedImg = node;
+			selectedImg.classList.add( 'is-selected' );
+			controls.hidden = false;
+			positionControls();
+		}
+
+		function deselectImage() {
+			if ( selectedImg ) {
+				selectedImg.classList.remove( 'is-selected' );
+			}
+			selectedImg = null;
+			controls.hidden = true;
+		}
+
+		// Click an image to select it; click anywhere else in the editor to clear.
+		quill.root.addEventListener( 'click', function ( e ) {
+			if ( e.target && 'IMG' === e.target.tagName ) {
+				selectImage( e.target );
+			} else {
+				deselectImage();
+			}
+		} );
+
+		// Keep the overlay glued to the image as the editor scrolls or reflows.
+		editorEl.addEventListener( 'scroll', function () {
+			if ( selectedImg ) {
+				positionControls();
+			}
+		}, true );
+		window.addEventListener( 'resize', function () {
+			if ( selectedImg ) {
+				positionControls();
+			}
+		} );
+		quill.on( 'text-change', function () {
+			if ( ! selectedImg ) {
+				return;
+			}
+			// The selected image may have been removed (e.g. undo); drop the overlay.
+			if ( ! selectedImg.parentNode ) {
+				deselectImage();
+			} else {
+				positionControls();
+			}
+		} );
+		quill.root.addEventListener( 'keydown', function ( e ) {
+			if ( 'Escape' === e.key && selectedImg ) {
+				deselectImage();
+			}
+		} );
+
+		// Don't let a mousedown on the controls steal focus/selection from Quill.
+		controls.addEventListener( 'mousedown', function ( e ) {
+			e.preventDefault();
+		} );
+
+		deleteBtn.addEventListener( 'click', function () {
+			if ( ! selectedImg ) {
+				return;
+			}
+			var index = imageIndex( selectedImg );
+			deselectImage();
+			if ( index < 0 ) {
+				return;
+			}
+			quill.deleteText( index, 1, 'user' );
+			// deleteText('user') fires text-change (body + autosave); belt-and-braces.
+			var html = quill.getSemanticHTML();
+			lesson.body = html;
+			saver.queue( { body: html } );
+		} );
+
+		replaceBtn.addEventListener( 'click', function () {
+			if ( uploading || ! selectedImg ) {
+				return;
+			}
+			replaceTarget = selectedImg; // Remember which image to swap.
+			deselectImage();
+			imageInput.click();
+		} );
+
+		if ( imgBtn ) {
+			// Keep the editor selection while clicking the toolbar button.
+			imgBtn.addEventListener( 'mousedown', function ( e ) {
+				e.preventDefault();
+			} );
+			imgBtn.addEventListener( 'click', function () {
+				if ( ! uploading ) {
+					replaceTarget = null; // Toolbar button always inserts a new image.
+					imageInput.click();
+				}
+			} );
+		}
+
+		imageInput.addEventListener( 'change', function () {
+			var file = imageInput.files && imageInput.files[ 0 ];
+			if ( ! file ) {
+				return;
+			}
+			var problem = validateImageFile( file );
+			if ( problem ) {
+				window.alert( problem );
+				imageInput.value = ''; // Allow re-selecting the same file later.
+				replaceTarget = null;
+				return;
+			}
+
+			var target = replaceTarget; // Capture for the async callback.
+			replaceTarget = null;
+			setBusy( true );
+			uploadLessonImage( lesson.id, file ).then( function ( data ) {
+				if ( ! data || ! data.image || ! data.image.url ) {
+					throw new Error( t( 'imageError', 'Could not upload the image. Please try again.' ) );
+				}
+				insertUploadedImage( quill, lesson, saver, data.image, imageIndex( target ) );
+			} ).catch( function ( err ) {
+				window.alert( ( err && err.message ) || t( 'imageError', 'Could not upload the image. Please try again.' ) );
+			} ).then( function () {
+				// Runs on success and failure alike (finally).
+				setBusy( false );
+				imageInput.value = '';
+			} );
+		} );
+	}
+
+	/**
+	 * Insert an already-uploaded image into Quill, then make sure the new body is
+	 * queued for autosave. When replaceIndex points at an existing image (>= 0),
+	 * that image is swapped in place; otherwise the image is inserted at the
+	 * current caret (or the end of the document). Only trusted, server-returned
+	 * upload URLs are ever inserted — never a local blob: or data: URL.
+	 */
+	function insertUploadedImage( quill, lesson, saver, image, replaceIndex ) {
+		if ( replaceIndex != null && replaceIndex >= 0 ) {
+			// Swap in place: drop the old embed, drop a new one where it stood. The
+			// trailing newline after the old image is left untouched.
+			quill.deleteText( replaceIndex, 1, 'user' );
+			quill.insertEmbed( replaceIndex, 'image', image.url, 'user' );
+			quill.setSelection( replaceIndex + 1, 0, 'silent' );
+		} else {
+			var range = quill.getSelection( true );
+			var index = range ? range.index : quill.getLength();
+			quill.insertEmbed( index, 'image', image.url, 'user' );
+			quill.insertText( index + 1, '\n', 'user' );
+			quill.setSelection( index + 2, 0, 'silent' );
+		}
+
+		// insertEmbed/deleteText with source 'user' fires text-change (which updates
+		// lesson.body + queues a save); do it explicitly too so the change is never
+		// left unsaved.
+		var html = quill.getSemanticHTML();
+		lesson.body = html;
+		saver.queue( { body: html } );
 	}
 
 	/* ----------------------------------------------------------- AI Quick Note */

@@ -1600,6 +1600,83 @@ body.tbt-notes-open {
 	color: var(--tbt-muted);
 }
 
+/* ------------------------------------------------------------ Lesson images */
+
+/* Toolbar photo button (🖼). Slightly larger glyph so it reads clearly. */
+.tbt-notes-editor-quillwrap .ql-toolbar .tbt-image-trigger {
+	font-size: 16px !important;
+	line-height: 1;
+	cursor: pointer;
+}
+
+.tbt-notes-editor-quillwrap .ql-toolbar .tbt-image-trigger:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+
+/* Uploaded photos in both the read-only view and the live editor. Never wider
+   than the note column; keep the natural aspect ratio. */
+.tbt-notes-read img,
+.tbt-notes-editorwrap .ql-editor img {
+	display: block;
+	max-width: 100%;
+	height: auto;
+	margin: 12px 0;
+	border-radius: 10px;
+}
+
+/* In the editor, clicking a photo selects it (shows the Replace/Delete bar). */
+.tbt-notes-editorwrap .ql-editor img {
+	cursor: pointer;
+}
+
+.tbt-notes-editorwrap .ql-editor img.is-selected {
+	outline: 2px solid var(--tbt-accent);
+	outline-offset: 2px;
+}
+
+/* Floating Replace/Delete controls, anchored over the selected photo. */
+.tbt-notes-image-controls {
+	position: absolute;
+	z-index: 4;
+	display: flex;
+	gap: 6px;
+	padding: 4px;
+	background: var(--tbt-panel-bg);
+	border: 1px solid var(--tbt-border);
+	border-radius: 999px;
+	box-shadow: 0 4px 14px rgba( 17, 52, 107, 0.18 );
+}
+
+.tbt-notes-image-controls[hidden] {
+	display: none;
+}
+
+.tbt-notes-image-controls__btn {
+	border: 0;
+	border-radius: 999px;
+	padding: 4px 12px;
+	font-size: 13px;
+	font-weight: 600;
+	line-height: 1.4;
+	cursor: pointer;
+	background: var(--tbt-accent-soft);
+	color: var(--tbt-accent-contrast);
+}
+
+.tbt-notes-image-controls__btn:hover {
+	background: var(--tbt-accent-soft-hover);
+}
+
+.tbt-notes-image-controls__btn--danger {
+	background: rgba( 204, 0, 0, 0.1 );
+	color: #a10000;
+}
+
+.tbt-notes-image-controls__btn--danger:hover {
+	background: rgba( 204, 0, 0, 0.18 );
+}
+
 /* ----------------------------------------------------------- AI Quick Note */
 
 /* Toolbar launcher (✨ Ask AI). Reset Quill's square button sizing so the
@@ -1949,6 +2026,16 @@ body.tbt-notes-open {
 		padding-bottom: 8px;
 		border-bottom: 2px solid #000;
 	}
+
+	/* Keep photos within the page and never split a photo across pages. */
+	.tbt-notes-read img,
+	.tbt-notes-editorwrap .ql-editor img {
+		max-width: 100%;
+		height: auto;
+		break-inside: avoid;
+		page-break-inside: avoid;
+	}
+
 	.tbt-notes-print-head__class {
 		font-size: 22px;
 		font-weight: 700;
