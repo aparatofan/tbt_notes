@@ -337,6 +337,8 @@ class TBT_Notes_Frontend {
 			'removeHighlight'   => __( 'No highlight', 'tbt-notes' ),
 			// Image upload.
 			'addPhoto'          => __( 'Add photo', 'tbt-notes' ),
+			'replacePhoto'      => __( 'Replace', 'tbt-notes' ),
+			'deletePhoto'       => __( 'Delete', 'tbt-notes' ),
 			'imageUploading'    => __( 'Uploading…', 'tbt-notes' ),
 			'imageUploadingSave' => __( 'Uploading image…', 'tbt-notes' ),
 			'imageTypeError'    => __( 'Please choose a JPG or PNG image.', 'tbt-notes' ),
