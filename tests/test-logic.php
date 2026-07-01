@@ -42,6 +42,14 @@ function wp_strip_all_tags_simple( $str ) {
 }
 
 /**
+ * Stub the uploads location so the sanitiser can tell our own images from
+ * external ones. Only the base URL matters for normalisation.
+ */
+function wp_upload_dir() {
+	return array( 'baseurl' => 'https://example.com/wp-content/uploads' );
+}
+
+/**
  * Pass-through stub. Real WordPress wp_kses enforces the allowlist; we trust it
  * and instead assert the allowlist's contents directly (see test_allowlist).
  */
@@ -240,7 +248,9 @@ function test_allowlist() {
 	ok( ! isset( $allowed['script'] ), 'script tag is not allowed' );
 	ok( ! isset( $allowed['style'] ), 'style tag is not allowed' );
 	ok( ! isset( $allowed['iframe'] ), 'iframe is not allowed' );
-	ok( ! isset( $allowed['img'] ), 'img is not allowed (no images in v1)' );
+	ok( isset( $allowed['img'] ), 'img is allowed (lesson photo upload)' );
+	ok( isset( $allowed['img']['src'], $allowed['img']['alt'], $allowed['img']['loading'] ), 'img allows src/alt/loading' );
+	ok( ! isset( $allowed['img']['style'], $allowed['img']['onerror'] ), 'img does not allow style/onerror' );
 	ok( isset( $allowed['a']['href'], $allowed['a']['target'], $allowed['a']['rel'] ), 'links allow href/target/rel' );
 	ok( ! isset( $allowed['a']['style'] ), 'links do not allow inline style' );
 	ok( isset( $allowed['span']['class'] ), 'span allows class (for highlights)' );
@@ -251,6 +261,9 @@ function test_allowlist() {
 
 	$classes = TBT_Notes_Sanitizer::allowed_classes();
 	ok( $classes === array( 'tbt-hl-blue', 'tbt-hl-red', 'tbt-hl-yellow', 'tbt-hl-pink', 'tbt-hl-green' ), 'five highlight classes (blue/red/yellow/pink/green)' );
+
+	$img_classes = TBT_Notes_Sanitizer::allowed_image_classes();
+	ok( $img_classes === array( 'tbt-notes-image' ), 'one approved image class (tbt-notes-image)' );
 }
 test_allowlist();
 
@@ -293,6 +306,48 @@ function test_classes() {
 	ok( ! contains( $out4, 'tbt-hl-evil' ), 'drops fake highlight colour' );
 }
 test_classes();
+
+echo "Normalize — lesson images:\n";
+function test_images() {
+	$base = 'https://example.com/wp-content/uploads/2026/07/note.jpg';
+
+	// Our own upload survives and is forced to lazy-load.
+	$out = call_normalize( '<p><img src="' . $base . '" alt="Notes"></p>' );
+	ok( contains( $out, 'src="' . $base . '"' ), 'keeps an image from our uploads dir' );
+	ok( contains( $out, 'loading="lazy"' ), 'forces loading=lazy on kept images' );
+	ok( contains( $out, 'alt="Notes"' ), 'keeps the alt text' );
+
+	// A scheme mismatch (http vs https) must not reject our own image.
+	$out_http = call_normalize( '<img src="http://example.com/wp-content/uploads/a.png">' );
+	ok( contains( $out_http, 'wp-content/uploads/a.png' ), 'ignores http/https scheme mismatch for own uploads' );
+
+	// External images are removed entirely.
+	$out_ext = call_normalize( '<p><img src="https://evil.example/tracker.png"></p>' );
+	ok( ! contains( $out_ext, 'evil.example' ), 'drops an external image (tracking pixel)' );
+
+	// data: URLs are not our uploads and must go.
+	$out_data = call_normalize( '<img src="data:image/png;base64,AAAA">' );
+	ok( ! contains( $out_data, 'data:image' ), 'drops a data: URL image' );
+
+	// Empty src is removed.
+	$out_empty = call_normalize( '<img src="">' );
+	ok( ! contains( $out_empty, '<img' ), 'drops an image with an empty src' );
+
+	// Only the approved image class survives; sneaky classes are stripped.
+	$out_cls = call_normalize( '<img src="' . $base . '" class="tbt-notes-image sneaky">' );
+	ok( contains( $out_cls, 'tbt-notes-image' ), 'keeps the approved image class' );
+	ok( ! contains( $out_cls, 'sneaky' ), 'drops non-approved image classes' );
+
+	// A highlight class must not ride along on an image.
+	$out_hl = call_normalize( '<img src="' . $base . '" class="tbt-hl-blue">' );
+	ok( ! contains( $out_hl, 'tbt-hl-blue' ), 'highlight classes are not allowed on images' );
+
+	// Non-numeric dimensions are dropped.
+	$out_dim = call_normalize( '<img src="' . $base . '" width="100" height="abc">' );
+	ok( contains( $out_dim, 'width="100"' ), 'keeps numeric width' );
+	ok( ! contains( $out_dim, 'height="abc"' ), 'drops non-numeric height' );
+}
+test_images();
 
 echo "Normalize — nested lists survive:\n";
 function test_lists() {

@@ -335,6 +335,13 @@ class TBT_Notes_Frontend {
 			'heading2'          => __( 'H2', 'tbt-notes' ),
 			'heading3'          => __( 'H3', 'tbt-notes' ),
 			'removeHighlight'   => __( 'No highlight', 'tbt-notes' ),
+			// Image upload.
+			'addPhoto'          => __( 'Add photo', 'tbt-notes' ),
+			'imageUploading'    => __( 'Uploading…', 'tbt-notes' ),
+			'imageUploadingSave' => __( 'Uploading image…', 'tbt-notes' ),
+			'imageTypeError'    => __( 'Please choose a JPG or PNG image.', 'tbt-notes' ),
+			'imageTooLarge'     => __( 'The image is too large. Please choose an image under 8 MB.', 'tbt-notes' ),
+			'imageError'        => __( 'Could not upload the image. Please try again.', 'tbt-notes' ),
 			'show'              => __( 'Show', 'tbt-notes' ),
 			'fullNote'          => __( 'Full note', 'tbt-notes' ),
 			'allHighlights'     => __( 'All highlights', 'tbt-notes' ),
