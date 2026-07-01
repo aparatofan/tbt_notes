@@ -111,4 +111,19 @@ class TBT_Notes_Capabilities {
 		}
 		return user_can( $user_id, TBT_NOTES_CAP ) || user_can( $user_id, 'manage_options' );
 	}
+
+	/**
+	 * Can the current (or a given) user manage every class regardless of who
+	 * created it? Reserved for site administrators (manage_options). Ordinary
+	 * teachers manage only the classes they own; administrators oversee all.
+	 *
+	 * @param int|null $user_id Optional user ID. Defaults to current user.
+	 * @return bool
+	 */
+	public static function user_can_manage_all( $user_id = null ) {
+		if ( null === $user_id ) {
+			return current_user_can( 'manage_options' );
+		}
+		return user_can( $user_id, 'manage_options' );
+	}
 }

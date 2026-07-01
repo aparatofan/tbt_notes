@@ -88,10 +88,12 @@ class TBT_Notes_DB {
 		$sql_classes = "CREATE TABLE {$classes} (
   id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
   title varchar(255) NOT NULL DEFAULT '',
+  teacher_id bigint(20) unsigned NOT NULL DEFAULT 0,
   student_id bigint(20) unsigned DEFAULT NULL,
   created_at datetime NOT NULL,
   updated_at datetime NOT NULL,
   PRIMARY KEY  (id),
+  KEY teacher_id (teacher_id),
   KEY created_at (created_at)
 ) {$charset_collate};";
 
@@ -232,22 +234,46 @@ class TBT_Notes_DB {
 	}
 
 	/**
-	 * Create a class.
+	 * Classes created by a given teacher, newest first. This is the per-teacher
+	 * visibility list: a teacher sees only their own classes, never another
+	 * teacher's.
 	 *
-	 * @param string $title Free-text title.
+	 * @param int $teacher_id Owner (teacher) user ID.
+	 * @return array[]
+	 */
+	public static function get_classes_for_teacher( $teacher_id ) {
+		global $wpdb;
+		$teacher_id = (int) $teacher_id;
+		if ( $teacher_id <= 0 ) {
+			return array();
+		}
+		$table = self::table_classes();
+		$rows  = $wpdb->get_results(
+			$wpdb->prepare( "SELECT * FROM {$table} WHERE teacher_id = %d ORDER BY created_at DESC, id DESC", $teacher_id ),
+			ARRAY_A
+		);
+		return array_map( array( __CLASS__, 'shape_class' ), $rows ? $rows : array() );
+	}
+
+	/**
+	 * Create a class owned by a teacher.
+	 *
+	 * @param string $title      Free-text title.
+	 * @param int    $teacher_id Owner (teacher) user ID.
 	 * @return int|false New class ID or false.
 	 */
-	public static function create_class( $title ) {
+	public static function create_class( $title, $teacher_id = 0 ) {
 		global $wpdb;
 		$now = self::now();
 		$ok  = $wpdb->insert(
 			self::table_classes(),
 			array(
 				'title'      => (string) $title,
+				'teacher_id' => (int) $teacher_id,
 				'created_at' => $now,
 				'updated_at' => $now,
 			),
-			array( '%s', '%s', '%s' )
+			array( '%s', '%d', '%s', '%s' )
 		);
 		return $ok ? (int) $wpdb->insert_id : false;
 	}
@@ -887,6 +913,7 @@ class TBT_Notes_DB {
 		return array(
 			'id'         => (int) $row['id'],
 			'title'      => (string) $row['title'],
+			'teacher_id' => isset( $row['teacher_id'] ) ? (int) $row['teacher_id'] : 0,
 			'created_at' => (string) $row['created_at'],
 			'updated_at' => (string) $row['updated_at'],
 		);

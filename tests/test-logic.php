@@ -379,38 +379,52 @@ function test_visibility() {
 	$student_id = 20;
 	$other_id   = 30;
 
-	$GLOBALS['__user_can'] = array( $teacher_id => true ); // Only 10 can manage.
+	// A plain teacher: has the manage cap but is NOT a site administrator.
+	$GLOBALS['__user_can'] = array( $teacher_id => array( 'manage_tbt_notes' ) );
 
-	$class = array( 'id' => 1, 'student_ids' => array( $student_id ) );
+	// A class this teacher created (teacher_id === 10).
+	$own = array( 'id' => 1, 'teacher_id' => $teacher_id, 'student_ids' => array( $student_id ) );
 
-	ok( TBT_Notes_REST::user_can_view_class( $class, $teacher_id ) === true, 'teacher can view any class' );
-	ok( TBT_Notes_REST::user_can_view_class( $class, $student_id ) === true, 'a member student can view their class' );
-	ok( TBT_Notes_REST::user_can_view_class( $class, $other_id ) === false, 'a non-member cannot view it' );
-	ok( TBT_Notes_REST::user_can_view_class( $class, 0 ) === false, 'logged-out (id 0) cannot view' );
+	ok( TBT_Notes_REST::user_can_view_class( $own, $teacher_id ) === true, 'teacher can view a class they created' );
+	ok( TBT_Notes_REST::user_can_view_class( $own, $student_id ) === true, 'a member student can view their class' );
+	ok( TBT_Notes_REST::user_can_view_class( $own, $other_id ) === false, 'a non-member cannot view it' );
+	ok( TBT_Notes_REST::user_can_view_class( $own, 0 ) === false, 'logged-out (id 0) cannot view' );
+
+	// The core bug fix: a class created by a DIFFERENT teacher is invisible.
+	$others = array( 'id' => 7, 'teacher_id' => 999, 'student_ids' => array() );
+	ok( TBT_Notes_REST::user_can_view_class( $others, $teacher_id ) === false, "teacher cannot view another teacher's class" );
+	ok( TBT_Notes_REST::user_can_manage_class( $others, $teacher_id ) === false, "teacher cannot manage another teacher's class" );
+	ok( TBT_Notes_REST::user_can_manage_class( $own, $teacher_id ) === true, 'teacher can manage a class they created' );
+
+	// A class with a missing/zero owner (legacy row) is not owned by any teacher.
+	$legacy = array( 'id' => 8, 'teacher_id' => 0, 'student_ids' => array() );
+	ok( TBT_Notes_REST::user_can_view_class( $legacy, $teacher_id ) === false, 'teacher does not own an unowned (legacy) class' );
 
 	// Many students per class: every member sees it; outsiders do not.
-	$group = array( 'id' => 5, 'student_ids' => array( $student_id, $other_id, 99 ) );
+	$group = array( 'id' => 5, 'teacher_id' => $teacher_id, 'student_ids' => array( $student_id, $other_id, 99 ) );
 	ok( TBT_Notes_REST::user_can_view_class( $group, $student_id ) === true, 'group member 1 can view' );
 	ok( TBT_Notes_REST::user_can_view_class( $group, $other_id ) === true, 'group member 2 can view' );
 	ok( TBT_Notes_REST::user_can_view_class( $group, 12345 ) === false, 'non-member cannot view the group' );
 
-	$empty_class = array( 'id' => 2, 'student_ids' => array() );
-	ok( TBT_Notes_REST::user_can_view_class( $empty_class, $teacher_id ) === true, 'teacher sees a class with no students' );
+	$empty_class = array( 'id' => 2, 'teacher_id' => $teacher_id, 'student_ids' => array() );
+	ok( TBT_Notes_REST::user_can_view_class( $empty_class, $teacher_id ) === true, 'teacher sees their own class with no students' );
 	ok( TBT_Notes_REST::user_can_view_class( $empty_class, $student_id ) === false, 'student cannot see a class they are not in' );
 
 	ok( TBT_Notes_REST::user_can_view_class( array(), $student_id ) === false, 'empty class array is not viewable' );
 
-	// Administrators (manage_options) always manage, even without the custom cap.
+	// Administrators (manage_options) oversee every class, whoever created it.
 	$admin_id = 40;
 	$GLOBALS['__user_can'] = array( $admin_id => array( 'manage_options' ) );
-	$someones_class = array( 'id' => 9, 'student_ids' => array( 99 ) );
+	$someones_class = array( 'id' => 9, 'teacher_id' => 999, 'student_ids' => array( 99 ) );
 	ok( TBT_Notes_REST::user_can_view_class( $someones_class, $admin_id ) === true, 'manage_options admin sees any class' );
+	ok( TBT_Notes_REST::user_can_manage_class( $someones_class, $admin_id ) === true, 'manage_options admin manages any class' );
 
 	// A plain user with no relevant caps sees only a class they belong to.
 	$plain_id = 50;
 	$GLOBALS['__user_can'] = array( $plain_id => array( 'read' ) );
 	ok( TBT_Notes_REST::user_can_view_class( $someones_class, $plain_id ) === false, 'plain user cannot view others' );
-	ok( TBT_Notes_REST::user_can_view_class( array( 'id' => 9, 'student_ids' => array( $plain_id ) ), $plain_id ) === true, 'plain user can view their own class' );
+	ok( TBT_Notes_REST::user_can_view_class( array( 'id' => 9, 'teacher_id' => 999, 'student_ids' => array( $plain_id ) ), $plain_id ) === true, 'plain user can view their own class' );
+	ok( TBT_Notes_REST::user_can_manage_class( $someones_class, $plain_id ) === false, 'plain user cannot manage any class' );
 }
 test_visibility();
 

@@ -29,7 +29,7 @@ define( 'TBT_NOTES_VERSION', '1.2.0' );
  * Database schema version. Bump when the table structure changes so that
  * activation/upgrade can run dbDelta again.
  */
-define( 'TBT_NOTES_DB_VERSION', '4' );
+define( 'TBT_NOTES_DB_VERSION', '5' );
 
 /**
  * Capability that gates all teacher/admin functionality (creating classes,

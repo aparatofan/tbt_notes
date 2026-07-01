@@ -309,7 +309,34 @@ class TBT_Notes_REST {
 	}
 
 	/**
-	 * Core ownership decision used across read paths.
+	 * Can a teacher/admin manage (create-inside, edit, delete) this class? Site
+	 * administrators manage every class; an ordinary teacher manages only the
+	 * classes they created. This is the ownership rule that keeps one teacher out
+	 * of another teacher's classes.
+	 *
+	 * @param array $class   Shaped class row including a 'teacher_id'.
+	 * @param int   $user_id Current user ID.
+	 * @return bool
+	 */
+	public static function user_can_manage_class( $class, $user_id ) {
+		$user_id = (int) $user_id;
+		if ( $user_id <= 0 || empty( $class ) ) {
+			return false;
+		}
+		if ( ! TBT_Notes_Capabilities::user_can_manage( $user_id ) ) {
+			return false;
+		}
+		// Administrators oversee every class regardless of who created it.
+		if ( TBT_Notes_Capabilities::user_can_manage_all( $user_id ) ) {
+			return true;
+		}
+		// A teacher owns only the classes they created.
+		return isset( $class['teacher_id'] ) && (int) $class['teacher_id'] === $user_id;
+	}
+
+	/**
+	 * Core ownership decision used across read paths. Managers see the classes
+	 * they own (admins see all); a student sees only the class they belong to.
 	 *
 	 * @param array $class   Shaped class row including a 'student_ids' array.
 	 * @param int   $user_id Current user ID.
@@ -321,10 +348,63 @@ class TBT_Notes_REST {
 			return false;
 		}
 		if ( TBT_Notes_Capabilities::user_can_manage( $user_id ) ) {
-			return true;
+			return self::user_can_manage_class( $class, $user_id );
 		}
 		$student_ids = isset( $class['student_ids'] ) ? array_map( 'intval', (array) $class['student_ids'] ) : array();
 		return in_array( $user_id, $student_ids, true );
+	}
+
+	/**
+	 * Guard a teacher/admin write against class ownership. Returns null when the
+	 * current user may manage the class, or a 403 WP_Error when not. Used by the
+	 * write handlers, whose permission callback only proves the manage capability
+	 * — this adds the per-class ownership check on top.
+	 *
+	 * @param array $class Shaped class row including a 'teacher_id'.
+	 * @return WP_Error|null
+	 */
+	protected function guard_class_ownership( $class ) {
+		if ( self::user_can_manage_class( $class, get_current_user_id() ) ) {
+			return null;
+		}
+		return new WP_Error( 'tbt_notes_forbidden', __( 'You are not allowed to manage this class.', 'tbt-notes' ), array( 'status' => 403 ) );
+	}
+
+	/**
+	 * Guard a teacher/admin write on a lesson (or its generated content) against
+	 * the ownership of the class the lesson belongs to. Returns null when
+	 * allowed, or a WP_Error (403/404) when not.
+	 *
+	 * @param array $lesson Shaped lesson row including a 'class_id'.
+	 * @return WP_Error|null
+	 */
+	protected function guard_lesson_ownership( $lesson ) {
+		$class = TBT_Notes_DB::get_class( (int) $lesson['class_id'] );
+		if ( ! $class ) {
+			return new WP_Error( 'tbt_notes_not_found', __( 'Class not found.', 'tbt-notes' ), array( 'status' => 404 ) );
+		}
+		return $this->guard_class_ownership( $class );
+	}
+
+	/**
+	 * Guard a teacher/admin write on an expression card against the ownership of
+	 * the class the card's lesson belongs to. Returns null when allowed (or when
+	 * the card/lesson no longer exists, leaving the service to report that), or a
+	 * WP_Error (403) when the current user does not own the class.
+	 *
+	 * @param int $card_id Expression card ID.
+	 * @return WP_Error|null
+	 */
+	protected function guard_card_ownership( $card_id ) {
+		$card = TBT_Notes_DB::get_expression_card_by_id( (int) $card_id );
+		if ( ! $card ) {
+			return null;
+		}
+		$lesson = TBT_Notes_DB::get_lesson( (int) $card['lesson_id'] );
+		if ( ! $lesson ) {
+			return null;
+		}
+		return $this->guard_lesson_ownership( $lesson );
 	}
 
 	/* --------------------------------------------------------------------- *
@@ -340,7 +420,13 @@ class TBT_Notes_REST {
 		$is_teacher = TBT_Notes_Capabilities::user_can_manage();
 
 		if ( $is_teacher ) {
-			$classes = TBT_Notes_DB::get_all_classes();
+			// Administrators oversee every class; an ordinary teacher sees only
+			// the classes they created, never another teacher's.
+			if ( TBT_Notes_Capabilities::user_can_manage_all() ) {
+				$classes = TBT_Notes_DB::get_all_classes();
+			} else {
+				$classes = TBT_Notes_DB::get_classes_for_teacher( get_current_user_id() );
+			}
 		} else {
 			$own     = TBT_Notes_DB::get_class_for_student( get_current_user_id() );
 			$classes = $own ? array( $own ) : array();
@@ -439,7 +525,9 @@ class TBT_Notes_REST {
 	public function create_class( WP_REST_Request $request ) {
 		$title = TBT_Notes_Sanitizer::text( (string) $request->get_param( 'title' ) );
 
-		$new_id = TBT_Notes_DB::create_class( $title );
+		// Stamp the creating teacher as the owner so only they (and admins) can
+		// see and manage the class.
+		$new_id = TBT_Notes_DB::create_class( $title, get_current_user_id() );
 		if ( ! $new_id ) {
 			return new WP_Error( 'tbt_notes_create_failed', __( 'Could not create the class.', 'tbt-notes' ), array( 'status' => 500 ) );
 		}
@@ -459,6 +547,10 @@ class TBT_Notes_REST {
 		$class    = TBT_Notes_DB::get_class( $class_id );
 		if ( ! $class ) {
 			return new WP_Error( 'tbt_notes_not_found', __( 'Class not found.', 'tbt-notes' ), array( 'status' => 404 ) );
+		}
+		$denied = $this->guard_class_ownership( $class );
+		if ( $denied ) {
+			return $denied;
 		}
 
 		$fields = array();
@@ -488,6 +580,10 @@ class TBT_Notes_REST {
 		if ( ! $class ) {
 			return new WP_Error( 'tbt_notes_not_found', __( 'Class not found.', 'tbt-notes' ), array( 'status' => 404 ) );
 		}
+		$denied = $this->guard_class_ownership( $class );
+		if ( $denied ) {
+			return $denied;
+		}
 
 		$ok = TBT_Notes_DB::delete_class( $class_id );
 		if ( ! $ok ) {
@@ -512,6 +608,10 @@ class TBT_Notes_REST {
 		$class    = TBT_Notes_DB::get_class( $class_id );
 		if ( ! $class ) {
 			return new WP_Error( 'tbt_notes_not_found', __( 'Class not found.', 'tbt-notes' ), array( 'status' => 404 ) );
+		}
+		$denied = $this->guard_class_ownership( $class );
+		if ( $denied ) {
+			return $denied;
 		}
 
 		$user_id = (int) $request->get_param( 'user_id' );
@@ -558,6 +658,10 @@ class TBT_Notes_REST {
 		if ( ! $class ) {
 			return new WP_Error( 'tbt_notes_not_found', __( 'Class not found.', 'tbt-notes' ), array( 'status' => 404 ) );
 		}
+		$denied = $this->guard_class_ownership( $class );
+		if ( $denied ) {
+			return $denied;
+		}
 
 		TBT_Notes_DB::remove_student_from_class( $class_id, $user_id );
 
@@ -579,6 +683,10 @@ class TBT_Notes_REST {
 		$class    = TBT_Notes_DB::get_class( $class_id );
 		if ( ! $class ) {
 			return new WP_Error( 'tbt_notes_not_found', __( 'Class not found.', 'tbt-notes' ), array( 'status' => 404 ) );
+		}
+		$denied = $this->guard_class_ownership( $class );
+		if ( $denied ) {
+			return $denied;
 		}
 
 		$header = TBT_Notes_Sanitizer::text( (string) $request->get_param( 'header' ) );
@@ -604,6 +712,10 @@ class TBT_Notes_REST {
 		$lesson    = TBT_Notes_DB::get_lesson( $lesson_id );
 		if ( ! $lesson ) {
 			return new WP_Error( 'tbt_notes_not_found', __( 'Lesson not found.', 'tbt-notes' ), array( 'status' => 404 ) );
+		}
+		$denied = $this->guard_lesson_ownership( $lesson );
+		if ( $denied ) {
+			return $denied;
 		}
 
 		$fields = array();
@@ -640,6 +752,10 @@ class TBT_Notes_REST {
 		if ( ! $lesson ) {
 			return new WP_Error( 'tbt_notes_not_found', __( 'Lesson not found.', 'tbt-notes' ), array( 'status' => 404 ) );
 		}
+		$denied = $this->guard_lesson_ownership( $lesson );
+		if ( $denied ) {
+			return $denied;
+		}
 
 		$ok = TBT_Notes_DB::delete_lesson( $lesson_id );
 		if ( ! $ok ) {
@@ -665,6 +781,10 @@ class TBT_Notes_REST {
 		$lesson    = TBT_Notes_DB::get_lesson( $lesson_id );
 		if ( ! $lesson ) {
 			return new WP_Error( 'tbt_notes_not_found', __( 'Lesson not found.', 'tbt-notes' ), array( 'status' => 404 ) );
+		}
+		$denied = $this->guard_lesson_ownership( $lesson );
+		if ( $denied ) {
+			return $denied;
 		}
 
 		$files = $request->get_file_params();
@@ -797,6 +917,15 @@ class TBT_Notes_REST {
 		$lesson_id = (int) $request['id'];
 		$text      = (string) $request->get_param( 'text' );
 
+		$lesson = TBT_Notes_DB::get_lesson( $lesson_id );
+		if ( ! $lesson ) {
+			return new WP_Error( 'tbt_notes_not_found', __( 'Lesson not found.', 'tbt-notes' ), array( 'status' => 404 ) );
+		}
+		$denied = $this->guard_lesson_ownership( $lesson );
+		if ( $denied ) {
+			return $denied;
+		}
+
 		$record = TBT_Notes_Pronunciation::generate( $lesson_id, $text );
 		if ( is_wp_error( $record ) ) {
 			return $record;
@@ -859,6 +988,15 @@ class TBT_Notes_REST {
 		$text      = (string) $request->get_param( 'text' );
 		$force     = (bool) $request->get_param( 'force' );
 
+		$lesson = TBT_Notes_DB::get_lesson( $lesson_id );
+		if ( ! $lesson ) {
+			return new WP_Error( 'tbt_notes_not_found', __( 'Lesson not found.', 'tbt-notes' ), array( 'status' => 404 ) );
+		}
+		$denied = $this->guard_lesson_ownership( $lesson );
+		if ( $denied ) {
+			return $denied;
+		}
+
 		$record = TBT_Notes_Expression_Cards::generate( $lesson_id, $text, $force );
 		if ( is_wp_error( $record ) ) {
 			return $record;
@@ -876,6 +1014,11 @@ class TBT_Notes_REST {
 	 */
 	public function update_expression_card( WP_REST_Request $request ) {
 		$card_id = (int) $request['id'];
+
+		$denied = $this->guard_card_ownership( $card_id );
+		if ( $denied ) {
+			return $denied;
+		}
 
 		$fields = array();
 		if ( null !== $request->get_param( 'polish_translation' ) ) {
@@ -904,6 +1047,11 @@ class TBT_Notes_REST {
 	 */
 	public function approve_expression_card( WP_REST_Request $request ) {
 		$card_id = (int) $request['id'];
+
+		$denied = $this->guard_card_ownership( $card_id );
+		if ( $denied ) {
+			return $denied;
+		}
 
 		$record = TBT_Notes_Expression_Cards::approve_card( $card_id );
 		if ( is_wp_error( $record ) ) {
