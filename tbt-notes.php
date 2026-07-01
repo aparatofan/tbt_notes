@@ -29,7 +29,7 @@ define( 'TBT_NOTES_VERSION', '1.2.0' );
  * Database schema version. Bump when the table structure changes so that
  * activation/upgrade can run dbDelta again.
  */
-define( 'TBT_NOTES_DB_VERSION', '4' );
+define( 'TBT_NOTES_DB_VERSION', '6' );
 
 /**
  * Capability that gates all teacher/admin functionality (creating classes,
@@ -61,11 +61,40 @@ require_once TBT_NOTES_PLUGIN_DIR . 'includes/class-tbt-notes-plugin.php';
 function tbt_notes_activate() {
 	TBT_Notes_DB::install();
 	TBT_Notes_DB::migrate_single_to_membership();
+	tbt_notes_backfill_orphan_class_owner();
 	TBT_Notes_Capabilities::add_caps();
 	// Stamp the version so we can detect upgrades on later loads.
 	update_option( 'tbt_notes_db_version', TBT_NOTES_DB_VERSION );
 }
 register_activation_hook( __FILE__, 'tbt_notes_activate' );
+
+/**
+ * One-time backfill of class ownership.
+ *
+ * Classes created before per-class ownership existed have no owner
+ * (teacher_id = 0). They are claimed once by the account that created them. The
+ * owner defaults to user 45 (the historical author on this install) and is
+ * filterable so the same code is safe to reuse elsewhere. Guarded by a dedicated
+ * option flag so it runs exactly once, whatever future schema upgrades happen.
+ */
+function tbt_notes_backfill_orphan_class_owner() {
+	if ( get_option( 'tbt_notes_orphan_owner_backfilled' ) ) {
+		return;
+	}
+
+	/**
+	 * Filter the user who should own classes that predate per-class ownership.
+	 *
+	 * @param int $owner_id Default owner user ID.
+	 */
+	$owner_id = (int) apply_filters( 'tbt_notes_orphan_class_owner', 45 );
+
+	// Only claim classes for a real user; otherwise leave them for a later run.
+	if ( $owner_id > 0 && get_userdata( $owner_id ) ) {
+		TBT_Notes_DB::assign_orphan_classes_to_owner( $owner_id );
+		update_option( 'tbt_notes_orphan_owner_backfilled', 1 );
+	}
+}
 
 /**
  * Deactivation: intentionally non-destructive. We do not drop tables or
@@ -88,6 +117,9 @@ function tbt_notes_bootstrap() {
 		TBT_Notes_Capabilities::add_caps();
 		update_option( 'tbt_notes_db_version', TBT_NOTES_DB_VERSION );
 	}
+
+	// Runs once (self-gated) to claim pre-ownership classes for their author.
+	tbt_notes_backfill_orphan_class_owner();
 
 	TBT_Notes_Plugin::instance()->run();
 }

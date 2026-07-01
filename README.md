@@ -49,15 +49,25 @@ student-facing / PWA app. Overlay mode keeps working on all other pages.
 ### The security model (visibility rule)
 
 A student can see a class **if and only if** they are the assigned student for
-that class. The teacher/admin sees everything. This is enforced **server-side**
-in the REST API (`includes/class-tbt-notes-rest.php`), not just hidden in the UI:
+that class. A **teacher** sees only the classes **they created** — never another
+teacher's. A site **administrator** (`manage_options`) oversees every class. Each
+class records its owner (`teacher_id`), stamped when the teacher creates it. This
+is enforced **server-side** in the REST API
+(`includes/class-tbt-notes-rest.php`), not just hidden in the UI:
 
-- Every write route requires the `manage_tbt_notes` capability.
+- Every write route requires the `manage_tbt_notes` capability, **and** — for
+  routes scoped to an existing class, lesson or card — an ownership check
+  (`TBT_Notes_REST::user_can_manage_class()`) so a teacher cannot touch another
+  teacher's class even by guessing its ID.
 - Read routes verify ownership in their permission callback **before** the handler
   runs (`TBT_Notes_REST::user_can_view_class()`).
 - Notes are stored in **custom tables**, not custom post types, so nothing leaks
   through WordPress's public surfaces (REST defaults, search, archives, feeds,
   sitemaps). Every read goes through one ownership check.
+
+Classes that predate per-class ownership are claimed once, on upgrade, by the
+account that authored them (see `tbt_notes_backfill_orphan_class_owner()`); the
+owner is filterable via `tbt_notes_orphan_class_owner`.
 
 ### Roles & granting teacher access
 
