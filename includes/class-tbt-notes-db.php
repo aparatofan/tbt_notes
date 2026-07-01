@@ -192,6 +192,33 @@ class TBT_Notes_DB {
 	}
 
 	/**
+	 * Backfill ownership for classes that predate the teacher_id column. Any
+	 * class still left unowned (teacher_id = 0) is assigned to $owner_id. Safe to
+	 * re-run: it only touches unowned rows, and newly created classes always
+	 * carry a real owner.
+	 *
+	 * @param int $owner_id User ID to claim the unowned classes.
+	 * @return int Number of classes updated.
+	 */
+	public static function assign_orphan_classes_to_owner( $owner_id ) {
+		global $wpdb;
+		$owner_id = (int) $owner_id;
+		if ( $owner_id <= 0 ) {
+			return 0;
+		}
+		$table = self::table_classes();
+		// phpcs:disable WordPress.DB.PreparedSQL.NotPrepared -- table name is internal.
+		$updated = $wpdb->query(
+			$wpdb->prepare(
+				"UPDATE {$table} SET teacher_id = %d WHERE teacher_id = 0",
+				$owner_id
+			)
+		);
+		// phpcs:enable WordPress.DB.PreparedSQL.NotPrepared
+		return (int) $updated;
+	}
+
+	/**
 	 * Current GMT timestamp in MySQL format.
 	 *
 	 * @return string

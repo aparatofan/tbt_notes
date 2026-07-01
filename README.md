@@ -65,6 +65,10 @@ is enforced **server-side** in the REST API
   through WordPress's public surfaces (REST defaults, search, archives, feeds,
   sitemaps). Every read goes through one ownership check.
 
+Classes that predate per-class ownership are claimed once, on upgrade, by the
+account that authored them (see `tbt_notes_backfill_orphan_class_owner()`); the
+owner is filterable via `tbt_notes_orphan_class_owner`.
+
 ### Roles & granting teacher access
 
 Permissions hang off a single capability, `manage_tbt_notes`. Administrators can
