@@ -328,6 +328,8 @@ class TBT_Notes_Frontend {
 			'blockquote'        => __( 'Quote', 'tbt-notes' ),
 			'highlight'         => __( 'Highlight', 'tbt-notes' ),
 			'link'              => __( 'Link', 'tbt-notes' ),
+			'copyLink'          => __( 'Copy link', 'tbt-notes' ),
+			'openLink'          => __( 'Open link', 'tbt-notes' ),
 			'orderedList'       => __( 'Numbered list', 'tbt-notes' ),
 			'bulletList'        => __( 'Bulleted list', 'tbt-notes' ),
 			'indent'            => __( 'Increase indent', 'tbt-notes' ),

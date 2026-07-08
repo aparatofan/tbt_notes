@@ -692,6 +692,14 @@ class TBT_Notes_REST {
 		$header = TBT_Notes_Sanitizer::text( (string) $request->get_param( 'header' ) );
 		$body   = TBT_Notes_Sanitizer::body( (string) $request->get_param( 'body' ) );
 
+		// No header supplied (the "New lesson" flow) → auto-number it: the highest
+		// leading integer among this class's existing headers, plus one, followed by
+		// today's date. Server-side is authoritative and avoids collisions if two
+		// lessons are created in quick succession. The value stays fully editable.
+		if ( '' === $header ) {
+			$header = self::default_lesson_header( $class_id );
+		}
+
 		$new_id = TBT_Notes_DB::create_lesson( $class_id, $header, $body );
 		if ( ! $new_id ) {
 			return new WP_Error( 'tbt_notes_create_failed', __( 'Could not create the lesson.', 'tbt-notes' ), array( 'status' => 500 ) );
@@ -699,6 +707,66 @@ class TBT_Notes_REST {
 
 		$lesson = TBT_Notes_DB::get_lesson( $new_id );
 		return rest_ensure_response( array( 'lesson' => $this->present_lesson( $lesson ) ) );
+	}
+
+	/**
+	 * The auto-generated header for a brand-new lesson: "{number} - {date}", e.g.
+	 * "12 - 8 July 2026". The number is one above the highest leading integer among
+	 * the class's existing headers (1 when the class is empty or none start with a
+	 * digit); the date matches the long form the editor has always used.
+	 *
+	 * @param int $class_id Class ID.
+	 * @return string
+	 */
+	protected static function default_lesson_header( $class_id ) {
+		$headers = TBT_Notes_DB::get_lesson_headers_for_class( $class_id );
+		$number  = self::next_lesson_number_from_headers( $headers );
+		return $number . ' - ' . self::format_long_date();
+	}
+
+	/**
+	 * Compute the next lesson number from a set of existing headers: the maximum
+	 * leading integer (parsed with ^\s*(\d+)) plus one, or 1 when nothing matches.
+	 * Headers whose text does not start with a digit are ignored by design — the
+	 * next lesson simply follows the highest numeric header present.
+	 *
+	 * @param string[] $headers Existing lesson headers.
+	 * @return int
+	 */
+	public static function next_lesson_number_from_headers( array $headers ) {
+		$max = 0;
+		foreach ( $headers as $header ) {
+			if ( preg_match( '/^\s*(\d+)/', (string) $header, $m ) ) {
+				$n = (int) $m[1];
+				if ( $n > $max ) {
+					$max = $n;
+				}
+			}
+		}
+		return $max + 1;
+	}
+
+	/**
+	 * Long English date, e.g. "8 July 2026" — the same format the editor's default
+	 * note title has always produced (day, full English month, year), kept in
+	 * English regardless of site locale so it reads consistently. Mirrors
+	 * formatLongDate() in tbt-notes.js.
+	 *
+	 * @param int|null $timestamp Unix timestamp; defaults to the site's local time.
+	 * @return string
+	 */
+	public static function format_long_date( $timestamp = null ) {
+		if ( null === $timestamp ) {
+			$timestamp = function_exists( 'current_time' ) ? (int) current_time( 'timestamp' ) : time();
+		}
+		$months = array(
+			'January', 'February', 'March', 'April', 'May', 'June',
+			'July', 'August', 'September', 'October', 'November', 'December',
+		);
+		$day   = (int) gmdate( 'j', $timestamp );
+		$month = $months[ (int) gmdate( 'n', $timestamp ) - 1 ];
+		$year  = (int) gmdate( 'Y', $timestamp );
+		return $day . ' ' . $month . ' ' . $year;
 	}
 
 	/**

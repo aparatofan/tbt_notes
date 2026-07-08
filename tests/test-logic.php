@@ -737,6 +737,43 @@ function test_ai_validation() {
 }
 test_ai_validation();
 
+echo "Lesson auto-numbering:\n";
+function test_lesson_numbering() {
+	// Empty class → 1.
+	ok( 1 === TBT_Notes_REST::next_lesson_number_from_headers( array() ), 'empty class numbers the first lesson 1' );
+
+	// None start with a digit → 1.
+	ok(
+		1 === TBT_Notes_REST::next_lesson_number_from_headers( array( 'Lesson Notes — 8 July 2026', 'Warmup' ) ),
+		'non-numeric headers are ignored (still 1)'
+	);
+
+	// Normal case → max + 1 (order-independent).
+	ok(
+		8 === TBT_Notes_REST::next_lesson_number_from_headers( array( '1 - a', '7 - b', '3 - c' ) ),
+		'next number is the highest leading integer plus one'
+	);
+
+	// After a deletion: 3 removed from 1..5 → still max + 1 (= 6), not re-used.
+	ok(
+		6 === TBT_Notes_REST::next_lesson_number_from_headers( array( '1 - a', '2 - b', '4 - d', '5 - e' ) ),
+		'a gap from a deleted lesson is not re-used'
+	);
+
+	// Leading whitespace and mixed numeric/non-numeric headers.
+	ok(
+		13 === TBT_Notes_REST::next_lesson_number_from_headers( array( '  12 - x', 'no number here', '5 - y' ) ),
+		'leading whitespace is tolerated and non-numeric headers skipped'
+	);
+
+	// The date format matches formatLongDate() in tbt-notes.js (English months).
+	$ts = gmmktime( 12, 0, 0, 7, 8, 2026 );
+	ok( '8 July 2026' === TBT_Notes_REST::format_long_date( $ts ), 'long date renders as "8 July 2026"' );
+	$ts2 = gmmktime( 12, 0, 0, 1, 1, 2026 );
+	ok( '1 January 2026' === TBT_Notes_REST::format_long_date( $ts2 ), 'long date renders January correctly' );
+}
+test_lesson_numbering();
+
 /* ----------------------------------------------------------------- Summary */
 
 echo "\n----------------------------------------\n";

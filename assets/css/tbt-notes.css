@@ -1600,6 +1600,165 @@ body.tbt-notes-open {
 	color: var(--tbt-muted);
 }
 
+/* -------------------------------------------- Floating highlight popup (F3) */
+
+/* Shown just above a non-empty selection in the editor; positioned in JS and
+   anchored inside the (position:relative) editor wrapper. Swatch colours are
+   sourced from the same --tbt-hl-* variables the applied highlights use, so the
+   popup and the resulting highlight always match. */
+.tbt-notes-editor-quillwrap .tbt-hl-popup {
+	position: absolute;
+	z-index: 6;
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	padding: 5px 6px;
+	background: var(--tbt-panel-bg);
+	border: 1px solid var(--tbt-border);
+	border-radius: 999px;
+	box-shadow: 0 4px 14px rgba( 17, 52, 107, 0.18 );
+}
+
+.tbt-notes-editor-quillwrap .tbt-hl-popup[hidden] {
+	display: none;
+}
+
+.tbt-notes-editor-quillwrap .tbt-hl-popup__swatch {
+	width: 22px;
+	height: 22px;
+	padding: 0;
+	border: 1px solid rgba( 0, 0, 0, 0.2 );
+	border-radius: 50%;
+	cursor: pointer;
+	transition: transform 0.08s ease;
+}
+
+.tbt-notes-editor-quillwrap .tbt-hl-popup__swatch:hover {
+	transform: scale( 1.12 );
+}
+
+.tbt-notes-editor-quillwrap .tbt-hl-popup__swatch[data-color="blue"] {
+	background: var(--tbt-hl-blue);
+}
+
+.tbt-notes-editor-quillwrap .tbt-hl-popup__swatch[data-color="red"] {
+	background: var(--tbt-hl-red);
+}
+
+.tbt-notes-editor-quillwrap .tbt-hl-popup__swatch[data-color="yellow"] {
+	background: var(--tbt-hl-yellow);
+}
+
+.tbt-notes-editor-quillwrap .tbt-hl-popup__swatch[data-color="pink"] {
+	background: var(--tbt-hl-pink);
+}
+
+.tbt-notes-editor-quillwrap .tbt-hl-popup__swatch[data-color="green"] {
+	background: var(--tbt-hl-green);
+}
+
+.tbt-notes-editor-quillwrap .tbt-hl-popup__remove {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 24px;
+	height: 22px;
+	margin-left: 2px;
+	padding: 0 0 0 6px;
+	font-size: 13px;
+	line-height: 1;
+	color: var(--tbt-muted);
+	background: transparent;
+	border: none;
+	border-left: 1px solid var(--tbt-border);
+	border-radius: 0;
+	cursor: pointer;
+}
+
+.tbt-notes-editor-quillwrap .tbt-hl-popup__remove:hover {
+	color: var(--tbt-text);
+}
+
+/* -------------------------------------------------- Link tooltip icons (F2) */
+
+/* Notion-style link tooltip: Copy + Open (added in JS) alongside Quill's native
+   Edit + Remove, rendered as a clean icon row with no text labels. Only the
+   preview ("read") mode is restyled; the editing/create-link mode stays stock
+   (input + Save), so Edit/Remove behaviour is unchanged. */
+
+/* Drop the "Visit URL:" prefix while previewing a link (kept while editing). */
+.tbt-notes-editor-quillwrap .ql-snow .ql-tooltip:not(.ql-editing)::before {
+	content: "";
+	margin: 0;
+}
+
+.tbt-notes-editor-quillwrap .ql-snow .ql-tooltip:not(.ql-editing) a.ql-preview {
+	vertical-align: middle;
+	color: var(--tbt-muted);
+}
+
+/* The four actions share one icon-button box: size, spacing, hover. */
+.tbt-notes-editor-quillwrap .ql-snow .ql-tooltip .ql-tbt-copy,
+.tbt-notes-editor-quillwrap .ql-snow .ql-tooltip .ql-tbt-open,
+.tbt-notes-editor-quillwrap .ql-snow .ql-tooltip:not(.ql-editing) a.ql-action,
+.tbt-notes-editor-quillwrap .ql-snow .ql-tooltip:not(.ql-editing) a.ql-remove {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 26px;
+	height: 26px;
+	padding: 0;
+	margin: 0 1px;
+	border-radius: 4px;
+	color: var(--tbt-text);
+	vertical-align: middle;
+	cursor: pointer;
+}
+
+.tbt-notes-editor-quillwrap .ql-snow .ql-tooltip .ql-tbt-copy:hover,
+.tbt-notes-editor-quillwrap .ql-snow .ql-tooltip .ql-tbt-open:hover,
+.tbt-notes-editor-quillwrap .ql-snow .ql-tooltip:not(.ql-editing) a.ql-action:hover,
+.tbt-notes-editor-quillwrap .ql-snow .ql-tooltip:not(.ql-editing) a.ql-remove:hover {
+	background: rgba( 17, 52, 107, 0.08 );
+}
+
+.tbt-notes-editor-quillwrap .ql-snow .ql-tooltip .ql-tbt-copy svg,
+.tbt-notes-editor-quillwrap .ql-snow .ql-tooltip .ql-tbt-open svg {
+	display: block;
+}
+
+.tbt-notes-editor-quillwrap .ql-snow .ql-tooltip .ql-tbt-copy.is-copied {
+	color: #1a7f37;
+}
+
+/* Copy/Open only make sense while previewing an existing link. */
+.tbt-notes-editor-quillwrap .ql-snow .ql-tooltip.ql-editing .ql-tbt-copy,
+.tbt-notes-editor-quillwrap .ql-snow .ql-tooltip.ql-editing .ql-tbt-open {
+	display: none;
+}
+
+/* Replace the "Edit" text with a pencil icon (preview mode only). */
+.tbt-notes-editor-quillwrap .ql-snow .ql-tooltip:not(.ql-editing) a.ql-action::after {
+	content: "";
+	display: block;
+	width: 15px;
+	height: 15px;
+	border-right: 0;
+	margin: 0;
+	padding: 0;
+	background: center / 15px no-repeat url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23334155' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 20h9'/%3E%3Cpath d='M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z'/%3E%3C/svg%3E");
+}
+
+/* Replace the "Remove" text with an unlink icon (preview mode only). */
+.tbt-notes-editor-quillwrap .ql-snow .ql-tooltip:not(.ql-editing) a.ql-remove::before {
+	content: "";
+	display: block;
+	width: 15px;
+	height: 15px;
+	margin: 0;
+	background: center / 15px no-repeat url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23334155' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M18.84 12.25l1.72-1.71a5 5 0 0 0-7.07-7.07l-1.71 1.71'/%3E%3Cpath d='M5.17 11.75l-1.72 1.71a5 5 0 0 0 7.07 7.07l1.71-1.71'/%3E%3Cline x1='8' y1='2' x2='8' y2='5'/%3E%3Cline x1='2' y1='8' x2='5' y2='8'/%3E%3Cline x1='16' y1='19' x2='16' y2='22'/%3E%3Cline x1='19' y1='16' x2='22' y2='16'/%3E%3C/svg%3E");
+}
+
 /* ------------------------------------------------------------ Lesson images */
 
 /* Toolbar photo button (🖼). Slightly larger glyph so it reads clearly. */

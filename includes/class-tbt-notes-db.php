@@ -563,6 +563,25 @@ class TBT_Notes_DB {
 	}
 
 	/**
+	 * The headers of every lesson in a class. Used to auto-number a new lesson
+	 * (max leading integer + 1). Kept lean — no bodies — as it can run on every
+	 * lesson creation.
+	 *
+	 * @param int $class_id Class ID.
+	 * @return string[]
+	 */
+	public static function get_lesson_headers_for_class( $class_id ) {
+		global $wpdb;
+		$class_id = (int) $class_id;
+		if ( $class_id <= 0 ) {
+			return array();
+		}
+		$table = self::table_lessons();
+		$headers = $wpdb->get_col( $wpdb->prepare( "SELECT header FROM {$table} WHERE class_id = %d", $class_id ) );
+		return $headers ? array_map( 'strval', $headers ) : array();
+	}
+
+	/**
 	 * Create a lesson.
 	 *
 	 * @param int    $class_id Class ID.
