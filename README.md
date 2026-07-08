@@ -95,7 +95,9 @@ The lesson body supports exactly what v1 requires (and nothing more):
   highlights grouped by category, or one selected category extracted as a list.
   In the teacher editor the filter lives in the toolbar; for students it sits
   above the read-only note
-- **Links** that always open in a new tab (`target="_blank" rel="noopener noreferrer"`)
+- **Links** that always open in a new tab (`target="_blank" rel="noopener noreferrer"`).
+  Clicking a link in the editor shows a small icon tooltip with **Copy** (copies
+  the URL), **Open** (opens it in a new tab), **Edit** and **Remove**.
 - **Numbered and bulleted lists, including nesting** (1 → a → i …)
 - **H2 headings and H3 subheadings** (clean sans-serif), plus **blockquotes**
 - **Spacious body text** with generous line height — easy to read and to print
@@ -121,6 +123,11 @@ keyboard:
 
 Shortcuts only fire inside the editor — they never interfere with the lesson
 title, search fields, the filter dropdown, or anything else on the page.
+
+For a mouse-driven alternative, selecting text in the editor pops up a small
+floating menu just above the selection with the five colour swatches and a
+remove-highlight control. It applies exactly the same highlight classes as the
+keyboard shortcuts, so the result is identical either way.
 
 ### Pronunciation audio (ElevenLabs)
 
@@ -286,7 +293,11 @@ tests/test-logic.php              Sanitiser, visibility, pronunciation, expressi
   separate table; each student belongs to **at most one** class (enforced by the
   membership table's primary key + a friendly server-side check).
 - **Lesson** — belongs to a class; has a teacher-typed free-text `header` and a
-  rich-text `body`. Listed newest-first by creation time.
+  rich-text `body`. Listed newest-first by creation time. A new lesson's `header`
+  is pre-filled server-side as `"{number} - {date}"` (e.g. `12 - 8 July 2026`),
+  where the number is one above the highest leading integer among the class's
+  existing lesson headers (1 when there are none). The header stays fully
+  editable — it is just a starting value.
 
 ## Running the tests
 

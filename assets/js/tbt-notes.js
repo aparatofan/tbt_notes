@@ -170,16 +170,6 @@
 	}
 
 	/**
-	 * The default title generated for a brand-new note. At creation there is no
-	 * lesson title yet, so this is the dated fallback form. The teacher can edit it.
-	 *
-	 * @return {string}
-	 */
-	function defaultNoteTitle() {
-		return t( 'lessonNotesTitle', 'Lesson Notes' ) + ' — ' + formatLongDate( new Date() );
-	}
-
-	/**
 	 * The full note title: "[class] — [lesson]". The class name is composed at
 	 * display time (never stored on the note) so renaming a class keeps every note
 	 * title current.
@@ -1663,10 +1653,12 @@
 	}
 
 	function createLessonFlow() {
-		// New notes start with a generated default title and the default lesson
-		// template pre-inserted. Both become normal editable content immediately.
+		// New notes start with the default lesson template pre-inserted and an
+		// auto-numbered header ("{n} - {date}") the server computes from the class's
+		// existing lessons — sending an empty header opts into that. Both the header
+		// and body become normal editable content immediately.
 		api( 'POST', 'classes/' + state.currentClass.id + '/lessons', {
-			header: defaultNoteTitle(),
+			header: '',
 			body: defaultNoteTemplateHtml(),
 		} ).then( function ( data ) {
 			state.lessons.unshift( data.lesson );
@@ -1907,6 +1899,222 @@
 		}
 	}
 
+	// Inline SVGs for the link-tooltip actions (no icon font / CDN). These are
+	// static, trusted strings, so innerHTML is safe here.
+	var TOOLTIP_ICONS = {
+		copy:
+			'<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+			'<rect x="9" y="9" width="12" height="12" rx="2"/>' +
+			'<path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>',
+		check:
+			'<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+			'<path d="M20 6 9 17l-5-5"/></svg>',
+		open:
+			'<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+			'<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>' +
+			'<path d="M15 3h6v6"/><path d="M10 14 21 3"/></svg>',
+	};
+
+	/**
+	 * Extend Quill's built-in Snow link tooltip (Edit + Remove) with Copy and Open,
+	 * Notion-style. The native Edit/Remove elements and handlers are left untouched;
+	 * we only add two icon buttons and read the currently targeted link's href from
+	 * the tooltip's preview anchor (which Quill points at the clicked link).
+	 */
+	function enhanceLinkTooltip( quill ) {
+		var tooltip = quill.theme && quill.theme.tooltip ? quill.theme.tooltip.root : null;
+		if ( ! tooltip && quill.container ) {
+			tooltip = quill.container.querySelector( '.ql-tooltip' );
+		}
+		if ( ! tooltip || tooltip.querySelector( '.ql-tbt-copy' ) ) {
+			return;
+		}
+		var preview = tooltip.querySelector( 'a.ql-preview' );
+		var action = tooltip.querySelector( 'a.ql-action' );
+		if ( ! preview || ! action ) {
+			return;
+		}
+
+		function currentHref() {
+			return preview.getAttribute( 'href' ) || preview.textContent || '';
+		}
+
+		var copyBtn = el( 'a', 'ql-tbt-copy' );
+		copyBtn.setAttribute( 'role', 'button' );
+		copyBtn.setAttribute( 'aria-label', t( 'copyLink', 'Copy link' ) );
+		copyBtn.title = t( 'copyLink', 'Copy link' );
+		copyBtn.innerHTML = TOOLTIP_ICONS.copy;
+		var copyRevert = null;
+		copyBtn.addEventListener( 'click', function ( e ) {
+			e.preventDefault();
+			var href = currentHref();
+			if ( ! href || ! navigator.clipboard || ! navigator.clipboard.writeText ) {
+				return;
+			}
+			navigator.clipboard.writeText( href ).then( function () {
+				// Brief, non-intrusive confirmation: swap to a check for ~1s.
+				copyBtn.innerHTML = TOOLTIP_ICONS.check;
+				copyBtn.classList.add( 'is-copied' );
+				window.clearTimeout( copyRevert );
+				copyRevert = window.setTimeout( function () {
+					copyBtn.innerHTML = TOOLTIP_ICONS.copy;
+					copyBtn.classList.remove( 'is-copied' );
+				}, 1000 );
+			} ).catch( function () {
+				// Clipboard blocked/denied: fail quietly, leave the tooltip intact.
+			} );
+		} );
+
+		var openBtn = el( 'a', 'ql-tbt-open' );
+		openBtn.setAttribute( 'role', 'button' );
+		openBtn.setAttribute( 'aria-label', t( 'openLink', 'Open link' ) );
+		openBtn.title = t( 'openLink', 'Open link' );
+		openBtn.innerHTML = TOOLTIP_ICONS.open;
+		openBtn.addEventListener( 'click', function ( e ) {
+			e.preventDefault();
+			var href = currentHref();
+			if ( href ) {
+				// Mirror the plugin's link policy (target="_blank" rel="noopener…").
+				window.open( href, '_blank', 'noopener,noreferrer' );
+			}
+		} );
+
+		// Order left-to-right: Copy, Open, Edit, Remove — insert ours before Edit.
+		tooltip.insertBefore( copyBtn, action );
+		tooltip.insertBefore( openBtn, action );
+	}
+
+	/**
+	 * A floating highlight popup: on a non-empty selection inside the editor, show
+	 * the five colour swatches + a remove control just above the selection. Each
+	 * control routes through the same applyHighlightFormat() the keyboard shortcuts
+	 * use, so the markup is identical. Teacher editor only (wired to the editable
+	 * Quill instance).
+	 */
+	function setupSelectionHighlightPopup( quill, quillWrap ) {
+		if ( ! quillWrap ) {
+			return;
+		}
+
+		var popup = el( 'div', 'tbt-hl-popup' );
+		popup.hidden = true;
+		// A mousedown inside the popup must not blur the editor or drop the
+		// selection before the format is applied (Quill selection-preservation).
+		popup.addEventListener( 'mousedown', function ( e ) {
+			e.preventDefault();
+		} );
+
+		var savedRange = null;
+
+		function applyFromPopup( color ) {
+			var range = savedRange || quill.getSelection();
+			if ( ! range || range.length === 0 ) {
+				return;
+			}
+			applyHighlightFormat( quill, color, range );
+			// applyHighlightFormat re-selects the range ('silent'), which fires a
+			// selection-change that keeps the popup in place for another colour.
+			savedRange = quill.getSelection() || range;
+		}
+
+		( cfg.highlightColors || [] ).forEach( function ( c, i ) {
+			var sw = el( 'button', 'tbt-hl-popup__swatch' );
+			sw.type = 'button';
+			sw.setAttribute( 'data-color', c.key );
+			var hint = c.label + ' — Alt+' + ( i + 1 );
+			sw.setAttribute( 'aria-label', hint );
+			sw.title = hint;
+			sw.addEventListener( 'click', function () {
+				applyFromPopup( c.key );
+			} );
+			popup.appendChild( sw );
+		} );
+
+		var removeBtn = el( 'button', 'tbt-hl-popup__remove' );
+		removeBtn.type = 'button';
+		removeBtn.textContent = '✕';
+		removeBtn.setAttribute( 'data-color', '' );
+		removeBtn.setAttribute( 'aria-label', t( 'removeHighlight', 'No highlight' ) + ' — Alt+0' );
+		removeBtn.title = t( 'removeHighlight', 'No highlight' ) + ' — Alt+0';
+		removeBtn.addEventListener( 'click', function () {
+			applyFromPopup( '' );
+		} );
+		popup.appendChild( removeBtn );
+
+		quillWrap.appendChild( popup );
+
+		function hide() {
+			if ( ! popup.hidden ) {
+				popup.hidden = true;
+			}
+		}
+
+		function position( range ) {
+			if ( ! range || range.length === 0 || ! quill.hasFocus() ) {
+				hide();
+				return;
+			}
+			var bounds = quill.getBounds( range.index, range.length );
+			if ( ! bounds ) {
+				hide();
+				return;
+			}
+			// Bounds are relative to quill.container; hide when the selection has
+			// scrolled out of the editor's visible area.
+			var containerRect = quill.container.getBoundingClientRect();
+			if ( bounds.bottom < 0 || bounds.top > containerRect.height ) {
+				hide();
+				return;
+			}
+			popup.hidden = false; // Must be visible to measure its size.
+			var pw = popup.offsetWidth;
+			var ph = popup.offsetHeight;
+			var wrapRect = quillWrap.getBoundingClientRect();
+			var selTopVp = containerRect.top + bounds.top;
+			var selBottomVp = containerRect.top + bounds.bottom;
+			var centerXVp = containerRect.left + bounds.left + bounds.width / 2;
+			var leftAbs = ( centerXVp - wrapRect.left ) - pw / 2;
+			var topAbs = ( selTopVp - wrapRect.top ) - ph - 8;
+			// If it would overflow above the editor, flip below the selection.
+			if ( selTopVp - ph - 8 < containerRect.top ) {
+				topAbs = ( selBottomVp - wrapRect.top ) + 8;
+			}
+			// Keep it inside the wrapper horizontally (itself within the viewport).
+			var maxLeft = wrapRect.width - pw - 4;
+			if ( leftAbs > maxLeft ) {
+				leftAbs = maxLeft;
+			}
+			if ( leftAbs < 4 ) {
+				leftAbs = 4;
+			}
+			popup.style.left = leftAbs + 'px';
+			popup.style.top = topAbs + 'px';
+		}
+
+		// Show on a non-empty focused selection; hide on collapse, blur or typing
+		// (typing replaces the selection, which fires a collapsed selection-change).
+		quill.on( 'selection-change', function ( range ) {
+			if ( range && range.length > 0 && quill.hasFocus() ) {
+				savedRange = range;
+				position( range );
+			} else {
+				savedRange = null;
+				hide();
+			}
+		} );
+
+		// Keep it glued to the selection as the editor or page scrolls / resizes.
+		// position() re-shows or hides depending on whether the selection is still
+		// in view, so a scroll-out then scroll-back behaves sensibly.
+		function reflow() {
+			if ( savedRange ) {
+				position( savedRange );
+			}
+		}
+		window.addEventListener( 'scroll', reflow, true );
+		window.addEventListener( 'resize', reflow );
+	}
+
 	function initEditor( editorEl, toolbar, headerInput, lesson, indicator ) {
 		if ( typeof window.Quill === 'undefined' ) {
 			editorEl.appendChild( errorBlock( t( 'genericError', 'Editor failed to load.' ) ) );
@@ -1986,6 +2194,11 @@
 			e.preventDefault();
 			highlightWithFallbackRange( shortcutMap[ e.code ] );
 		} );
+
+		// Mouse-driven highlighting: a floating popup over the current selection,
+		// and Copy/Open on the link tooltip. Both are editor-only (this instance).
+		setupSelectionHighlightPopup( quill, editorEl.parentNode );
+		enhanceLinkTooltip( quill );
 
 		var ai = cfg.aiEnabled ? createAiQuickNote( quill, editorEl.parentNode, lesson, headerInput ) : null;
 		if ( ai ) {
