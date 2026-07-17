@@ -212,6 +212,28 @@ expressions over 200 characters are rejected, each user is capped at 50
 generations per hour, and the OpenAI key is **server-side only** — it is never
 exposed to the browser.
 
+#### Add a card to Personal Dictionary
+
+If the [Personal Dictionary](https://wordpress.org/plugins/personal-dictionary/)
+plugin is active on the site, each expression card also offers a hover-revealed
+**＋** icon (front-end only — no PHP bridge). Clicking it lists the logged-in
+user's dictionary **groups** (fetched live via Personal Dictionary's own
+`admin-ajax` API, cookie-authenticated and scoped server-side to the current
+user); picking one inserts the expression as `word` with the card's **current
+Polish value** as `translation` — the Example is intentionally omitted. A user
+with no groups yet gets an inline **＋ New group** field and continues the same
+add in one step. After a successful add the card shows **Added ✓** for the rest
+of the session so it cannot be double-inserted by accident (the dictionary has
+no server-side duplicate check; a reload re-arms the button).
+
+Who sees the ＋: in the **teacher** view it appears only on **Approved** cards
+(the editable card exposes its status). In the **student** view every visible
+card is addable — read-only students only ever receive approved cards anyway,
+and self-generated cards deliberately don't expose an approval status. Teachers
+clicking it add to their **own** dictionary (Personal Dictionary scopes by
+user). Without the Personal Dictionary plugin the menu simply reports that the
+add failed; nothing else in Notes depends on it.
+
 The call uses the OpenAI **Responses API** with **Structured Outputs** (a strict
 JSON schema), defaulting to the small `gpt-5.4-nano` model.
 
