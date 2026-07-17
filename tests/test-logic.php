@@ -118,19 +118,55 @@ function is_wp_error( $thing ) {
 }
 
 /**
+ * Minimal hook/filter stubs so the "constant, then filter" config helpers can be
+ * exercised. Filters are stored per hook and applied in registration order.
+ */
+$GLOBALS['__filters'] = array();
+
+function add_filter( $hook, $cb, $priority = 10, $accepted_args = 1 ) {
+	$GLOBALS['__filters'][ $hook ][] = $cb;
+	return true;
+}
+
+function remove_all_filters( $hook ) {
+	unset( $GLOBALS['__filters'][ $hook ] );
+}
+
+function apply_filters( $hook, $value ) {
+	if ( ! empty( $GLOBALS['__filters'][ $hook ] ) ) {
+		foreach ( $GLOBALS['__filters'][ $hook ] as $cb ) {
+			$value = call_user_func( $cb, $value );
+		}
+	}
+	return $value;
+}
+
+function __return_false() {
+	return false;
+}
+
+function __return_true() {
+	return true;
+}
+
+/**
  * In-memory stand-in for TBT_Notes_DB, covering only the lesson + expression-card
  * methods the service touches. Lets us exercise list/generate/delete logic
  * without a database.
  */
 class TBT_Notes_DB {
-	public static $lessons      = array();
-	public static $cards        = array();
-	public static $next_card_id = 1;
+	public static $lessons        = array();
+	public static $cards          = array();
+	public static $next_card_id   = 1;
+	public static $pronunciations = array();
+	public static $next_pron_id   = 1;
 
 	public static function reset() {
-		self::$lessons      = array();
-		self::$cards        = array();
-		self::$next_card_id = 1;
+		self::$lessons        = array();
+		self::$cards          = array();
+		self::$next_card_id   = 1;
+		self::$pronunciations = array();
+		self::$next_pron_id   = 1;
 	}
 
 	public static function set_lesson( $id, $header, $body ) {
@@ -203,6 +239,30 @@ class TBT_Notes_DB {
 				unset( self::$cards[ $id ] );
 			}
 		}
+	}
+
+	public static function insert_pronunciation( array $data ) {
+		$id  = self::$next_pron_id++;
+		$rec = array(
+			'id'        => $id,
+			'lesson_id' => (int) $data['lesson_id'],
+			'voice_id'  => (string) $data['voice_id'],
+			'text_hash' => (string) $data['text_hash'],
+			'text'      => (string) $data['text'],
+			'audio_url' => (string) $data['audio_url'],
+		);
+		self::$pronunciations[ $id ] = $rec;
+		return $id;
+	}
+
+	public static function get_pronunciations_for_lesson( $lesson_id ) {
+		$out = array();
+		foreach ( self::$pronunciations as $p ) {
+			if ( (int) $p['lesson_id'] === (int) $lesson_id ) {
+				$out[] = $p;
+			}
+		}
+		return $out;
 	}
 }
 
@@ -644,6 +704,232 @@ function test_expr_delete_with_lesson() {
 	ok( count( TBT_Notes_DB::get_expression_cards_for_lesson( 4 ) ) === 0, 'cards removed when the lesson is deleted' );
 }
 test_expr_delete_with_lesson();
+
+/* --------------------------------------------- Student self-generation (v1) */
+
+echo "Student generation switch (students_can_generate):\n";
+function test_students_can_generate() {
+	// Default: constant undefined, no filter → enabled (the whole point is to open it).
+	remove_all_filters( 'tbt_notes_students_can_generate' );
+	ok( TBT_Notes_Capabilities::students_can_generate() === true, 'defaults to enabled (on)' );
+
+	// The filter can switch it off…
+	add_filter( 'tbt_notes_students_can_generate', '__return_false' );
+	ok( TBT_Notes_Capabilities::students_can_generate() === false, 'filter can switch it off' );
+
+	// …and back on.
+	remove_all_filters( 'tbt_notes_students_can_generate' );
+	add_filter( 'tbt_notes_students_can_generate', '__return_true' );
+	ok( TBT_Notes_Capabilities::students_can_generate() === true, 'filter can switch it on' );
+	remove_all_filters( 'tbt_notes_students_can_generate' );
+
+	// The constant is honoured when defined. Defined last because a PHP constant
+	// cannot be un-defined within a single process, and nothing after this reads it.
+	define( 'TBT_NOTES_STUDENT_GENERATION', false );
+	ok( TBT_Notes_Capabilities::students_can_generate() === false, 'constant false switches it off' );
+
+	// The filter still takes precedence over the constant.
+	add_filter( 'tbt_notes_students_can_generate', '__return_true' );
+	ok( TBT_Notes_Capabilities::students_can_generate() === true, 'filter overrides the constant' );
+	remove_all_filters( 'tbt_notes_students_can_generate' );
+}
+test_students_can_generate();
+
+echo "Expression cards — can-generate student list (any status, read-only):\n";
+function test_expr_student_can_generate_list() {
+	TBT_Notes_DB::reset();
+	$body = '<p><span class="tbt-hl-blue">in the zone</span>, '
+		. '<span class="tbt-hl-blue">find your bearings</span>, '
+		. '<span class="tbt-hl-blue">read the room</span>.</p>';
+	TBT_Notes_DB::set_lesson( 20, 'Lesson 20', $body );
+
+	// One approved, one draft, one with no card at all.
+	TBT_Notes_DB::insert_expression_card( array(
+		'lesson_id'          => 20,
+		'text_hash'          => TBT_Notes_Expression_Cards::text_hash( 'in the zone' ),
+		'text'               => 'in the zone',
+		'polish_translation' => 'w rytmie pracy',
+		'example_sentence'   => 'I was in the zone.',
+		'status'             => 'approved',
+	) );
+	TBT_Notes_DB::insert_expression_card( array(
+		'lesson_id'          => 20,
+		'text_hash'          => TBT_Notes_Expression_Cards::text_hash( 'find your bearings' ),
+		'text'               => 'find your bearings',
+		'polish_translation' => 'odnaleźć się',
+		'example_sentence'   => 'It took a week to find my bearings.',
+		'status'             => 'draft',
+	) );
+
+	$items = TBT_Notes_Expression_Cards::list_for_lesson( 20, false, true );
+	ok( count( $items ) === 3, 'can-generate student sees every current blue highlight (3)' );
+
+	$by_text = array();
+	foreach ( $items as $it ) {
+		$by_text[ $it['text'] ] = $it;
+	}
+
+	// Approved card: shown read-only, with no editable affordances.
+	ok( $by_text['in the zone']['has_card'] === true, 'approved card is shown' );
+	ok( ! isset( $by_text['in the zone']['card_id'] ), 'approved card exposes no card_id to students' );
+	ok( ! isset( $by_text['in the zone']['status'] ), 'approved card exposes no status to students' );
+	ok( $by_text['in the zone']['polish_translation'] === 'w rytmie pracy', 'approved card Polish is present' );
+
+	// Draft card: shown too (any status), still read-only.
+	ok( $by_text['find your bearings']['has_card'] === true, 'draft card is shown to a can-generate student' );
+	ok( ! isset( $by_text['find your bearings']['card_id'] ), 'draft card exposes no card_id' );
+	ok( ! isset( $by_text['find your bearings']['status'] ), 'draft card exposes no status' );
+
+	// Cardless blue item: generatable.
+	ok( $by_text['read the room']['has_card'] === false, 'cardless item flagged has_card=false' );
+	ok( $by_text['read the room']['can_generate'] === true, 'cardless item flagged can_generate=true' );
+}
+test_expr_student_can_generate_list();
+
+echo "Expression cards — off-switch student list (approved only, reverts):\n";
+function test_expr_student_off_list() {
+	TBT_Notes_DB::reset();
+	$body = '<p><span class="tbt-hl-blue">in the zone</span>, '
+		. '<span class="tbt-hl-blue">find your bearings</span>.</p>';
+	TBT_Notes_DB::set_lesson( 21, 'Lesson 21', $body );
+	TBT_Notes_DB::insert_expression_card( array(
+		'lesson_id'          => 21,
+		'text_hash'          => TBT_Notes_Expression_Cards::text_hash( 'in the zone' ),
+		'text'               => 'in the zone',
+		'polish_translation' => 'w rytmie pracy',
+		'example_sentence'   => 'I was in the zone.',
+		'status'             => 'approved',
+	) );
+	TBT_Notes_DB::insert_expression_card( array(
+		'lesson_id'          => 21,
+		'text_hash'          => TBT_Notes_Expression_Cards::text_hash( 'find your bearings' ),
+		'text'               => 'find your bearings',
+		'polish_translation' => 'odnaleźć się',
+		'example_sentence'   => 'x',
+		'status'             => 'draft',
+	) );
+
+	// Switch off (can_generate=false): approved only — identical to the legacy
+	// two-arg student behaviour.
+	$off    = TBT_Notes_Expression_Cards::list_for_lesson( 21, false, false );
+	$legacy = TBT_Notes_Expression_Cards::list_for_lesson( 21, false );
+	ok( $off === $legacy, 'explicit can_generate=false matches the legacy student path byte-for-byte' );
+	ok( count( $off ) === 1 && $off[0]['text'] === 'in the zone', 'off-switch student sees only the approved card' );
+	ok( $off[0]['status'] === 'approved', 'off-switch student card keeps its approved status' );
+}
+test_expr_student_off_list();
+
+echo "Expression cards — teacher list unchanged by the new arg:\n";
+function test_expr_teacher_list_unchanged() {
+	TBT_Notes_DB::reset();
+	$body = '<p><span class="tbt-hl-blue">in the zone</span> and '
+		. '<span class="tbt-hl-blue">find your bearings</span>.</p>';
+	TBT_Notes_DB::set_lesson( 22, 'Lesson 22', $body );
+	TBT_Notes_DB::insert_expression_card( array(
+		'lesson_id'          => 22,
+		'text_hash'          => TBT_Notes_Expression_Cards::text_hash( 'in the zone' ),
+		'text'               => 'in the zone',
+		'polish_translation' => 'w rytmie pracy',
+		'example_sentence'   => 'I was in the zone.',
+		'status'             => 'draft',
+	) );
+
+	$two   = TBT_Notes_Expression_Cards::list_for_lesson( 22, true );
+	$three = TBT_Notes_Expression_Cards::list_for_lesson( 22, true, true );
+	ok( $two === $three, 'teacher output identical whether can_generate is defaulted or passed' );
+
+	$by_text = array();
+	foreach ( $two as $it ) {
+		$by_text[ $it['text'] ] = $it;
+	}
+	ok( isset( $by_text['in the zone']['card_id'], $by_text['in the zone']['status'] ), 'teacher card keeps card_id + status' );
+	ok( $by_text['in the zone']['status'] === 'draft', 'teacher card keeps its draft status' );
+	ok( $by_text['in the zone']['can_generate'] === true, 'teacher card keeps can_generate' );
+	ok( $by_text['find your bearings']['has_card'] === false, 'teacher still sees the cardless blue item' );
+}
+test_expr_teacher_list_unchanged();
+
+echo "Pronunciation — can-generate student list (audio-less items generatable):\n";
+function test_pron_student_can_generate_list() {
+	TBT_Notes_DB::reset();
+	$body = '<p><span class="tbt-hl-pink">moment of levity</span> and '
+		. '<span class="tbt-hl-pink">read the room</span>.</p>';
+	TBT_Notes_DB::set_lesson( 30, 'Lesson 30', $body );
+
+	// Only one of the two pink items has audio so far.
+	TBT_Notes_DB::insert_pronunciation( array(
+		'lesson_id' => 30,
+		'voice_id'  => TBT_Notes_Pronunciation::VOICE_ID,
+		'text_hash' => TBT_Notes_Pronunciation::text_hash( 'moment of levity' ),
+		'text'      => 'moment of levity',
+		'audio_url' => 'https://example.com/audio/mol.mp3',
+	) );
+
+	$items = TBT_Notes_Pronunciation::list_for_lesson( 30, false, true );
+	ok( count( $items ) === 2, 'can-generate student sees every current pink highlight (2)' );
+
+	$by_text = array();
+	foreach ( $items as $it ) {
+		$by_text[ $it['text'] ] = $it;
+	}
+	ok( $by_text['moment of levity']['has_audio'] === true, 'item with audio flagged has_audio=true' );
+	ok( $by_text['moment of levity']['audio_url'] === 'https://example.com/audio/mol.mp3', 'audio url is present' );
+	ok( $by_text['moment of levity']['can_generate'] === true, 'item with audio still flagged can_generate' );
+	ok( $by_text['read the room']['has_audio'] === false, 'audio-less item flagged has_audio=false' );
+	ok( $by_text['read the room']['audio_url'] === null, 'audio-less item has a null audio_url' );
+	ok( $by_text['read the room']['can_generate'] === true, 'audio-less item flagged can_generate=true' );
+}
+test_pron_student_can_generate_list();
+
+echo "Pronunciation — off-switch student list (audio only, reverts):\n";
+function test_pron_student_off_list() {
+	TBT_Notes_DB::reset();
+	$body = '<p><span class="tbt-hl-pink">moment of levity</span> and '
+		. '<span class="tbt-hl-pink">read the room</span>.</p>';
+	TBT_Notes_DB::set_lesson( 31, 'Lesson 31', $body );
+	TBT_Notes_DB::insert_pronunciation( array(
+		'lesson_id' => 31,
+		'voice_id'  => TBT_Notes_Pronunciation::VOICE_ID,
+		'text_hash' => TBT_Notes_Pronunciation::text_hash( 'moment of levity' ),
+		'text'      => 'moment of levity',
+		'audio_url' => 'https://example.com/audio/mol.mp3',
+	) );
+
+	$off    = TBT_Notes_Pronunciation::list_for_lesson( 31, false, false );
+	$legacy = TBT_Notes_Pronunciation::list_for_lesson( 31, false );
+	ok( $off === $legacy, 'explicit can_generate=false matches the legacy student path byte-for-byte' );
+	ok( count( $off ) === 1 && $off[0]['text'] === 'moment of levity', 'off-switch student sees only the audio-bearing item' );
+	ok( ! isset( $off[0]['can_generate'] ), 'off-switch student item carries no can_generate flag' );
+}
+test_pron_student_off_list();
+
+echo "Pronunciation — teacher list unchanged by the new arg:\n";
+function test_pron_teacher_list_unchanged() {
+	TBT_Notes_DB::reset();
+	$body = '<p><span class="tbt-hl-pink">moment of levity</span> and '
+		. '<span class="tbt-hl-pink">read the room</span>.</p>';
+	TBT_Notes_DB::set_lesson( 32, 'Lesson 32', $body );
+	TBT_Notes_DB::insert_pronunciation( array(
+		'lesson_id' => 32,
+		'voice_id'  => TBT_Notes_Pronunciation::VOICE_ID,
+		'text_hash' => TBT_Notes_Pronunciation::text_hash( 'moment of levity' ),
+		'text'      => 'moment of levity',
+		'audio_url' => 'https://example.com/audio/mol.mp3',
+	) );
+
+	$two   = TBT_Notes_Pronunciation::list_for_lesson( 32, true );
+	$three = TBT_Notes_Pronunciation::list_for_lesson( 32, true, true );
+	ok( $two === $three, 'teacher output identical whether can_generate is defaulted or passed' );
+	ok( count( $two ) === 2, 'teacher still sees every pink highlight' );
+
+	$by_text = array();
+	foreach ( $two as $it ) {
+		$by_text[ $it['text'] ] = $it;
+	}
+	ok( array_key_exists( 'audio_id', $by_text['moment of levity'] ), 'teacher item keeps the audio_id key' );
+	ok( $by_text['read the room']['can_generate'] === true, 'teacher can generate the audio-less pink item' );
+}
+test_pron_teacher_list_unchanged();
 
 /* ----------------------------------------------- AI Quick Note (logic only) */
 

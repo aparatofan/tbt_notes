@@ -15,8 +15,11 @@ runtime dependency on any external CDN or service**.
   logged-in users). It is a round icon button that links to the Page Mode
   workspace (filterable via `tbt_notes_launcher_url`, default
   `https://thebluetree.pl/tbt-notes/`).
-- **Students** see a read-only view: their one class → a list of lessons (newest
-  on top) → a formatted, read-only lesson.
+- **Students** see a read-only view of the lesson text: their one class → a list
+  of lessons (newest on top) → a formatted, read-only lesson. They can also
+  **generate their own** pronunciation audio and expression-card flashcards for a
+  lesson's highlights (see the AI sections below); this is on by default and can
+  be switched off in one line.
 - The **teacher** sees the same panel, but with inline management: create/rename/
   delete classes, assign a student, add/edit/delete lessons, and write notes in a
   rich-text editor that **autosaves as you type**.
@@ -132,19 +135,32 @@ keyboard shortcuts, so the result is identical either way.
 ### Pronunciation audio (ElevenLabs)
 
 Pink **Pronunciation** highlights can have spoken audio. Under **Show:
-Pronunciation**, the teacher sees each pink phrase with a **Generate audio**
-button; clicking it calls a server-side WordPress REST route that asks
-ElevenLabs to synthesise the phrase, saves the MP3 under
-`wp-content/uploads/tbt-notes-pronunciation/`, and returns a Play button.
-Students viewing the same filter see **only** phrases that already have audio,
-with a Play button — they can never trigger generation. Audio appears solely in
-the Pronunciation filter, never in the full note.
+Pronunciation**, each pink phrase shows a **Generate audio** button; clicking it
+calls a server-side WordPress REST route that asks ElevenLabs to synthesise the
+phrase, saves the MP3 under `wp-content/uploads/tbt-notes-pronunciation/`, and
+returns a Play button. By default **both teachers and students** (class members)
+can generate: the first person to generate a phrase produces the audio for the
+whole class, and it is cached and reused thereafter. Audio appears solely in the
+Pronunciation filter, never in the full note.
 
-Generation is deliberately conservative: it is teacher-only and manual,
-already-generated audio is cached and reused (keyed by lesson + voice + text),
-the requested text must currently be highlighted pink in that lesson, phrases
-over 200 characters are rejected, and each teacher is capped at 30 generations
-per hour.
+Generation is deliberately conservative: it is manual, already-generated audio is
+cached and reused (keyed by lesson + voice + text), the requested text must
+currently be highlighted pink in that lesson, phrases over 200 characters are
+rejected, and each user is capped at 30 generations per hour.
+
+**Student self-generation is switchable off.** It is on by default; to revert to
+teacher-only generation (students then see only phrases that already have audio),
+define a constant in `wp-config.php` or add a filter (handy with a Code Snippets
+plugin):
+
+```php
+define( 'TBT_NOTES_STUDENT_GENERATION', false );
+// or:
+add_filter( 'tbt_notes_students_can_generate', '__return_false' );
+```
+
+The same switch governs the expression-card flashcards below. Editing, approving
+and force-regenerating cards always stay teacher-only, in both switch states.
 
 **Configure the API key server-side** (it is never exposed to the browser).
 Either define a constant in `wp-config.php`:
@@ -166,24 +182,35 @@ request is made.
 
 ### AI expression cards — OpenAI
 
-Blue **Useful expression** highlights can become small editable English–Polish
-flashcards. Under **Show: Useful expression**, the teacher sees each blue phrase
-with a **Generate card** button; clicking it calls a server-side WordPress REST
-route that asks OpenAI to produce a natural Polish translation plus one clear
-B1/B2 English example, then stores the result as a **draft** card.
+Blue **Useful expression** highlights can become small English–Polish flashcards.
+Under **Show: Useful expression**, each blue phrase shows a **Generate card**
+button; clicking it calls a server-side WordPress REST route that asks OpenAI to
+produce a natural Polish translation plus one clear B1/B2 English example, then
+stores the result as a **draft** card. By default **both teachers and students**
+(class members) can generate a card for a blue phrase that has none yet; cards are
+shared per lesson, so the first person to generate benefits the whole class.
 
-The teacher stays the quality-control gate. A draft card can be **edited** (both
-the Polish translation and the example are editable text fields), **regenerated**
-(a fresh OpenAI call that resets the card to draft), and **approved**. Students
-viewing the same filter see **only approved cards** — never drafts, never the
-generation controls, and never anything in the full note view. If an expression
-is no longer highlighted blue, it drops out of the current list.
+The teacher stays the quality-control gate. Only the teacher can **edit** a card
+(both the Polish translation and the example are editable text fields),
+**regenerate** it (a fresh OpenAI call that resets the card to draft), or
+**approve** it — those controls, and the `force`-regenerate path, are always
+teacher-only. Students see a **read-only** card and cannot edit, approve, or
+force a card. If an expression is no longer highlighted blue, it drops out of the
+current list.
+
+Because students generate straight into the shared list, they see cards
+**regardless of draft/approved status** (so a freshly generated card is visible
+immediately); the teacher's approval step becomes optional polish rather than a
+visibility gate. When **student self-generation is switched off** (see the
+constant/filter in the pronunciation section above), students revert to the
+previous behaviour exactly: no generate buttons, and cards visible **only when
+approved**.
 
 Generation is deliberately conservative and mirrors the pronunciation feature: it
-is teacher-only and manual, the requested text must currently be highlighted blue
-in that lesson, expressions over 200 characters are rejected, each teacher is
-capped at 50 generations per hour, and the OpenAI key is **server-side only** —
-it is never exposed to the browser. No AI generation ever happens for students.
+is manual, the requested text must currently be highlighted blue in that lesson,
+expressions over 200 characters are rejected, each user is capped at 50
+generations per hour, and the OpenAI key is **server-side only** — it is never
+exposed to the browser.
 
 The call uses the OpenAI **Responses API** with **Structured Outputs** (a strict
 JSON schema), defaulting to the small `gpt-5.4-nano` model.
@@ -228,10 +255,12 @@ into the note at the cursor, preserving line breaks), **Regenerate** (asks
 again), and **Discard**. Loading shows *Thinking…*, and any failure shows a
 friendly message without breaking the editor.
 
-Like the other AI features it is teacher-only and server-side: the request is
-gated by the `manage_tbt_notes` capability, prompts over 2000 characters are
-rejected, each teacher is capped at **20 requests per hour**, and the OpenAI key
-is **never** exposed to the browser.
+Unlike the pronunciation and expression-card generation (which students can now
+use), AI Quick Note stays **teacher-only** and server-side — it is an authoring
+aid inside the editor, which students never see. The request is gated by the
+`manage_tbt_notes` capability, prompts over 2000 characters are rejected, each
+teacher is capped at **20 requests per hour**, and the OpenAI key is **never**
+exposed to the browser.
 
 Per the project's API-key decision this feature reads its **own** constants from
 a server-side PHP snippet (do **not** edit `wp-config.php`):
