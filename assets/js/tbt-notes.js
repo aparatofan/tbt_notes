@@ -1199,7 +1199,13 @@
 
 		// ---- Student: read-only card, plus (when allowed) a Generate button. ----
 		if ( ! isTeacher ) {
-			li.appendChild( el( 'div', 'tbt-expression-text tbt-hl-blue', item.text ) );
+			// Same head structure as the teacher card, so the add-to-dictionary
+			// control sits in the same right-aligned actions slot in both views.
+			var studentHead = el( 'div', 'tbt-expression-head' );
+			studentHead.appendChild( el( 'span', 'tbt-expression-text tbt-hl-blue', item.text ) );
+			var studentActions = el( 'span', 'tbt-expression-actions' );
+			studentHead.appendChild( studentActions );
+			li.appendChild( studentHead );
 			var studentBody = el( 'div', 'tbt-expression-body' );
 			li.appendChild( studentBody );
 
@@ -1217,6 +1223,13 @@
 				eRow.appendChild( document.createTextNode( data.example_sentence || '' ) );
 				card.appendChild( eRow );
 				studentBody.appendChild( card );
+				// Any card a student can see is addable: read-only students only
+				// ever receive approved cards, and can-generate students see their
+				// own fresh cards, whose status the server deliberately omits.
+				clear( studentActions );
+				studentActions.appendChild( dictAddControl( lesson, item.text, function () {
+					return data.polish_translation || '';
+				} ) );
 			}
 
 			if ( item.has_card ) {
@@ -1423,10 +1436,460 @@
 			card.appendChild( actions );
 
 			body.appendChild( card );
+
+			// Approved cards get the add-to-dictionary control in the head row
+			// (paint() cleared it, so approval state is always current — a
+			// regenerated card drops back to draft and loses the +). Polish is
+			// read from the textarea at click time, so unsaved edits carry over.
+			if ( isApproved ) {
+				headActions.appendChild( dictAddControl( lesson, item.text, function () {
+					return pArea.value;
+				} ) );
+			}
 		}
 
 		paint( item );
 		return li;
+	}
+
+	/* ------------------------------------ Add to Personal Dictionary (blue) */
+
+	// Bridge to the Personal Dictionary plugin: every operation is one
+	// admin-ajax action (action=ays_pd_ajax) with a `function` selector, cookie
+	// authenticated (no nonce — the plugin's own handlers use none and scope all
+	// reads/writes to get_current_user_id() server-side).
+
+	// Expressions added this session, keyed by lesson + expression text, so a
+	// re-render (filter change, card repaint) keeps the "Added ✓" state and a
+	// second click cannot double-insert. Deliberately not persisted — the
+	// dictionary itself has no duplicate check, and a page reload resetting the
+	// affordance is acceptable per spec.
+	var dictAdded = {};
+
+	function dictKey( lesson, word ) {
+		return ( lesson && lesson.id ) + '\u0001' + word;
+	}
+
+	var DICT_ERR = 'Could not add to your dictionary. Please try again.';
+
+	// Same inline-SVG approach as TOOLTIP_ICONS: a static, trusted string.
+	var DICT_ADD_ICON =
+		'<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+		'<path d="M12 5v14"/><path d="M5 12h14"/></svg>';
+
+	/**
+	 * Resolve admin-ajax.php. Prefer Personal Dictionary's own localized URL when
+	 * its script happens to be on the page; otherwise derive it from our REST
+	 * root (which always sits alongside wp-admin), covering both pretty
+	 * (…/wp-json/…) and plain (…?rest_route=…) permalinks.
+	 */
+	function pdAjaxUrl() {
+		var pd = window.aysPersonalDictionaryAjaxPublic;
+		if ( pd && pd.ajaxUrl ) {
+			return pd.ajaxUrl;
+		}
+		var rest = '' + ( cfg.restUrl || '' );
+		var m = rest.match( /^(.*?)wp-json\// );
+		if ( ! m ) {
+			m = rest.match( /^(.*?)\?rest_route=/ );
+		}
+		if ( m ) {
+			return m[ 1 ] + 'wp-admin/admin-ajax.php';
+		}
+		return '/wp-admin/admin-ajax.php';
+	}
+
+	/**
+	 * POST one Personal Dictionary operation. Mirrors api()'s conventions
+	 * (fetch, same-origin credentials, JSON-or-error) but form-encoded, which is
+	 * what admin-ajax handlers read.
+	 */
+	function pdAjax( fn, fields ) {
+		var params = new URLSearchParams();
+		params.set( 'action', 'ays_pd_ajax' );
+		params.set( 'function', fn );
+		Object.keys( fields || {} ).forEach( function ( key ) {
+			params.set( key, fields[ key ] );
+		} );
+		return fetch( pdAjaxUrl(), {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+			credentials: 'same-origin',
+			body: params.toString(),
+		} ).then( function ( res ) {
+			if ( ! res.ok ) {
+				throw new Error( t( 'dictError', DICT_ERR ) );
+			}
+			return res.json().catch( function () {
+				throw new Error( t( 'dictError', DICT_ERR ) );
+			} );
+		} );
+	}
+
+	/**
+	 * The learner's dictionary groups, newest first: [{ id, name }].
+	 */
+	function pdFetchGroups() {
+		return pdAjax( 'ays_groups_pd' ).then( function ( data ) {
+			var rows = ( data && data.status && Array.isArray( data.results ) ) ? data.results : [];
+			var out = [];
+			rows.forEach( function ( row ) {
+				var id = parseInt( row && row.id, 10 );
+				if ( id > 0 ) {
+					out.push( { id: id, name: String( ( row && row.name ) || '' ) } );
+				}
+			} );
+			return out;
+		} );
+	}
+
+	/**
+	 * Insert one word. The handler only reports added_words when the insert
+	 * really ran (missing/empty fields fall through to a bare status:true), so
+	 * added_words >= 1 — not status — is the success signal.
+	 */
+	function pdAddWord( groupId, word, translation ) {
+		return pdAjax( 'ays_words_add_ajax', {
+			category_id: groupId,
+			word: word,
+			translation: translation,
+		} ).then( function ( data ) {
+			if ( ! data || ! ( parseInt( data.added_words, 10 ) >= 1 ) ) {
+				throw new Error( t( 'dictError', DICT_ERR ) );
+			}
+			return data;
+		} );
+	}
+
+	/**
+	 * Create a group and resolve its id. Current Personal Dictionary (2.7.x)
+	 * returns the new id as last_id; older builds did not, so fall back to
+	 * re-fetching the (newest-first) group list.
+	 */
+	function pdCreateGroup( name ) {
+		return pdAjax( 'ays_groups_add_ajax', { value: name } ).then( function ( data ) {
+			if ( ! data || ! ( parseInt( data.added_group, 10 ) >= 1 ) ) {
+				throw new Error( t( 'dictError', DICT_ERR ) );
+			}
+			var id = parseInt( data.last_id, 10 );
+			if ( id > 0 ) {
+				return id;
+			}
+			return pdFetchGroups().then( function ( groups ) {
+				if ( ! groups.length ) {
+					throw new Error( t( 'dictError', DICT_ERR ) );
+				}
+				return groups[ 0 ].id;
+			} );
+		} );
+	}
+
+	/* -- Group-picker menu: one shared floating panel, anchored to a + button -- */
+
+	var dictMenuEl = null;
+	var dictMenuState = null; // { anchor, onPick, busy }
+
+	function ensureDictMenu() {
+		if ( dictMenuEl ) {
+			return dictMenuEl;
+		}
+		// Lives on <body>: the notes panel is transformed (overlay slide), which
+		// would re-anchor position:fixed descendants, and its scroll containers
+		// would clip an absolutely positioned menu. The tbt-notes-app class is
+		// carried along so the --tbt-* design tokens still apply.
+		dictMenuEl = el( 'div', 'tbt-notes-app tbt-dict-menu' );
+		dictMenuEl.hidden = true;
+		// Same guard as the highlight popup: pressing inside the menu must not
+		// blur the editor or drop a Quill selection. The new-group input is
+		// exempt so it can still take focus.
+		dictMenuEl.addEventListener( 'mousedown', function ( e ) {
+			if ( ! e.target || 'INPUT' !== e.target.tagName ) {
+				e.preventDefault();
+			}
+		} );
+		document.body.appendChild( dictMenuEl );
+		return dictMenuEl;
+	}
+
+	/**
+	 * Anchor the menu to the + button: right-aligned below it, flipped above
+	 * when it would overflow the viewport bottom — the same measure-then-flip
+	 * approach as the selection highlight popup, in fixed coordinates.
+	 */
+	function positionDictMenu( anchor ) {
+		var rect = anchor.getBoundingClientRect();
+		dictMenuEl.hidden = false; // Must be visible to measure its size.
+		var mw = dictMenuEl.offsetWidth;
+		var mh = dictMenuEl.offsetHeight;
+		var left = rect.right - mw;
+		var maxLeft = window.innerWidth - mw - 8;
+		if ( left > maxLeft ) {
+			left = maxLeft;
+		}
+		if ( left < 8 ) {
+			left = 8;
+		}
+		var top = rect.bottom + 6;
+		if ( top + mh > window.innerHeight - 8 ) {
+			top = rect.top - mh - 6;
+			if ( top < 8 ) {
+				top = rect.bottom + 6;
+			}
+		}
+		dictMenuEl.style.left = left + 'px';
+		dictMenuEl.style.top = top + 'px';
+	}
+
+	function onDictDocMousedown( e ) {
+		var anchor = dictMenuState && dictMenuState.anchor;
+		if ( dictMenuEl.contains( e.target ) || ( anchor && anchor.contains( e.target ) ) ) {
+			return;
+		}
+		closeDictMenu();
+	}
+
+	function onDictDocKeydown( e ) {
+		if ( 'Escape' === e.key ) {
+			// Capture-phase + stopPropagation so Escape closes only the menu, not
+			// the notes overlay behind it.
+			e.stopPropagation();
+			closeDictMenu();
+		}
+	}
+
+	function onDictReflow( e ) {
+		// Scrolling the group list itself must not dismiss it; any outer scroll
+		// or resize closes the menu (its fixed anchor point is gone).
+		if ( e && 'scroll' === e.type && e.target && 1 === e.target.nodeType && dictMenuEl.contains( e.target ) ) {
+			return;
+		}
+		closeDictMenu();
+	}
+
+	function closeDictMenu() {
+		if ( ! dictMenuState ) {
+			return;
+		}
+		var anchor = dictMenuState.anchor;
+		dictMenuState = null;
+		dictMenuEl.hidden = true;
+		clear( dictMenuEl );
+		if ( anchor ) {
+			anchor.setAttribute( 'aria-expanded', 'false' );
+		}
+		document.removeEventListener( 'mousedown', onDictDocMousedown, true );
+		document.removeEventListener( 'keydown', onDictDocKeydown, true );
+		window.removeEventListener( 'scroll', onDictReflow, true );
+		window.removeEventListener( 'resize', onDictReflow );
+	}
+
+	/**
+	 * Open the picker for one + button. onPick( {id, name} ) performs the add
+	 * and resolves on success; the menu shows Adding…/errors around it.
+	 */
+	function openDictMenu( anchor, onPick ) {
+		if ( dictMenuState && dictMenuState.anchor === anchor ) {
+			closeDictMenu(); // Second click on the same + toggles the menu shut.
+			return;
+		}
+		closeDictMenu();
+		ensureDictMenu();
+
+		var state = { anchor: anchor, onPick: onPick, busy: false };
+		dictMenuState = state;
+		anchor.setAttribute( 'aria-expanded', 'true' );
+
+		document.addEventListener( 'mousedown', onDictDocMousedown, true );
+		document.addEventListener( 'keydown', onDictDocKeydown, true );
+		window.addEventListener( 'scroll', onDictReflow, true );
+		window.addEventListener( 'resize', onDictReflow );
+
+		renderDictMenuMessage( t( 'loading', 'Loading…' ), false );
+		positionDictMenu( anchor );
+
+		pdFetchGroups().then( function ( groups ) {
+			if ( dictMenuState !== state ) {
+				return;
+			}
+			renderDictMenuGroups( state, groups );
+			positionDictMenu( anchor );
+		} ).catch( function ( err ) {
+			if ( dictMenuState !== state ) {
+				return;
+			}
+			renderDictMenuMessage( ( err && err.message ) || t( 'dictError', DICT_ERR ), true );
+			positionDictMenu( anchor );
+		} );
+	}
+
+	function renderDictMenuMessage( text, isError ) {
+		clear( dictMenuEl );
+		dictMenuEl.appendChild(
+			el( 'div', 'tbt-dict-menu__msg' + ( isError ? ' tbt-dict-menu__msg--error' : '' ), text )
+		);
+	}
+
+	/**
+	 * Menu content: a row per group, or — for a learner with no groups yet — an
+	 * inline "＋ New group" name input that creates the group and continues the
+	 * same add in one interaction.
+	 */
+	function renderDictMenuGroups( state, groups ) {
+		clear( dictMenuEl );
+		dictMenuEl.appendChild( el( 'div', 'tbt-dict-menu__label', t( 'dictGroupsLabel', 'Add to dictionary group' ) ) );
+
+		var msg = el( 'div', 'tbt-dict-menu__msg' );
+		msg.hidden = true;
+
+		function showMsg( text, isError ) {
+			msg.hidden = false;
+			msg.className = 'tbt-dict-menu__msg' + ( isError ? ' tbt-dict-menu__msg--error' : '' );
+			msg.textContent = text;
+		}
+
+		function setDisabled( disabled ) {
+			var controls = dictMenuEl.querySelectorAll( 'button, input' );
+			for ( var i = 0; i < controls.length; i++ ) {
+				controls[ i ].disabled = disabled;
+			}
+		}
+
+		function beginBusy() {
+			state.busy = true;
+			setDisabled( true );
+			showMsg( t( 'dictAdding', 'Adding…' ), false );
+			positionDictMenu( state.anchor );
+		}
+
+		function failBusy( err ) {
+			state.busy = false;
+			if ( dictMenuState !== state ) {
+				return;
+			}
+			setDisabled( false );
+			showMsg( ( err && err.message ) || t( 'dictError', DICT_ERR ), true );
+			positionDictMenu( state.anchor );
+		}
+
+		// Run the actual add; close on success, report + re-enable on failure.
+		function runAdd( group ) {
+			state.onPick( group ).then( function () {
+				if ( dictMenuState === state ) {
+					closeDictMenu();
+				}
+			} ).catch( failBusy );
+		}
+
+		function groupRow( group ) {
+			var row = el( 'button', 'tbt-dict-menu__item', group.name );
+			row.type = 'button';
+			row.addEventListener( 'click', function () {
+				if ( state.busy ) {
+					return;
+				}
+				beginBusy();
+				runAdd( group );
+			} );
+			return row;
+		}
+
+		if ( groups.length ) {
+			var list = el( 'div', 'tbt-dict-menu__list' );
+			groups.forEach( function ( group ) {
+				list.appendChild( groupRow( group ) );
+			} );
+			dictMenuEl.appendChild( list );
+		} else {
+			var wrap = el( 'div', 'tbt-dict-menu__new' );
+			var input = el( 'input', 'tbt-notes-input tbt-dict-menu__input' );
+			input.type = 'text';
+			input.placeholder = t( 'dictNewGroupPh', 'New group name' );
+			input.setAttribute( 'aria-label', t( 'dictNewGroup', '＋ New group' ) );
+			var createBtn = el( 'button', 'tbt-notes-btn tbt-dict-menu__create', t( 'dictCreate', 'Create' ) );
+			createBtn.type = 'button';
+
+			function submitNewGroup() {
+				if ( state.busy ) {
+					return;
+				}
+				var name = input.value.trim();
+				if ( '' === name ) {
+					input.focus();
+					return;
+				}
+				beginBusy();
+				pdCreateGroup( name ).then( function ( groupId ) {
+					if ( dictMenuState !== state ) {
+						return;
+					}
+					// The group now exists: swap the form for a normal pick row so
+					// a failed add can be retried without duplicating the group.
+					var group = { id: groupId, name: name };
+					var list = el( 'div', 'tbt-dict-menu__list' );
+					list.appendChild( groupRow( group ) );
+					dictMenuEl.replaceChild( list, wrap );
+					setDisabled( true );
+					runAdd( group );
+				} ).catch( failBusy );
+			}
+
+			createBtn.addEventListener( 'click', submitNewGroup );
+			input.addEventListener( 'keydown', function ( e ) {
+				if ( 'Enter' === e.key ) {
+					e.preventDefault();
+					submitNewGroup();
+				}
+			} );
+
+			wrap.appendChild( input );
+			wrap.appendChild( createBtn );
+			dictMenuEl.appendChild( wrap );
+		}
+
+		dictMenuEl.appendChild( msg );
+	}
+
+	function dictAddedBadge() {
+		var badge = el( 'span', 'tbt-dict-added', t( 'dictAdded', 'Added ✓' ) );
+		badge.title = t( 'dictAddedTitle', 'Added to your dictionary' );
+		return badge;
+	}
+
+	/**
+	 * The per-card control: a hover-revealed + (link-tooltip icon-button style)
+	 * that opens the group picker, or the session "Added ✓" badge once the
+	 * expression is in the dictionary. `getTranslation` is read at click time so
+	 * the teacher's unsaved Polish edits carry over. The Example is intentionally
+	 * never sent.
+	 */
+	function dictAddControl( lesson, word, getTranslation ) {
+		if ( dictAdded[ dictKey( lesson, word ) ] ) {
+			return dictAddedBadge();
+		}
+
+		var btn = el( 'button', 'tbt-dict-add' );
+		btn.type = 'button';
+		btn.title = t( 'dictAdd', 'Add to my dictionary' );
+		btn.setAttribute( 'aria-label', t( 'dictAdd', 'Add to my dictionary' ) );
+		btn.setAttribute( 'aria-haspopup', 'true' );
+		btn.setAttribute( 'aria-expanded', 'false' );
+		btn.innerHTML = DICT_ADD_ICON;
+		// Same guard as the highlight popup: pressing the control must not blur
+		// the editor, drop a Quill selection, or steal focus from a card field.
+		btn.addEventListener( 'mousedown', function ( e ) {
+			e.preventDefault();
+		} );
+		btn.addEventListener( 'click', function () {
+			openDictMenu( btn, function ( group ) {
+				return pdAddWord( group.id, word, getTranslation() ).then( function () {
+					dictAdded[ dictKey( lesson, word ) ] = true;
+					if ( btn.parentNode ) {
+						btn.parentNode.replaceChild( dictAddedBadge(), btn );
+					}
+				} );
+			} );
+		} );
+		return btn;
 	}
 
 	/* ---------------------------------------------------------- Class settings */

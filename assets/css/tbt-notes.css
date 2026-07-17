@@ -1415,6 +1415,143 @@ body.tbt-notes-open {
 	font-size: 14px;
 }
 
+/* ------------------------------ Add to Personal Dictionary (blue cards) */
+
+/* The + mirrors the link-tooltip icon buttons (26px rounded hover box, inline
+   SVG). Revealed on card hover / keyboard focus; always visible where hover
+   does not exist (touch). */
+.tbt-dict-add {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 26px;
+	height: 26px;
+	padding: 0;
+	margin: 0 1px;
+	background: transparent;
+	border: none;
+	border-radius: 4px;
+	color: var(--tbt-text);
+	cursor: pointer;
+	opacity: 0;
+	transition: opacity 0.12s ease;
+}
+
+.tbt-expression-item:hover .tbt-dict-add,
+.tbt-expression-item:focus-within .tbt-dict-add {
+	opacity: 1;
+}
+
+@media (hover: none) {
+	.tbt-dict-add {
+		opacity: 1;
+	}
+}
+
+.tbt-dict-add:hover {
+	background: rgba( 17, 52, 107, 0.08 );
+}
+
+.tbt-dict-add svg {
+	display: block;
+}
+
+/* Session "Added ✓" state: quiet, non-interactive confirmation. */
+.tbt-dict-added {
+	display: inline-flex;
+	align-items: center;
+	font-size: 13px;
+	font-weight: 600;
+	color: var(--tbt-success, #2e7d32);
+	white-space: nowrap;
+}
+
+/* Group-picker menu: the highlight popup's floating-panel recipe (panel bg,
+   border, shadow), but fixed-positioned on <body> — the notes panel is
+   transformed and scroll-clipped, so it cannot host a floating child. The
+   element also carries .tbt-notes-app for the --tbt-* tokens.
+   LOAD-BEARING: z-index must exceed the overlay panel's (--tbt-z + 2). */
+.tbt-dict-menu {
+	position: fixed;
+	z-index: calc(var(--tbt-z, 2147483000) + 3);
+	min-width: 200px;
+	max-width: 280px;
+	max-height: 300px;
+	overflow-y: auto;
+	padding: 6px;
+	background: var(--tbt-panel-bg);
+	border: 1px solid var(--tbt-border);
+	border-radius: 10px;
+	box-shadow: 0 4px 14px rgba( 17, 52, 107, 0.18 );
+}
+
+.tbt-dict-menu[hidden] {
+	display: none;
+}
+
+.tbt-dict-menu__label {
+	padding: 2px 8px 6px;
+	font-size: 12px;
+	font-weight: 600;
+	color: var(--tbt-muted, #777);
+}
+
+.tbt-dict-menu__item {
+	display: block;
+	width: 100%;
+	padding: 7px 10px;
+	font: inherit;
+	font-size: 14px;
+	text-align: left;
+	color: var(--tbt-text);
+	background: transparent;
+	border: none;
+	border-radius: 6px;
+	cursor: pointer;
+}
+
+.tbt-dict-menu__item:hover,
+.tbt-dict-menu__item:focus {
+	background: rgba( 17, 52, 107, 0.08 );
+}
+
+.tbt-dict-menu__item:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+
+/* Zero-groups: inline "＋ New group" name + Create, reusing the standard
+   input/button classes with menu-sized overrides. */
+.tbt-dict-menu__new {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 4px;
+}
+
+.tbt-dict-menu__input {
+	flex: 1 1 auto;
+	min-width: 0;
+	padding: 6px 8px;
+	font-size: 14px;
+}
+
+.tbt-dict-menu__create {
+	flex: 0 0 auto;
+	padding: 6px 12px;
+	font-size: 14px;
+}
+
+.tbt-dict-menu__msg {
+	padding: 4px 8px;
+	font-size: 13px;
+	color: var(--tbt-muted, #777);
+}
+
+.tbt-dict-menu__msg--error {
+	color: var(--tbt-danger);
+}
+
 /* --------------------------------------------------------------- Editor view */
 /* Fills the full width of the detail pane (no artificial max-width). */
 
