@@ -262,13 +262,23 @@ class TBT_Notes_Pronunciation {
 	 * Build the pronunciation list for a lesson.
 	 *
 	 * Teacher: every current pink-highlight item, each flagged with whether
-	 * audio exists. Student: only current pink items that already have audio.
+	 * audio exists. Student who may self-generate: the same full list, so they
+	 * can generate the ones without audio yet. Read-only student: only current
+	 * pink items that already have audio.
 	 *
-	 * @param int  $lesson_id   Lesson ID.
-	 * @param bool $for_teacher Whether the viewer can manage notes.
+	 * @param int      $lesson_id    Lesson ID.
+	 * @param bool     $for_teacher  Whether the viewer can manage notes.
+	 * @param bool|null $can_generate Whether the viewer may generate audio. When
+	 *                                unspecified, a can-generate viewer is exactly
+	 *                                a teacher (back-compat with existing callers).
 	 * @return array[]
 	 */
-	public static function list_for_lesson( $lesson_id, $for_teacher ) {
+	public static function list_for_lesson( $lesson_id, $for_teacher, $can_generate = null ) {
+		// Back-compat: when unspecified, a can-generate viewer is exactly a teacher.
+		if ( null === $can_generate ) {
+			$can_generate = (bool) $for_teacher;
+		}
+
 		$lesson = TBT_Notes_DB::get_lesson( (int) $lesson_id );
 		if ( ! $lesson ) {
 			return array();
@@ -289,7 +299,9 @@ class TBT_Notes_Pronunciation {
 			$hash = self::text_hash( $text );
 			$rec  = isset( $by_hash[ $hash ] ) ? $by_hash[ $hash ] : null;
 
-			if ( $for_teacher ) {
+			if ( $for_teacher || $can_generate ) {
+				// Teachers and can-generate students both see every current pink
+				// highlight, with a Generate affordance on the ones without audio.
 				$out[] = array(
 					'text'         => $text,
 					'has_audio'    => (bool) $rec,
@@ -298,7 +310,7 @@ class TBT_Notes_Pronunciation {
 					'can_generate' => true,
 				);
 			} elseif ( $rec ) {
-				// Students only ever see generated, currently-pink items.
+				// Read-only students only ever see generated, currently-pink items.
 				$out[] = array(
 					'text'      => $text,
 					'has_audio' => true,

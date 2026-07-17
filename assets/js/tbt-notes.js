@@ -41,6 +41,7 @@
 	var state = {
 		loaded: false,
 		isTeacher: !! cfg.isTeacher,
+		studentGeneration: !! cfg.studentGeneration,
 		classes: [],
 		view: 'root',
 		currentClass: null,
@@ -1071,7 +1072,9 @@
 
 	/**
 	 * One row in the pronunciation list: the pink-highlighted text plus either a
-	 * Play button (audio exists) or, for teachers only, a Generate audio button.
+	 * Play button (audio exists) or a Generate audio button. The Generate button
+	 * is driven by the per-item can_generate flag from the server (which folds in
+	 * the student-generation switch), not by isTeacher.
 	 */
 	function pronunciationItem( lesson, item, isTeacher ) {
 		var li = el( 'li', 'tbt-pronunciation-item' );
@@ -1134,7 +1137,7 @@
 
 		if ( item.has_audio && item.audio_url ) {
 			renderPlay( item.audio_url );
-		} else if ( isTeacher ) {
+		} else if ( item.can_generate ) {
 			renderGenerate();
 		}
 		return li;
@@ -1187,24 +1190,60 @@
 	 *
 	 * Teacher: the blue text plus either a "Generate card" button (no card yet) or
 	 * an editable card (Polish + example textareas, status, Save/Approve/
-	 * Regenerate). Student: a static, read-only approved card.
+	 * Regenerate). Student: a static, read-only card (any status); when the server
+	 * allows it (item.can_generate on a cardless item) a "Generate card" button
+	 * that produces the same read-only card in place.
 	 */
 	function expressionCardItem( lesson, item, isTeacher ) {
 		var li = el( 'li', 'tbt-expression-item' );
 
-		// ---- Student: static approved card only. ----
+		// ---- Student: read-only card, plus (when allowed) a Generate button. ----
 		if ( ! isTeacher ) {
 			li.appendChild( el( 'div', 'tbt-expression-text tbt-hl-blue', item.text ) );
-			var card = el( 'div', 'tbt-expression-card' );
-			var pRow = el( 'div', 'tbt-expression-readrow' );
-			pRow.appendChild( el( 'strong', null, t( 'polishLabel', 'Polish' ) + ': ' ) );
-			pRow.appendChild( document.createTextNode( item.polish_translation || '' ) );
-			card.appendChild( pRow );
-			var eRow = el( 'div', 'tbt-expression-readrow' );
-			eRow.appendChild( el( 'strong', null, t( 'exampleLabel', 'Example' ) + ': ' ) );
-			eRow.appendChild( document.createTextNode( item.example_sentence || '' ) );
-			card.appendChild( eRow );
-			li.appendChild( card );
+			var studentBody = el( 'div', 'tbt-expression-body' );
+			li.appendChild( studentBody );
+
+			// Read-only Polish + Example rows. Reads only polish_translation /
+			// example_sentence; status and card_id are ignored for students.
+			function renderStudentCard( data ) {
+				clear( studentBody );
+				var card = el( 'div', 'tbt-expression-card' );
+				var pRow = el( 'div', 'tbt-expression-readrow' );
+				pRow.appendChild( el( 'strong', null, t( 'polishLabel', 'Polish' ) + ': ' ) );
+				pRow.appendChild( document.createTextNode( data.polish_translation || '' ) );
+				card.appendChild( pRow );
+				var eRow = el( 'div', 'tbt-expression-readrow' );
+				eRow.appendChild( el( 'strong', null, t( 'exampleLabel', 'Example' ) + ': ' ) );
+				eRow.appendChild( document.createTextNode( data.example_sentence || '' ) );
+				card.appendChild( eRow );
+				studentBody.appendChild( card );
+			}
+
+			if ( item.has_card ) {
+				renderStudentCard( item );
+			} else if ( item.can_generate ) {
+				var genBtn = el( 'button', 'tbt-notes-btn tbt-expression-generate' );
+				genBtn.type = 'button';
+				genBtn.textContent = t( 'generateCard', 'Generate card' );
+				genBtn.addEventListener( 'click', function () {
+					genBtn.disabled = true;
+					genBtn.textContent = t( 'generating', 'Generating…' );
+					api( 'POST', 'lessons/' + lesson.id + '/expression-cards', { text: item.text } ).then( function ( data ) {
+						if ( data && data.item && data.item.has_card ) {
+							renderStudentCard( data.item );
+						} else {
+							throw new Error( t( 'cardError', 'Could not generate the expression card. Please try again.' ) );
+						}
+					} ).catch( function ( err ) {
+						genBtn.disabled = false;
+						genBtn.textContent = t( 'generateCard', 'Generate card' );
+						studentBody.appendChild( el( 'span', 'tbt-expression-error', err.message ) );
+					} );
+				} );
+				studentBody.appendChild( genBtn );
+			}
+			// else: no card and generation is off → render nothing extra (the
+			// server won't send cardless items to students in that case anyway).
 			return li;
 		}
 

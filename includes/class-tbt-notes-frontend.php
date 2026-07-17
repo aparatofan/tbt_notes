@@ -258,6 +258,10 @@ class TBT_Notes_Frontend {
 				),
 			),
 			'i18n'            => $this->strings(),
+			// Whether students may self-generate flashcards and audio. Drives the
+			// student generate buttons; the per-item can_generate flag from the
+			// server is the authoritative gate (it already folds in this switch).
+			'studentGeneration' => (bool) TBT_Notes_Capabilities::students_can_generate(),
 			// AI Quick Note presets are teacher-only (it is a teacher feature). The
 			// instruction wording lives server-side; only key + label cross to JS.
 			'aiPresets'       => $is_teacher ? TBT_Notes_AI_Quick_Note::preset_choices() : array(),

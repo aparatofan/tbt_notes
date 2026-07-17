@@ -299,14 +299,25 @@ class TBT_Notes_Expression_Cards {
 	 * Build the expression-card list for a lesson.
 	 *
 	 * Teacher: every current blue highlight, each flagged with whether a card
-	 * exists (and its current contents). Student: only current blue highlights
+	 * exists (and its current contents), fully editable. Student who may
+	 * self-generate: every current blue highlight too, but cards are read-only
+	 * (of any status, so they see what was just generated) and cardless items
+	 * carry a can_generate flag. Read-only student: only current blue highlights
 	 * that already have an approved card.
 	 *
-	 * @param int  $lesson_id   Lesson ID.
-	 * @param bool $for_teacher Whether the viewer can manage notes.
+	 * @param int      $lesson_id    Lesson ID.
+	 * @param bool     $for_teacher  Whether the viewer can manage notes.
+	 * @param bool|null $can_generate Whether the viewer may generate cards. When
+	 *                                unspecified, a can-generate viewer is exactly
+	 *                                a teacher (back-compat with existing callers).
 	 * @return array[]
 	 */
-	public static function list_for_lesson( $lesson_id, $for_teacher ) {
+	public static function list_for_lesson( $lesson_id, $for_teacher, $can_generate = null ) {
+		// Back-compat: when unspecified, a can-generate viewer is exactly a teacher.
+		if ( null === $can_generate ) {
+			$can_generate = (bool) $for_teacher;
+		}
+
 		$lesson = TBT_Notes_DB::get_lesson( (int) $lesson_id );
 		if ( ! $lesson ) {
 			return array();
@@ -344,8 +355,28 @@ class TBT_Notes_Expression_Cards {
 						'can_generate' => true,
 					);
 				}
+			} elseif ( $can_generate ) {
+				// A student who may self-generate sees every current blue highlight:
+				// existing cards read-only (any status, so freshly generated ones
+				// show), and cardless items with a Generate affordance. No card_id,
+				// status or editable controls cross to the student.
+				if ( $rec ) {
+					$out[] = array(
+						'text'               => $text,
+						'has_card'           => true,
+						'polish_translation' => $rec['polish_translation'],
+						'example_sentence'   => $rec['example_sentence'],
+						'level'              => $rec['level'],
+					);
+				} else {
+					$out[] = array(
+						'text'         => $text,
+						'has_card'     => false,
+						'can_generate' => true,
+					);
+				}
 			} elseif ( $rec && 'approved' === $rec['status'] ) {
-				// Students only ever see approved, currently-blue items.
+				// Read-only students only ever see approved, currently-blue items.
 				$out[] = array(
 					'text'               => $text,
 					'has_card'           => true,

@@ -126,4 +126,24 @@ class TBT_Notes_Capabilities {
 		}
 		return user_can( $user_id, 'manage_options' );
 	}
+
+	/**
+	 * Whether students (class members without the manage capability) may generate
+	 * flashcards and pronunciation audio themselves. Defaults to enabled. Switch off
+	 * with either:
+	 *
+	 *   define( 'TBT_NOTES_STUDENT_GENERATION', false );        // wp-config or a snippet
+	 *   add_filter( 'tbt_notes_students_can_generate', '__return_false' );
+	 *
+	 * @return bool
+	 */
+	public static function students_can_generate() {
+		$enabled = defined( 'TBT_NOTES_STUDENT_GENERATION' ) ? (bool) TBT_NOTES_STUDENT_GENERATION : true;
+		/**
+		 * Filter whether students may self-generate flashcards and audio.
+		 *
+		 * @param bool $enabled Whether student generation is enabled.
+		 */
+		return (bool) apply_filters( 'tbt_notes_students_can_generate', $enabled );
+	}
 }

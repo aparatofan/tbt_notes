@@ -146,8 +146,11 @@ class TBT_Notes_REST {
 			)
 		);
 
-		// Pronunciation audio for pink highlights. Reads follow the lesson's
-		// class visibility rule; generation is teacher/admin only.
+		// Pronunciation audio for pink highlights. Both reads and generation follow
+		// the lesson's class visibility rule (can_read_lesson): the owning teacher,
+		// an admin, or a class-member student may reach them. The generate handler
+		// then re-checks capability — teachers are additionally ownership-guarded,
+		// students are gated on the student-generation switch.
 		register_rest_route(
 			$ns,
 			'/lessons/(?P<id>\d+)/pronunciations',
@@ -160,14 +163,15 @@ class TBT_Notes_REST {
 				array(
 					'methods'             => WP_REST_Server::CREATABLE,
 					'callback'            => array( $this, 'create_pronunciation' ),
-					'permission_callback' => array( $this, 'require_manage' ),
+					'permission_callback' => array( $this, 'can_read_lesson' ),
 				),
 			)
 		);
 
-		// Expression cards for blue ("Useful expression") highlights. Reads follow
-		// the lesson's class visibility rule; generation/edit/approve are
-		// teacher/admin only.
+		// Expression cards for blue ("Useful expression") highlights. Reads and
+		// generation follow the lesson's class visibility rule (can_read_lesson);
+		// the generate handler re-checks capability as above. Edit/approve/force
+		// stay teacher/admin only (their own routes below).
 		register_rest_route(
 			$ns,
 			'/lessons/(?P<id>\d+)/expression-cards',
@@ -180,7 +184,7 @@ class TBT_Notes_REST {
 				array(
 					'methods'             => WP_REST_Server::CREATABLE,
 					'callback'            => array( $this, 'create_expression_card' ),
-					'permission_callback' => array( $this, 'require_manage' ),
+					'permission_callback' => array( $this, 'can_read_lesson' ),
 				),
 			)
 		);
@@ -947,21 +951,24 @@ class TBT_Notes_REST {
 	 * --------------------------------------------------------------------- */
 
 	/**
-	 * List pronunciation items for a lesson. Teachers get every current pink
-	 * highlight (with a has_audio flag); students get only generated ones.
-	 * Ownership already verified in the permission callback.
+	 * List pronunciation items for a lesson. Teachers and can-generate students
+	 * get every current pink highlight (with a has_audio flag); read-only students
+	 * get only generated ones. Class membership already verified in the permission
+	 * callback, so a non-teacher here is a confirmed member and can_generate
+	 * reduces to whether the student-generation switch is on.
 	 *
 	 * @param WP_REST_Request $request Request.
 	 * @return WP_REST_Response
 	 */
 	public function get_pronunciations( WP_REST_Request $request ) {
-		$lesson_id  = (int) $request['id'];
-		$is_teacher = TBT_Notes_Capabilities::user_can_manage();
+		$lesson_id    = (int) $request['id'];
+		$is_teacher   = TBT_Notes_Capabilities::user_can_manage();
+		$can_generate = $is_teacher || TBT_Notes_Capabilities::students_can_generate();
 
 		$response = array(
 			'lesson_id'    => $lesson_id,
-			'items'        => TBT_Notes_Pronunciation::list_for_lesson( $lesson_id, $is_teacher ),
-			'can_generate' => $is_teacher,
+			'items'        => TBT_Notes_Pronunciation::list_for_lesson( $lesson_id, $is_teacher, $can_generate ),
+			'can_generate' => $can_generate,
 		);
 
 		// Surface key-configuration status to teachers only (never the key).
@@ -973,10 +980,11 @@ class TBT_Notes_REST {
 	}
 
 	/**
-	 * Generate (or reuse cached) audio for one pink-highlight item.
-	 * Teacher/admin only (enforced by the permission callback). All validation,
-	 * the pink-membership check, caching and the ElevenLabs call live in the
-	 * pronunciation service.
+	 * Generate (or reuse cached) audio for one pink-highlight item. Reachable by
+	 * the owning teacher/admin or a class-member student (permission callback
+	 * proved membership). A teacher is additionally ownership-guarded; a student
+	 * is gated on the student-generation switch. All validation, the
+	 * pink-membership check, caching and the ElevenLabs call live in the service.
 	 *
 	 * @param WP_REST_Request $request Request.
 	 * @return WP_REST_Response|WP_Error
@@ -989,9 +997,23 @@ class TBT_Notes_REST {
 		if ( ! $lesson ) {
 			return new WP_Error( 'tbt_notes_not_found', __( 'Lesson not found.', 'tbt-notes' ), array( 'status' => 404 ) );
 		}
-		$denied = $this->guard_lesson_ownership( $lesson );
-		if ( $denied ) {
-			return $denied;
+
+		$is_teacher = TBT_Notes_Capabilities::user_can_manage();
+		if ( $is_teacher ) {
+			// Unchanged: a teacher may only generate inside a class they own.
+			$denied = $this->guard_lesson_ownership( $lesson );
+			if ( $denied ) {
+				return $denied;
+			}
+		} else {
+			// Student: class membership already proven by can_read_lesson().
+			if ( ! TBT_Notes_Capabilities::students_can_generate() ) {
+				return new WP_Error(
+					'tbt_notes_forbidden',
+					__( 'You are not allowed to generate this.', 'tbt-notes' ),
+					array( 'status' => 403 )
+				);
+			}
 		}
 
 		$record = TBT_Notes_Pronunciation::generate( $lesson_id, $text );
@@ -1018,21 +1040,25 @@ class TBT_Notes_REST {
 
 	/**
 	 * List expression-card items for a lesson. Teachers get every current blue
-	 * highlight (each flagged with whether a card exists and its contents);
-	 * students get only currently-blue highlights with an approved card.
-	 * Ownership already verified in the permission callback.
+	 * highlight (each flagged with whether a card exists and its contents, fully
+	 * editable); can-generate students get every current blue highlight too, but
+	 * cards read-only and cardless items flagged can_generate; read-only students
+	 * get only currently-blue highlights with an approved card. Class membership
+	 * already verified in the permission callback, so a non-teacher here is a
+	 * confirmed member and can_generate reduces to whether the switch is on.
 	 *
 	 * @param WP_REST_Request $request Request.
 	 * @return WP_REST_Response
 	 */
 	public function get_expression_cards( WP_REST_Request $request ) {
-		$lesson_id  = (int) $request['id'];
-		$is_teacher = TBT_Notes_Capabilities::user_can_manage();
+		$lesson_id    = (int) $request['id'];
+		$is_teacher   = TBT_Notes_Capabilities::user_can_manage();
+		$can_generate = $is_teacher || TBT_Notes_Capabilities::students_can_generate();
 
 		$response = array(
 			'lesson_id'    => $lesson_id,
-			'items'        => TBT_Notes_Expression_Cards::list_for_lesson( $lesson_id, $is_teacher ),
-			'can_generate' => $is_teacher,
+			'items'        => TBT_Notes_Expression_Cards::list_for_lesson( $lesson_id, $is_teacher, $can_generate ),
+			'can_generate' => $can_generate,
 		);
 
 		// Surface key-configuration status to teachers only (never the key).
@@ -1045,8 +1071,11 @@ class TBT_Notes_REST {
 
 	/**
 	 * Generate (or reuse/regenerate) an expression card for one blue-highlight
-	 * item. Teacher/admin only. All validation, the blue-membership check and the
-	 * OpenAI call live in the expression-card service.
+	 * item. Reachable by the owning teacher/admin or a class-member student
+	 * (permission callback proved membership). A teacher is additionally
+	 * ownership-guarded and may force regeneration; a student is gated on the
+	 * student-generation switch and can never force. All validation, the
+	 * blue-membership check and the OpenAI call live in the service.
 	 *
 	 * @param WP_REST_Request $request Request.
 	 * @return WP_REST_Response|WP_Error
@@ -1054,16 +1083,32 @@ class TBT_Notes_REST {
 	public function create_expression_card( WP_REST_Request $request ) {
 		$lesson_id = (int) $request['id'];
 		$text      = (string) $request->get_param( 'text' );
-		$force     = (bool) $request->get_param( 'force' );
 
 		$lesson = TBT_Notes_DB::get_lesson( $lesson_id );
 		if ( ! $lesson ) {
 			return new WP_Error( 'tbt_notes_not_found', __( 'Lesson not found.', 'tbt-notes' ), array( 'status' => 404 ) );
 		}
-		$denied = $this->guard_lesson_ownership( $lesson );
-		if ( $denied ) {
-			return $denied;
+
+		$is_teacher = TBT_Notes_Capabilities::user_can_manage();
+		if ( $is_teacher ) {
+			// Unchanged: a teacher may only generate inside a class they own.
+			$denied = $this->guard_lesson_ownership( $lesson );
+			if ( $denied ) {
+				return $denied;
+			}
+		} else {
+			// Student: class membership already proven by can_read_lesson().
+			if ( ! TBT_Notes_Capabilities::students_can_generate() ) {
+				return new WP_Error(
+					'tbt_notes_forbidden',
+					__( 'You are not allowed to generate this.', 'tbt-notes' ),
+					array( 'status' => 403 )
+				);
+			}
 		}
+
+		// Only a teacher may force a paid regeneration; students never regenerate.
+		$force = $is_teacher ? (bool) $request->get_param( 'force' ) : false;
 
 		$record = TBT_Notes_Expression_Cards::generate( $lesson_id, $text, $force );
 		if ( is_wp_error( $record ) ) {
