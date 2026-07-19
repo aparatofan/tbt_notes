@@ -1,9 +1,7 @@
 name: Deploy to WordPress
 
 on:
-  push:
-    branches:
-      - main
+  workflow_dispatch:
 
 jobs:
   deploy:
