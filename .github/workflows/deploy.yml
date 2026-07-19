@@ -20,7 +20,7 @@ jobs:
           password: ${{ secrets.FTP_PASSWORD }}
           protocol: ftps
           server-dir: /tbt-notes/
-          dry-run: true
+          dry-run: false
           exclude: |
             **/.git*
             **/.git*/**
