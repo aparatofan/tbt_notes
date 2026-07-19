@@ -124,3 +124,23 @@ function tbt_notes_bootstrap() {
 	TBT_Notes_Plugin::instance()->run();
 }
 add_action( 'plugins_loaded', 'tbt_notes_bootstrap' );
+
+/**
+ * Register this plugin on the TBT Hub Overview page.
+ *
+ * Loaded unconditionally from the main plugin file even though the menu
+ * itself is registered inside includes/class-tbt-notes-admin.php.
+ *
+ * @param array $items Existing hub items.
+ * @return array
+ */
+function tbt_notes_register_hub_item( $items ) {
+	$items[] = array(
+		'slug'        => 'tbt-notes',
+		'title'       => 'TBT Notes',
+		'description' => 'Per-class lesson notes shown to each student in a slide-out side panel.',
+		'capability'  => 'manage_options',
+	);
+	return $items;
+}
+add_filter( 'tbt_hub_items', 'tbt_notes_register_hub_item' );
