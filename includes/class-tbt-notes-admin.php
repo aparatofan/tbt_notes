@@ -33,18 +33,32 @@ class TBT_Notes_Admin {
 	}
 
 	/**
-	 * Register the top-level menu page.
+	 * Register the settings page.
+	 *
+	 * Under the TBT hub when it is active; otherwise a top-level menu of its
+	 * own so the page is never unreachable.
 	 */
 	public function add_menu() {
-		add_menu_page(
-			__( 'TBT Notes', 'tbt-notes' ),
-			__( 'TBT Notes', 'tbt-notes' ),
-			'manage_options',
-			self::PAGE_SLUG,
-			array( $this, 'render_page' ),
-			'dashicons-welcome-write-blog',
-			58
-		);
+		if ( defined( 'TBT_HUB_SLUG' ) ) {
+			add_submenu_page(
+				TBT_HUB_SLUG,
+				__( 'TBT Notes', 'tbt-notes' ),
+				__( 'TBT Notes', 'tbt-notes' ),
+				'manage_options',
+				self::PAGE_SLUG,
+				array( $this, 'render_page' )
+			);
+		} else {
+			add_menu_page(
+				__( 'TBT Notes', 'tbt-notes' ),
+				__( 'TBT Notes', 'tbt-notes' ),
+				'manage_options',
+				self::PAGE_SLUG,
+				array( $this, 'render_page' ),
+				'dashicons-welcome-write-blog',
+				58
+			);
+		}
 	}
 
 	/**
