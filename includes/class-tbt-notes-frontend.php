@@ -206,6 +206,24 @@ class TBT_Notes_Frontend {
 
 		wp_localize_script( 'tbt-notes', 'TBTNotes', $this->localized_data( $is_teacher ) );
 		wp_enqueue_script( 'tbt-notes' );
+
+		/**
+		 * Fires after Notes has enqueued its own front-end assets.
+		 *
+		 * The companion to the tbt_notes_class_extras filter: a plugin that
+		 * contributes to the panel can add its scripts here instead of having to
+		 * work out on its own which pages Notes is running on. It fires only
+		 * where the panel actually loads, so a contributor's assets never end up
+		 * on a page that has no Notes on it.
+		 *
+		 * @param array $context Request context. Currently 'is_manager' (bool).
+		 */
+		do_action(
+			'tbt_notes_frontend_assets',
+			array(
+				'is_manager' => (bool) $is_teacher,
+			)
+		);
 	}
 
 	/**
