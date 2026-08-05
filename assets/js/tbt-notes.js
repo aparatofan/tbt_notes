@@ -53,6 +53,7 @@
 		extrasClassId: 0,
 		extrasOpenGroups: {},
 		extrasOpenItem: '',
+		extrasOpenLesson: 0,
 		sidebarFolded: false,
 		highlightFilter: 'full',
 		error: '',
@@ -732,6 +733,10 @@
 	 *    with no contributors installed the panel looks exactly as it always did.
 	 * 3. Item text comes from teacher input, so it is only ever written as text
 	 *    nodes (el() sets textContent) — never innerHTML.
+	 *
+	 * An item that names a lesson is drawn on that lesson's row. Everything else
+	 * falls through to the group list below the lessons, which is the safety net
+	 * described at renderExtrasGroups(): an item must never simply disappear.
 	 */
 
 	function loadExtras( classId ) {
@@ -739,6 +744,7 @@
 		state.extrasClassId = classId;
 		state.extrasOpenGroups = {};
 		state.extrasOpenItem = '';
+		state.extrasOpenLesson = 0;
 
 		api( 'GET', 'classes/' + classId + '/extras' ).then( function ( data ) {
 			// The user may have moved to another class while this was in flight.
@@ -750,6 +756,62 @@
 		} ).catch( function () {
 			// Optional by design: on failure the class simply has no extras.
 		} );
+	}
+
+	/**
+	 * Every contributed item, flattened and tagged with the group it came from
+	 * and a stable key. The key identifies an item across both surfaces (lesson
+	 * row and fallback group), which is what keeps "only one open at a time"
+	 * true when the two are mixed.
+	 *
+	 * @return {Array} Entries of { group, item, key, lessonId }.
+	 */
+	function extrasEntries() {
+		var out = [];
+		state.extras.forEach( function ( group ) {
+			if ( ! group || ! group.key || ! Array.isArray( group.items ) ) {
+				return;
+			}
+			group.items.forEach( function ( item, i ) {
+				if ( ! item ) {
+					return;
+				}
+				out.push( {
+					group: group,
+					item: item,
+					key: group.key + ':' + i,
+					lessonId: parseInt( item.lesson_id, 10 ) || 0
+				} );
+			} );
+		} );
+		return out;
+	}
+
+	/**
+	 * Entries anchored to a lesson that is actually on screen, keyed by lesson
+	 * ID. An item naming a lesson that no longer exists — deleted since the deck
+	 * was made — is deliberately excluded so it falls through to the group list
+	 * instead of pointing at a row that is not there.
+	 *
+	 * @return {Object} lessonId → entries.
+	 */
+	function extrasByLesson() {
+		var known = {};
+		state.lessons.forEach( function ( lesson ) {
+			known[ lesson.id ] = true;
+		} );
+
+		var map = {};
+		extrasEntries().forEach( function ( entry ) {
+			if ( ! entry.lessonId || ! known[ entry.lessonId ] ) {
+				return;
+			}
+			if ( ! map[ entry.lessonId ] ) {
+				map[ entry.lessonId ] = [];
+			}
+			map[ entry.lessonId ].push( entry );
+		} );
+		return map;
 	}
 
 	/**
@@ -765,36 +827,267 @@
 	}
 
 	/**
-	 * Rebuild the extras container in place.
+	 * Repaint both extras surfaces: the icons on the lesson rows and the group
+	 * list below them.
 	 *
 	 * @param {string} focusKey Optional data-tbt-extras-key to restore focus to,
 	 *                          so keyboard users are not dropped to the top of
 	 *                          the panel when a section opens or closes.
 	 */
 	function paintExtras( focusKey ) {
-		var host = content.querySelector( '[data-tbt-extras]' );
-		if ( ! host ) {
-			return;
-		}
-		clear( host );
-
-		state.extras.forEach( function ( group ) {
-			// A group with nothing in it is dropped rather than shown empty.
-			if ( ! group || ! group.key || ! group.items || ! group.items.length ) {
-				return;
-			}
-			host.appendChild( extrasGroup( group ) );
-		} );
+		paintLessonExtras();
+		paintExtrasGroups();
 
 		if ( focusKey ) {
-			var target = host.querySelector( '[data-tbt-extras-key="' + focusKey + '"]' );
+			var target = content.querySelector( '[data-tbt-extras-key="' + focusKey + '"]' );
 			if ( target ) {
 				target.focus();
 			}
 		}
 	}
 
-	function extrasGroup( group ) {
+	/**
+	 * Draw the per-lesson controls onto the rows that have items.
+	 *
+	 * Rows are found in the DOM rather than re-rendered, because this runs when
+	 * the extras response lands — after the lessons list is already on screen
+	 * and possibly while the teacher is typing in the editor beside it.
+	 */
+	function paintLessonExtras() {
+		var nav = content.querySelector( '.tbt-notes-lesson-nav' );
+		if ( ! nav ) {
+			return;
+		}
+
+		// Clear first: this is a repaint, and a lesson may have lost its items.
+		Array.prototype.forEach.call( nav.querySelectorAll( '.tbt-notes-lesson-extras, .tbt-notes-lesson-extras__panel' ), function ( node ) {
+			node.parentNode.removeChild( node );
+		} );
+
+		var byLesson = extrasByLesson();
+
+		Array.prototype.forEach.call( nav.querySelectorAll( '[data-tbt-lesson-id]' ), function ( row ) {
+			var lessonId = parseInt( row.getAttribute( 'data-tbt-lesson-id' ), 10 ) || 0;
+			var entries = byLesson[ lessonId ];
+			if ( ! entries || ! entries.length ) {
+				row.classList.remove( 'has-extras', 'is-extras-open' );
+				return;
+			}
+
+			var isOpen = state.extrasOpenLesson === lessonId;
+			row.classList.add( 'has-extras' );
+			row.classList.toggle( 'is-extras-open', isOpen );
+
+			// Before the delete control, so the destructive action stays last.
+			var deleteBtn = row.querySelector( '.tbt-notes-listitem__delete' );
+			var button = lessonExtrasButton( lessonId, entries, isOpen );
+			if ( deleteBtn ) {
+				row.insertBefore( button, deleteBtn );
+			} else {
+				row.appendChild( button );
+			}
+
+			if ( isOpen ) {
+				row.appendChild( lessonExtrasPanel( entries ) );
+			}
+		} );
+	}
+
+	/**
+	 * The control on a lesson row: the contributor's mark, plus a count when the
+	 * lesson has more than one item.
+	 *
+	 * @param {number} lessonId Lesson the row belongs to.
+	 * @param {Array}  entries  Items anchored to it.
+	 * @param {boolean} isOpen  Whether its panel is showing.
+	 * @return {HTMLElement}
+	 */
+	function lessonExtrasButton( lessonId, entries, isOpen ) {
+		var button = el( 'button', 'tbt-notes-lesson-extras' + ( isOpen ? ' is-open' : '' ) );
+		button.type = 'button';
+		button.setAttribute( 'aria-expanded', isOpen ? 'true' : 'false' );
+		button.setAttribute( 'data-tbt-extras-key', 'l:' + lessonId );
+		button.setAttribute( 'aria-label', t( 'extrasOpenDeck', 'Pokaż fiszki' ) );
+		button.title = t( 'extrasOpenDeck', 'Pokaż fiszki' );
+
+		button.appendChild( extrasIcon( entries[ 0 ].group ) );
+		if ( entries.length > 1 ) {
+			button.appendChild( el( 'span', 'tbt-notes-lesson-extras__count', String( entries.length ) ) );
+		}
+
+		button.addEventListener( 'click', function ( e ) {
+			// The row itself opens the note. Without this, one tap would both
+			// switch the note and open the deck.
+			e.stopPropagation();
+			var wasOpen = state.extrasOpenLesson === lessonId;
+			state.extrasOpenLesson = wasOpen ? 0 : lessonId;
+			// Opening one closes every other, on either surface.
+			state.extrasOpenItem = ( ! wasOpen && entries.length === 1 ) ? entries[ 0 ].key : '';
+			paintExtras( 'l:' + lessonId );
+		} );
+
+		return button;
+	}
+
+	/**
+	 * What a lesson row expands to. One item opens straight to its QR and link;
+	 * several become a short list, one open at a time.
+	 *
+	 * @param {Array} entries Items anchored to this lesson.
+	 * @return {HTMLElement}
+	 */
+	function lessonExtrasPanel( entries ) {
+		var panel = el( 'div', 'tbt-notes-lesson-extras__panel' );
+
+		if ( entries.length === 1 ) {
+			var entry = entries[ 0 ];
+			panel.appendChild( el( 'div', 'tbt-notes-extras__title', entry.item.title || '' ) );
+			if ( entry.item.subtitle ) {
+				panel.appendChild( el( 'div', 'tbt-notes-extras__subtitle', entry.item.subtitle ) );
+			}
+			panel.appendChild( extrasDetail( entry.item ) );
+			return panel;
+		}
+
+		var list = el( 'ul', 'tbt-notes-extras__list' );
+		entries.forEach( function ( entry ) {
+			list.appendChild( extrasItem( entry.item, entry.key, true ) );
+		} );
+		panel.appendChild( list );
+		return panel;
+	}
+
+	/**
+	 * The contributor's icon, or a neutral built-in one.
+	 *
+	 * The supplied markup has already been through an SVG allowlist server-side.
+	 * It is parsed here rather than assigned as innerHTML, and re-checked on the
+	 * way through, so even a mistake in that allowlist cannot put a handler or a
+	 * script into the page. Anything unexpected falls back to the built-in mark,
+	 * which keeps the row's control working.
+	 *
+	 * @param {Object} group Group the item came from.
+	 * @return {HTMLElement}
+	 */
+	function extrasIcon( group ) {
+		var raw = group && typeof group.icon === 'string' ? group.icon : '';
+
+		if ( raw && window.DOMParser ) {
+			try {
+				var parsed = new window.DOMParser().parseFromString( raw, 'text/html' );
+				var svg = parsed.body ? parsed.body.querySelector( 'svg' ) : null;
+				if ( svg && scrubSvg( svg ) ) {
+					svg.setAttribute( 'aria-hidden', 'true' );
+					svg.setAttribute( 'focusable', 'false' );
+					svg.classList.add( 'tbt-notes-lesson-extras__icon' );
+					return document.importNode( svg, true );
+				}
+			} catch ( e ) {
+				// Fall through to the built-in mark.
+			}
+		}
+
+		return defaultExtrasIcon();
+	}
+
+	/**
+	 * Strip anything executable or fetching from a parsed icon.
+	 *
+	 * @param {Element} svg Parsed <svg>.
+	 * @return {boolean} False if the icon is not worth rendering.
+	 */
+	function scrubSvg( svg ) {
+		var banned = svg.querySelectorAll( 'script, foreignObject, use, image, a, style, animate, set, iframe, object, embed' );
+		Array.prototype.forEach.call( banned, function ( node ) {
+			node.parentNode.removeChild( node );
+		} );
+
+		var all = [ svg ].concat( Array.prototype.slice.call( svg.querySelectorAll( '*' ) ) );
+		all.forEach( function ( node ) {
+			Array.prototype.slice.call( node.attributes ).forEach( function ( attr ) {
+				var name = attr.name.toLowerCase();
+				if ( name.indexOf( 'on' ) === 0 || name === 'href' || name === 'xlink:href' || name === 'src' || name === 'style' ) {
+					node.removeAttribute( attr.name );
+				}
+			} );
+		} );
+
+		// An icon with no shapes left is not an icon.
+		return !! svg.querySelector( 'path, circle, rect, polygon, g' );
+	}
+
+	/**
+	 * Neutral stand-in when a contributor supplies no usable icon: two stacked
+	 * cards, drawn as elements so no markup is ever parsed.
+	 *
+	 * @return {SVGElement}
+	 */
+	function defaultExtrasIcon() {
+		var NS = 'http://www.w3.org/2000/svg';
+		var svg = document.createElementNS( NS, 'svg' );
+		svg.setAttribute( 'viewBox', '0 0 24 24' );
+		svg.setAttribute( 'width', '18' );
+		svg.setAttribute( 'height', '18' );
+		svg.setAttribute( 'aria-hidden', 'true' );
+		svg.setAttribute( 'focusable', 'false' );
+		svg.setAttribute( 'class', 'tbt-notes-lesson-extras__icon' );
+
+		[ [ 3, 7 ], [ 7, 3 ] ].forEach( function ( xy ) {
+			var rect = document.createElementNS( NS, 'rect' );
+			rect.setAttribute( 'x', xy[ 0 ] );
+			rect.setAttribute( 'y', xy[ 1 ] );
+			rect.setAttribute( 'width', '14' );
+			rect.setAttribute( 'height', '14' );
+			rect.setAttribute( 'rx', '3' );
+			rect.setAttribute( 'fill', 'none' );
+			rect.setAttribute( 'stroke', 'currentColor' );
+			rect.setAttribute( 'stroke-width', '1.6' );
+			svg.appendChild( rect );
+		} );
+
+		return svg;
+	}
+
+	/**
+	 * The group list under the lessons.
+	 *
+	 * It now renders only what no lesson row claimed: items with no lesson, and
+	 * items naming a lesson that no longer exists. In day-to-day use it is
+	 * empty and draws nothing. That is the point of keeping it — an item whose
+	 * anchor has gone stale still has somewhere to appear, and quietly vanishing
+	 * is the one failure here that looks like nothing at all.
+	 */
+	function paintExtrasGroups() {
+		var host = content.querySelector( '[data-tbt-extras]' );
+		if ( ! host ) {
+			return;
+		}
+		clear( host );
+
+		var claimed = extrasByLesson();
+		var anchored = {};
+		Object.keys( claimed ).forEach( function ( lessonId ) {
+			claimed[ lessonId ].forEach( function ( entry ) {
+				anchored[ entry.key ] = true;
+			} );
+		} );
+
+		state.extras.forEach( function ( group ) {
+			if ( ! group || ! group.key || ! Array.isArray( group.items ) ) {
+				return;
+			}
+			var leftover = extrasEntries().filter( function ( entry ) {
+				return entry.group === group && ! anchored[ entry.key ];
+			} );
+			// A group with nothing left over is dropped rather than shown empty.
+			if ( ! leftover.length ) {
+				return;
+			}
+			host.appendChild( extrasGroup( group, leftover ) );
+		} );
+	}
+
+	function extrasGroup( group, entries ) {
 		var isOpen = !! state.extrasOpenGroups[ group.key ];
 		var section = el( 'section', 'tbt-notes-extras__group' + ( isOpen ? ' is-open' : '' ) );
 
@@ -804,7 +1097,7 @@
 		toggle.setAttribute( 'data-tbt-extras-key', 'g:' + group.key );
 		toggle.appendChild( el( 'span', 'tbt-notes-extras__caret', isOpen ? '▾' : '▸' ) );
 		toggle.appendChild( el( 'span', 'tbt-notes-extras__label', group.label || '' ) );
-		toggle.appendChild( el( 'span', 'tbt-notes-extras__count', '(' + group.items.length + ')' ) );
+		toggle.appendChild( el( 'span', 'tbt-notes-extras__count', '(' + entries.length + ')' ) );
 		toggle.addEventListener( 'click', function () {
 			state.extrasOpenGroups[ group.key ] = ! isOpen;
 			paintExtras( 'g:' + group.key );
@@ -814,10 +1107,8 @@
 		// Collapsed by default: the lessons list stays the focus of the sidebar.
 		if ( isOpen ) {
 			var list = el( 'ul', 'tbt-notes-extras__list' );
-			group.items.forEach( function ( item, i ) {
-				if ( item ) {
-					list.appendChild( extrasItem( item, group.key + ':' + i ) );
-				}
+			entries.forEach( function ( entry ) {
+				list.appendChild( extrasItem( entry.item, entry.key ) );
 			} );
 			section.appendChild( list );
 		}
@@ -825,7 +1116,17 @@
 		return section;
 	}
 
-	function extrasItem( item, itemKey ) {
+	/**
+	 * One item row plus its expanded detail.
+	 *
+	 * @param {Object}  item          Contributed item.
+	 * @param {string}  itemKey       Stable key, unique across both surfaces.
+	 * @param {boolean} inLessonPanel True when rendered inside a lesson row's
+	 *                                panel, where closing the lesson is the
+	 *                                caller's business, not this row's.
+	 * @return {HTMLElement}
+	 */
+	function extrasItem( item, itemKey, inLessonPanel ) {
 		var isOpen = state.extrasOpenItem === itemKey;
 		var li = el( 'li', 'tbt-notes-extras__item' + ( isOpen ? ' is-open' : '' ) );
 
@@ -837,9 +1138,14 @@
 		if ( item.subtitle ) {
 			row.appendChild( el( 'span', 'tbt-notes-extras__subtitle', item.subtitle ) );
 		}
-		row.addEventListener( 'click', function () {
-			// One open item at a time; clicking the open row closes it again.
+		row.addEventListener( 'click', function ( e ) {
+			e.stopPropagation();
+			// One open item at a time, counting both surfaces: opening an item
+			// in the group list closes whatever a lesson row had open.
 			state.extrasOpenItem = isOpen ? '' : itemKey;
+			if ( ! inLessonPanel ) {
+				state.extrasOpenLesson = 0;
+			}
 			paintExtras( 'i:' + itemKey );
 		} );
 		li.appendChild( row );
@@ -1050,6 +1356,8 @@
 
 	function lessonNavItem( lesson, isTeacher ) {
 		var li = el( 'li', 'tbt-notes-listitem' );
+		// How paintLessonExtras() finds this row when the extras response lands.
+		li.setAttribute( 'data-tbt-lesson-id', lesson.id );
 		var active = state.currentLesson && state.currentLesson.id === lesson.id;
 		var main = el( 'button', 'tbt-notes-listitem__main' + ( active ? ' is-active' : '' ) );
 		main.type = 'button';

@@ -327,6 +327,7 @@ class TBT_Notes_Frontend {
 			// links students open in class, and the classroom language is Polish.
 			'extrasCopy'        => __( 'Kopiuj link', 'tbt-notes' ),
 			'extrasCopied'      => __( 'Skopiowano', 'tbt-notes' ),
+			'extrasOpenDeck'    => __( 'Pokaż fiszki', 'tbt-notes' ),
 			'searchStudents'    => __( 'Search by username, name or email…', 'tbt-notes' ),
 			'searchHint'        => __( 'Type to find a student to add.', 'tbt-notes' ),
 			'noResults'         => __( 'No matches.', 'tbt-notes' ),
