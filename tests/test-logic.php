@@ -1081,13 +1081,13 @@ function test_extras_sanitize() {
 	$in = array(
 		array(
 			'key'   => 'Some_Key!9',
-			'label' => "  Fiszki <b>x</b>\n",
+			'label' => "  Grupa <b>x</b>\n",
 			'items' => array(
 				array(
 					'id'       => '12abc',
 					'title'    => 'Unit 4 <script>alert(1)</script>',
-					'subtitle' => 'Lekcja 23 · 18 kart',
-					'url'      => 'https://thebluetree.pl/swipe-deck/?deck=ab12cd34ef56',
+					'subtitle' => 'Lekcja 23 · 18 elementów',
+					'url'      => 'https://thebluetree.pl/example/?item=ab12cd34ef56',
 				),
 			),
 		),
@@ -1096,10 +1096,10 @@ function test_extras_sanitize() {
 
 	ok( count( $out ) === 1, 'a well-formed group survives' );
 	ok( $out[0]['key'] === 'some_key', 'key is lowercased and stripped to [a-z_]' );
-	ok( $out[0]['label'] === 'Fiszki x', 'label is text-sanitised' );
+	ok( $out[0]['label'] === 'Grupa x', 'label is text-sanitised' );
 	ok( $out[0]['items'][0]['id'] === 12, 'id becomes an int' );
 	ok( ! contains( $out[0]['items'][0]['title'], '<script' ), 'title is stripped of markup' );
-	ok( $out[0]['items'][0]['subtitle'] === 'Lekcja 23 · 18 kart', 'subtitle passes through intact' );
+	ok( $out[0]['items'][0]['subtitle'] === 'Lekcja 23 · 18 elementów', 'subtitle passes through intact' );
 
 	// A group with no usable items must not reach the panel as an empty heading.
 	ok( TBT_Notes_REST::sanitize_extras( array( array( 'key' => 'k', 'label' => 'L', 'items' => array() ) ) ) === array(), 'a group with no items is dropped' );
