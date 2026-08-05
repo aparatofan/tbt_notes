@@ -305,6 +305,10 @@ class TBT_Notes_Frontend {
 			'lessons'           => __( 'Lessons', 'tbt-notes' ),
 			'toggleLessons'     => __( 'Show / hide lessons', 'tbt-notes' ),
 			'print'             => __( 'Print', 'tbt-notes' ),
+			// Contributed extras panel. Polish by design: these labels sit next to
+			// deck links students scan in class, and the classroom language is Polish.
+			'extrasCopy'        => __( 'Kopiuj link', 'tbt-notes' ),
+			'extrasCopied'      => __( 'Skopiowano', 'tbt-notes' ),
 			'searchStudents'    => __( 'Search by username, name or email…', 'tbt-notes' ),
 			'searchHint'        => __( 'Type to find a student to add.', 'tbt-notes' ),
 			'noResults'         => __( 'No matches.', 'tbt-notes' ),
