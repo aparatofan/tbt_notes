@@ -681,10 +681,14 @@ body.tbt-notes-open {
 	background: var(--tbt-accent-soft);
 }
 
+/* Sized by height, with width following the artwork's own aspect ratio — a
+   contributed mark is not necessarily square, and forcing it to be would
+   distort it. The cap keeps a very wide one from crowding the row. */
 .tbt-notes-lesson-extras__icon {
 	display: block;
-	width: 18px;
-	height: 18px;
+	height: 20px;
+	width: auto;
+	max-width: 28px;
 }
 
 .tbt-notes-lesson-extras__count {
