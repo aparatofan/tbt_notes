@@ -93,6 +93,22 @@ function wp_strip_all_tags( $str ) {
 	return trim( preg_replace( '/<[^>]*>/', '', (string) $str ) );
 }
 
+function absint( $value ) {
+	return abs( (int) $value );
+}
+
+/**
+ * Stand-in for esc_url_raw: the point under test is that a URL outside the
+ * allowed protocols comes back empty, which is what real WordPress does.
+ */
+function esc_url_raw( $url ) {
+	$url = trim( (string) $url );
+	if ( '' === $url ) {
+		return '';
+	}
+	return preg_match( '#^https?://#i', $url ) ? $url : '';
+}
+
 /**
  * Tiny WP_Error stand-in: stores a code + message so tests can assert on them.
  */
@@ -1059,6 +1075,60 @@ function test_lesson_numbering() {
 	ok( '1 January 2026' === TBT_Notes_REST::format_long_date( $ts2 ), 'long date renders January correctly' );
 }
 test_lesson_numbering();
+
+echo "Class extras — sanitising untrusted contributor output:\n";
+function test_extras_sanitize() {
+	$in = array(
+		array(
+			'key'   => 'Some_Key!9',
+			'label' => "  Fiszki <b>x</b>\n",
+			'items' => array(
+				array(
+					'id'       => '12abc',
+					'title'    => 'Unit 4 <script>alert(1)</script>',
+					'subtitle' => 'Lekcja 23 · 18 kart',
+					'url'      => 'https://thebluetree.pl/swipe-deck/?deck=ab12cd34ef56',
+				),
+			),
+		),
+	);
+	$out = TBT_Notes_REST::sanitize_extras( $in );
+
+	ok( count( $out ) === 1, 'a well-formed group survives' );
+	ok( $out[0]['key'] === 'some_key', 'key is lowercased and stripped to [a-z_]' );
+	ok( $out[0]['label'] === 'Fiszki x', 'label is text-sanitised' );
+	ok( $out[0]['items'][0]['id'] === 12, 'id becomes an int' );
+	ok( ! contains( $out[0]['items'][0]['title'], '<script' ), 'title is stripped of markup' );
+	ok( $out[0]['items'][0]['subtitle'] === 'Lekcja 23 · 18 kart', 'subtitle passes through intact' );
+
+	// A group with no usable items must not reach the panel as an empty heading.
+	ok( TBT_Notes_REST::sanitize_extras( array( array( 'key' => 'k', 'label' => 'L', 'items' => array() ) ) ) === array(), 'a group with no items is dropped' );
+
+	// A rogue contributor cannot smuggle a script URL through.
+	$evil = array(
+		array(
+			'key'   => 'evil',
+			'label' => 'Evil',
+			'items' => array(
+				array( 'id' => 1, 'title' => 'x', 'url' => 'javascript:alert(1)' ),
+				array( 'id' => 2, 'title' => 'y', 'url' => '' ),
+			),
+		),
+	);
+	ok( TBT_Notes_REST::sanitize_extras( $evil ) === array(), 'javascript: and empty URLs are dropped, emptying the group' );
+
+	// Nonsense in, empty array out — never a fatal.
+	ok( TBT_Notes_REST::sanitize_extras( 'nope' ) === array(), 'a non-array filter return is ignored' );
+	ok( TBT_Notes_REST::sanitize_extras( array( 'nope', 5, null ) ) === array(), 'non-array groups are ignored' );
+	ok( TBT_Notes_REST::sanitize_extras( array( array( 'key' => '99', 'items' => array( array( 'url' => 'https://x.pl' ) ) ) ) ) === array(), 'a group whose key has no [a-z_] characters is dropped' );
+
+	// Missing optional fields default rather than warn.
+	$bare = TBT_Notes_REST::sanitize_extras(
+		array( array( 'key' => 'k', 'items' => array( array( 'url' => 'https://x.pl/d' ) ) ) )
+	);
+	ok( $bare[0]['label'] === '' && $bare[0]['items'][0]['subtitle'] === '' && $bare[0]['items'][0]['id'] === 0, 'absent label/subtitle/id default to empty' );
+}
+test_extras_sanitize();
 
 /* ----------------------------------------------------------------- Summary */
 
