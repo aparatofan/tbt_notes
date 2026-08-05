@@ -632,6 +632,87 @@ body.tbt-notes-open {
 	gap: var(--tbt-s1);
 }
 
+/* ------------------------------------------------- Extras on a lesson row */
+
+/* A lesson row gains a small control when a contributor has something for that
+   lesson. The row stays one line; the expanded panel wraps onto the next. */
+
+.tbt-notes-listitem.has-extras {
+	flex-wrap: wrap;
+}
+
+.tbt-notes-lesson-extras {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	flex: 0 0 auto;
+	padding: 4px 6px;
+	margin-right: 2px;
+	border: 0;
+	border-radius: var(--tbt-radius);
+	background: transparent;
+	cursor: pointer;
+	color: var(--tbt-muted);
+	line-height: 0;
+	opacity: 0.85;
+	transition: opacity 0.12s ease, transform 0.12s ease, background 0.12s ease;
+}
+
+/* The artwork belongs to whoever contributed it and may be multicolour, so
+   hover and open states change weight and size only — never its colours. */
+.tbt-notes-lesson-extras:hover,
+.tbt-notes-lesson-extras:focus-visible {
+	opacity: 1;
+	transform: scale(1.08);
+	background: var(--tbt-hover);
+}
+
+.tbt-notes-lesson-extras.is-open {
+	opacity: 1;
+	background: var(--tbt-accent-soft);
+}
+
+.tbt-notes-lesson-extras__icon {
+	display: block;
+	width: 18px;
+	height: 18px;
+}
+
+.tbt-notes-lesson-extras__count {
+	font-size: 11px;
+	font-weight: 700;
+	line-height: 1;
+	color: var(--tbt-accent-contrast);
+	background: var(--tbt-accent-soft);
+	border-radius: 999px;
+	padding: 2px 5px;
+}
+
+.tbt-notes-lesson-extras__panel {
+	flex: 0 0 100%;
+	width: 100%;
+	border-top: 1px solid var(--tbt-border);
+	padding: var(--tbt-s2) var(--tbt-s3) var(--tbt-s3);
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 2px;
+}
+
+.tbt-notes-lesson-extras__panel .tbt-notes-extras__title,
+.tbt-notes-lesson-extras__panel .tbt-notes-extras__subtitle {
+	align-self: flex-start;
+}
+
+.tbt-notes-lesson-extras__panel .tbt-notes-extras__list {
+	width: 100%;
+	margin-top: var(--tbt-s1);
+}
+
+.tbt-notes-lesson-extras__panel .tbt-notes-extras__detail {
+	padding: var(--tbt-s2) 0 0;
+}
+
 /* ------------------------------------------------------------ Class extras */
 
 /* Contributed groups stacked under the lessons list. Deliberately quieter than

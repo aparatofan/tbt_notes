@@ -1127,8 +1127,70 @@ function test_extras_sanitize() {
 		array( array( 'key' => 'k', 'items' => array( array( 'url' => 'https://x.pl/d' ) ) ) )
 	);
 	ok( $bare[0]['label'] === '' && $bare[0]['items'][0]['subtitle'] === '' && $bare[0]['items'][0]['id'] === 0, 'absent label/subtitle/id default to empty' );
+
+	// lesson_id anchors an item to a lesson; 0 means "the class as a whole".
+	$anchored = TBT_Notes_REST::sanitize_extras(
+		array(
+			array(
+				'key'   => 'k',
+				'items' => array(
+					array( 'url' => 'https://x.pl/a', 'lesson_id' => '42abc' ),
+					array( 'url' => 'https://x.pl/b' ),
+					array( 'url' => 'https://x.pl/c', 'lesson_id' => -9 ),
+				),
+			),
+		)
+	);
+	ok( $anchored[0]['items'][0]['lesson_id'] === 42, 'lesson_id is absint-ed' );
+	ok( $anchored[0]['items'][1]['lesson_id'] === 0, 'an absent lesson_id defaults to 0 (not anchored)' );
+	ok( $anchored[0]['items'][2]['lesson_id'] === 9, 'a negative lesson_id cannot survive as negative' );
 }
 test_extras_sanitize();
+
+echo "Class extras — contributed SVG icons:\n";
+function test_extras_icon() {
+	// Our own guards, which run either side of wp_kses (stubbed pass-through).
+	ok( TBT_Notes_REST::sanitize_extras_icon( '' ) === '', 'empty icon yields empty' );
+	ok( TBT_Notes_REST::sanitize_extras_icon( null ) === '', 'a null icon yields empty' );
+	ok( TBT_Notes_REST::sanitize_extras_icon( '<img src=x>' ) === '', 'a non-SVG icon is refused outright' );
+	ok( TBT_Notes_REST::sanitize_extras_icon( 'hello <svg></svg>' ) === '', 'markup not starting with <svg> is refused' );
+	ok( TBT_Notes_REST::sanitize_extras_icon( '  <svg viewBox="0 0 4 4"><path d="M0 0"/></svg> ' ) !== '', 'a plain SVG survives' );
+
+	// The allowlist itself is the security boundary, so assert its contents —
+	// wp_kses is WordPress's own code and is stubbed out here.
+	TBT_Notes_REST::sanitize_extras_icon( '<svg></svg>' );
+	$allowed = $GLOBALS['__last_kses_allowed'];
+	ok( isset( $allowed['svg'], $allowed['path'], $allowed['circle'], $allowed['rect'], $allowed['polygon'], $allowed['g'], $allowed['defs'], $allowed['title'] ), 'shape and geometry elements are allowed' );
+	ok( ! isset( $allowed['script'] ), 'script is not allowed' );
+	ok( ! isset( $allowed['foreignobject'], $allowed['foreignObject'] ), 'foreignObject is not allowed' );
+	ok( ! isset( $allowed['use'] ), 'use is not allowed' );
+	ok( ! isset( $allowed['image'], $allowed['a'], $allowed['style'], $allowed['animate'] ), 'image/a/style/animate are not allowed' );
+	ok( isset( $allowed['path']['d'], $allowed['circle']['cx'], $allowed['rect']['rx'], $allowed['polygon']['points'] ), 'geometry attributes are allowed' );
+	ok( isset( $allowed['svg']['viewbox'] ), 'viewBox is allowed (wp_kses lowercases attribute names)' );
+
+	// No element may carry an event handler or a reference to anything external.
+	$bad = array( 'onload', 'onclick', 'onerror', 'onmouseover', 'href', 'xlink:href', 'src', 'style' );
+	$leaks = array();
+	foreach ( $allowed as $tag => $attrs ) {
+		foreach ( $bad as $attr ) {
+			if ( isset( $attrs[ $attr ] ) ) {
+				$leaks[] = $tag . '/' . $attr;
+			}
+		}
+	}
+	ok( empty( $leaks ), 'no on*/href/src/style attribute is allowed anywhere (' . implode( ',', $leaks ) . ')' );
+
+	// The icon rides along on the group.
+	$grouped = TBT_Notes_REST::sanitize_extras(
+		array( array( 'key' => 'k', 'icon' => '<svg><path d="M0 0"/></svg>', 'items' => array( array( 'url' => 'https://x.pl/d' ) ) ) )
+	);
+	ok( strpos( $grouped[0]['icon'], '<svg' ) === 0, 'a group icon reaches the panel' );
+	$noicon = TBT_Notes_REST::sanitize_extras(
+		array( array( 'key' => 'k', 'icon' => '<script>alert(1)</script>', 'items' => array( array( 'url' => 'https://x.pl/d' ) ) ) )
+	);
+	ok( $noicon[0]['icon'] === '', 'a non-SVG icon is dropped, leaving the built-in glyph' );
+}
+test_extras_icon();
 
 /* ----------------------------------------------------------------- Summary */
 

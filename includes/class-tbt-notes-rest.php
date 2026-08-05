@@ -558,10 +558,14 @@ class TBT_Notes_REST {
 					continue;
 				}
 				$items[] = array(
-					'id'       => isset( $item['id'] ) ? absint( $item['id'] ) : 0,
-					'title'    => isset( $item['title'] ) ? sanitize_text_field( (string) $item['title'] ) : '',
-					'subtitle' => isset( $item['subtitle'] ) ? sanitize_text_field( (string) $item['subtitle'] ) : '',
-					'url'      => $url,
+					'id'        => isset( $item['id'] ) ? absint( $item['id'] ) : 0,
+					// Which lesson this item belongs to, or 0 for "the class as a
+					// whole". Notes owns lessons, so the field is meaningful to the
+					// panel without it knowing what the item is.
+					'lesson_id' => isset( $item['lesson_id'] ) ? absint( $item['lesson_id'] ) : 0,
+					'title'     => isset( $item['title'] ) ? sanitize_text_field( (string) $item['title'] ) : '',
+					'subtitle'  => isset( $item['subtitle'] ) ? sanitize_text_field( (string) $item['subtitle'] ) : '',
+					'url'       => $url,
 				);
 			}
 
@@ -572,11 +576,83 @@ class TBT_Notes_REST {
 			$clean[] = array(
 				'key'   => $key,
 				'label' => isset( $group['label'] ) ? sanitize_text_field( (string) $group['label'] ) : '',
+				// Optional group artwork, supplied as raw SVG by the contributor so
+				// Notes needs no icon of its own for content it did not create.
+				// Empty when absent or when nothing survived the allowlist; the
+				// panel then falls back to its own neutral glyph.
+				'icon'  => isset( $group['icon'] ) ? self::sanitize_extras_icon( $group['icon'] ) : '',
 				'items' => $items,
 			);
 		}
 
 		return $clean;
+	}
+
+	/**
+	 * Filter a contributed SVG icon down to a safe subset.
+	 *
+	 * Inline SVG from another plugin is untrusted input — it reaches the panel as
+	 * markup, so it gets an allowlist of shape and geometry elements and nothing
+	 * else. script, foreignObject and use are absent by construction (an
+	 * allowlist admits only what it names), as is every on* handler, and href /
+	 * xlink:href are refused so an icon cannot pull in or point at anything.
+	 *
+	 * Returns '' when the input is not an SVG or when nothing usable survives,
+	 * which the panel reads as "use the built-in glyph".
+	 *
+	 * @param mixed $svg Raw SVG markup from a contributor.
+	 * @return string
+	 */
+	public static function sanitize_extras_icon( $svg ) {
+		$svg = trim( (string) $svg );
+		if ( '' === $svg || stripos( $svg, '<svg' ) !== 0 ) {
+			return '';
+		}
+
+		// Geometry and presentation attributes shared by the shape elements.
+		$shape = array(
+			'fill'             => true,
+			'fill-rule'        => true,
+			'fill-opacity'     => true,
+			'stroke'           => true,
+			'stroke-width'     => true,
+			'stroke-linecap'   => true,
+			'stroke-linejoin'  => true,
+			'stroke-opacity'   => true,
+			'clip-rule'        => true,
+			'opacity'          => true,
+			'transform'        => true,
+			'class'            => true,
+		);
+
+		$allowed = array(
+			'svg'     => array_merge(
+				$shape,
+				array(
+					'xmlns'       => true,
+					'viewbox'     => true,
+					'width'       => true,
+					'height'      => true,
+					'role'        => true,
+					'aria-hidden' => true,
+					'focusable'   => true,
+				)
+			),
+			'g'       => $shape,
+			'defs'    => array(),
+			'title'   => array(),
+			'path'    => array_merge( $shape, array( 'd' => true ) ),
+			'circle'  => array_merge( $shape, array( 'cx' => true, 'cy' => true, 'r' => true ) ),
+			'rect'    => array_merge( $shape, array( 'x' => true, 'y' => true, 'width' => true, 'height' => true, 'rx' => true, 'ry' => true ) ),
+			'polygon' => array_merge( $shape, array( 'points' => true ) ),
+		);
+
+		$clean = trim( wp_kses( $svg, $allowed ) );
+
+		// wp_kses strips disallowed tags but keeps their text, so a stripped
+		// <script> can leave its body behind as stray characters. Anything that
+		// no longer opens with an <svg> element is not worth rendering.
+		return stripos( $clean, '<svg' ) === 0 ? $clean : '';
 	}
 
 	/**
