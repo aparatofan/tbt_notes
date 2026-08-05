@@ -48,6 +48,11 @@
 		lessons: [],
 		loadingLessons: false,
 		currentLesson: null,
+		// Contributed extras for the open class (see "Class extras" below).
+		extras: [],
+		extrasClassId: 0,
+		extrasOpenGroups: {},
+		extrasOpenItem: '',
 		sidebarFolded: false,
 		highlightFilter: 'full',
 		error: '',
@@ -698,6 +703,8 @@
 		state.view = 'class';
 		state.loadingLessons = true;
 		render();
+		// Fired alongside the lessons request, never before or instead of it.
+		loadExtras( cls.id );
 		api( 'GET', 'classes/' + cls.id + '/lessons' ).then( function ( data ) {
 			state.lessons = data.lessons || [];
 			state.currentLesson = state.lessons.length ? state.lessons[ 0 ] : null;
@@ -708,6 +715,200 @@
 			state.error = err.message;
 			render();
 		} );
+	}
+
+	/* ------------------------------------------------------------- Class extras */
+
+	/*
+	 * "Extras" is the generic extension point: another plugin contributes groups
+	 * of links for a class, Notes renders them without knowing what produced
+	 * them. Three rules shape everything below.
+	 *
+	 * 1. The request runs in parallel with the lessons fetch and must never hold
+	 *    it up, so the response paints itself into the sidebar rather than
+	 *    triggering render() — a full re-render would re-mount the teacher's
+	 *    editor mid-edit.
+	 * 2. Failure and emptiness are silent. No error, no placeholder heading:
+	 *    with no contributors installed the panel looks exactly as it always did.
+	 * 3. Item text comes from teacher input, so it is only ever written as text
+	 *    nodes (el() sets textContent) — never innerHTML.
+	 */
+
+	function loadExtras( classId ) {
+		state.extras = [];
+		state.extrasClassId = classId;
+		state.extrasOpenGroups = {};
+		state.extrasOpenItem = '';
+
+		api( 'GET', 'classes/' + classId + '/extras' ).then( function ( data ) {
+			// The user may have moved to another class while this was in flight.
+			if ( state.extrasClassId !== classId ) {
+				return;
+			}
+			state.extras = Array.isArray( data ) ? data : [];
+			paintExtras();
+		} ).catch( function () {
+			// Optional by design: on failure the class simply has no extras.
+		} );
+	}
+
+	/**
+	 * Only http(s) links are ever rendered. The server already drops anything
+	 * else (esc_url_raw), so this is a second line of defence against a
+	 * contributed javascript: URL reaching an href.
+	 *
+	 * @param {string} url Candidate URL.
+	 * @return {string} The URL, or '' if it is not safe to link to.
+	 */
+	function safeExtrasUrl( url ) {
+		return /^https?:\/\//i.test( String( url || '' ) ) ? String( url ) : '';
+	}
+
+	/**
+	 * Rebuild the extras container in place.
+	 *
+	 * @param {string} focusKey Optional data-tbt-extras-key to restore focus to,
+	 *                          so keyboard users are not dropped to the top of
+	 *                          the panel when a section opens or closes.
+	 */
+	function paintExtras( focusKey ) {
+		var host = content.querySelector( '[data-tbt-extras]' );
+		if ( ! host ) {
+			return;
+		}
+		clear( host );
+
+		state.extras.forEach( function ( group ) {
+			// A group with nothing in it is dropped rather than shown empty.
+			if ( ! group || ! group.key || ! group.items || ! group.items.length ) {
+				return;
+			}
+			host.appendChild( extrasGroup( group ) );
+		} );
+
+		if ( focusKey ) {
+			var target = host.querySelector( '[data-tbt-extras-key="' + focusKey + '"]' );
+			if ( target ) {
+				target.focus();
+			}
+		}
+	}
+
+	function extrasGroup( group ) {
+		var isOpen = !! state.extrasOpenGroups[ group.key ];
+		var section = el( 'section', 'tbt-notes-extras__group' + ( isOpen ? ' is-open' : '' ) );
+
+		var toggle = el( 'button', 'tbt-notes-extras__toggle' );
+		toggle.type = 'button';
+		toggle.setAttribute( 'aria-expanded', isOpen ? 'true' : 'false' );
+		toggle.setAttribute( 'data-tbt-extras-key', 'g:' + group.key );
+		toggle.appendChild( el( 'span', 'tbt-notes-extras__caret', isOpen ? '▾' : '▸' ) );
+		toggle.appendChild( el( 'span', 'tbt-notes-extras__label', group.label || '' ) );
+		toggle.appendChild( el( 'span', 'tbt-notes-extras__count', '(' + group.items.length + ')' ) );
+		toggle.addEventListener( 'click', function () {
+			state.extrasOpenGroups[ group.key ] = ! isOpen;
+			paintExtras( 'g:' + group.key );
+		} );
+		section.appendChild( toggle );
+
+		// Collapsed by default: the lessons list stays the focus of the sidebar.
+		if ( isOpen ) {
+			var list = el( 'ul', 'tbt-notes-extras__list' );
+			group.items.forEach( function ( item, i ) {
+				if ( item ) {
+					list.appendChild( extrasItem( item, group.key + ':' + i ) );
+				}
+			} );
+			section.appendChild( list );
+		}
+
+		return section;
+	}
+
+	function extrasItem( item, itemKey ) {
+		var isOpen = state.extrasOpenItem === itemKey;
+		var li = el( 'li', 'tbt-notes-extras__item' + ( isOpen ? ' is-open' : '' ) );
+
+		var row = el( 'button', 'tbt-notes-extras__row' );
+		row.type = 'button';
+		row.setAttribute( 'aria-expanded', isOpen ? 'true' : 'false' );
+		row.setAttribute( 'data-tbt-extras-key', 'i:' + itemKey );
+		row.appendChild( el( 'span', 'tbt-notes-extras__title', item.title || '' ) );
+		if ( item.subtitle ) {
+			row.appendChild( el( 'span', 'tbt-notes-extras__subtitle', item.subtitle ) );
+		}
+		row.addEventListener( 'click', function () {
+			// One open item at a time; clicking the open row closes it again.
+			state.extrasOpenItem = isOpen ? '' : itemKey;
+			paintExtras( 'i:' + itemKey );
+		} );
+		li.appendChild( row );
+
+		if ( isOpen ) {
+			li.appendChild( extrasDetail( item ) );
+		}
+
+		return li;
+	}
+
+	/**
+	 * The expanded row: QR code and link, both visible at once. QR comes first
+	 * because the classroom flow is students scanning it off a screen.
+	 *
+	 * @param {Object} item Extras item.
+	 * @return {HTMLElement}
+	 */
+	function extrasDetail( item ) {
+		var detail = el( 'div', 'tbt-notes-extras__detail' );
+		var url = safeExtrasUrl( item.url );
+		if ( ! url ) {
+			return detail;
+		}
+
+		// Notes ships no QR library. Whichever plugin contributed the item may
+		// provide one; if none did, the row degrades to the link alone — no
+		// broken image, no console error.
+		if ( window.TBTNotesQR && typeof window.TBTNotesQR.render === 'function' ) {
+			var qr = el( 'div', 'tbt-notes-extras__qr' );
+			detail.appendChild( qr );
+			try {
+				window.TBTNotesQR.render( qr, url );
+			} catch ( e ) {
+				// A broken adapter must not take the panel down with it.
+				detail.removeChild( qr );
+			}
+		}
+
+		var linkRow = el( 'div', 'tbt-notes-extras__linkrow' );
+
+		var link = el( 'a', 'tbt-notes-extras__link', url );
+		link.href = url;
+		link.target = '_blank';
+		link.rel = 'noopener noreferrer';
+		linkRow.appendChild( link );
+
+		var copy = el( 'button', 'tbt-notes-btn tbt-notes-extras__copy', t( 'extrasCopy', 'Kopiuj link' ) );
+		copy.type = 'button';
+		copy.addEventListener( 'click', function () {
+			if ( ! navigator.clipboard || ! navigator.clipboard.writeText ) {
+				return;
+			}
+			navigator.clipboard.writeText( url ).then( function () {
+				// Brief, non-intrusive confirmation, as in the editor tooltip.
+				copy.textContent = t( 'extrasCopied', 'Skopiowano' );
+				copy.classList.add( 'is-copied' );
+				window.setTimeout( function () {
+					copy.textContent = t( 'extrasCopy', 'Kopiuj link' );
+					copy.classList.remove( 'is-copied' );
+				}, 1200 );
+			} ).catch( function () {
+				// Clipboard blocked/denied: the link itself is still right there.
+			} );
+		} );
+		linkRow.appendChild( copy );
+
+		detail.appendChild( linkRow );
+		return detail;
 	}
 
 	/* ------------------------------------------------------- Master/detail view */
@@ -778,6 +979,14 @@
 			} );
 			sidebar.appendChild( nav );
 		}
+
+		// Contributed extras stack under the lessons list. The container is
+		// always mounted so a late response can paint into it without a
+		// re-render, and stays empty when there is nothing to show.
+		var extrasHost = el( 'div', 'tbt-notes-extras' );
+		extrasHost.setAttribute( 'data-tbt-extras', '' );
+		sidebar.appendChild( extrasHost );
+
 		split.appendChild( sidebar );
 
 		/* Detail: selected lesson. */
@@ -825,6 +1034,10 @@
 		split.appendChild( detail );
 
 		content.appendChild( split );
+
+		// Now that the sidebar is in the document, fill in whatever extras have
+		// already arrived (a re-render for another reason must not lose them).
+		paintExtras();
 	}
 
 	function toggleSidebar() {

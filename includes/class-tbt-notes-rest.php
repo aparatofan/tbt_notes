@@ -97,6 +97,21 @@ class TBT_Notes_REST {
 			)
 		);
 
+		// Extras: the generic extension point. Notes owns no content here — it
+		// asks whoever is listening what else belongs to this class and passes
+		// the answer straight to the panel. Read-only by design, and it reuses
+		// can_read_class so contributors inherit the class visibility rule
+		// instead of inventing one.
+		register_rest_route(
+			$ns,
+			'/classes/(?P<id>\d+)/extras',
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => array( $this, 'get_class_extras' ),
+				'permission_callback' => array( $this, 'can_read_class' ),
+			)
+		);
+
 		register_rest_route(
 			$ns,
 			'/classes/(?P<id>\d+)/students',
@@ -462,6 +477,106 @@ class TBT_Notes_REST {
 				'lessons'  => array_map( array( $this, 'present_lesson' ), $lessons ),
 			)
 		);
+	}
+
+	/**
+	 * Everything else attached to this class, contributed by other plugins.
+	 *
+	 * Notes produces nothing here itself: it collects groups from the
+	 * `tbt_notes_class_extras` filter and hands them to the panel. The route
+	 * therefore returns an empty array on a site with no contributors, which is
+	 * the normal, fully-supported case.
+	 *
+	 * Authorization is the permission callback's job (can_read_class), so a
+	 * contributor never has to re-derive who may see a class — by the time the
+	 * filter runs, the caller has already been proven a member or the owner.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response
+	 */
+	public function get_class_extras( WP_REST_Request $request ) {
+		/**
+		 * Filter the extra content groups shown for a class.
+		 *
+		 * Each contributor appends zero or more groups shaped as:
+		 *   array(
+		 *     'key'   => 'some_slug',   // unique, [a-z_]
+		 *     'label' => 'Heading',
+		 *     'items' => array(
+		 *       array( 'id' => 1, 'title' => '…', 'subtitle' => '…', 'url' => '…' ),
+		 *     ),
+		 *   )
+		 *
+		 * @param array $groups   Groups collected so far.
+		 * @param int   $class_id Class being viewed.
+		 * @param int   $user_id  Current user.
+		 */
+		$groups = apply_filters( 'tbt_notes_class_extras', array(), (int) $request['id'], get_current_user_id() );
+
+		return rest_ensure_response( self::sanitize_extras( $groups ) );
+	}
+
+	/**
+	 * Clean and shape whatever the extras filter returned.
+	 *
+	 * A contributing plugin is not a trusted source: everything it hands back is
+	 * re-sanitised here, and anything that does not fit the contract is dropped
+	 * rather than passed through. Groups left with no usable items are removed
+	 * so the panel never renders an empty heading.
+	 *
+	 * Static and public so it can be exercised directly by the logic tests.
+	 *
+	 * @param mixed $groups Raw filter output.
+	 * @return array
+	 */
+	public static function sanitize_extras( $groups ) {
+		if ( ! is_array( $groups ) ) {
+			return array();
+		}
+
+		$clean = array();
+
+		foreach ( $groups as $group ) {
+			if ( ! is_array( $group ) || empty( $group['key'] ) || empty( $group['items'] ) || ! is_array( $group['items'] ) ) {
+				continue;
+			}
+
+			$key = preg_replace( '/[^a-z_]/', '', strtolower( (string) $group['key'] ) );
+			if ( '' === $key ) {
+				continue;
+			}
+
+			$items = array();
+			foreach ( $group['items'] as $item ) {
+				if ( ! is_array( $item ) || empty( $item['url'] ) ) {
+					continue;
+				}
+				$url = esc_url_raw( (string) $item['url'] );
+				// esc_url_raw() empties anything outside the allowed protocols,
+				// so this also drops a javascript: URL from a rogue contributor.
+				if ( '' === $url ) {
+					continue;
+				}
+				$items[] = array(
+					'id'       => isset( $item['id'] ) ? absint( $item['id'] ) : 0,
+					'title'    => isset( $item['title'] ) ? sanitize_text_field( (string) $item['title'] ) : '',
+					'subtitle' => isset( $item['subtitle'] ) ? sanitize_text_field( (string) $item['subtitle'] ) : '',
+					'url'      => $url,
+				);
+			}
+
+			if ( ! $items ) {
+				continue;
+			}
+
+			$clean[] = array(
+				'key'   => $key,
+				'label' => isset( $group['label'] ) ? sanitize_text_field( (string) $group['label'] ) : '',
+				'items' => $items,
+			);
+		}
+
+		return $clean;
 	}
 
 	/**

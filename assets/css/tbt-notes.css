@@ -632,6 +632,151 @@ body.tbt-notes-open {
 	gap: var(--tbt-s1);
 }
 
+/* ------------------------------------------------------------ Class extras */
+
+/* Contributed groups stacked under the lessons list. Deliberately quieter than
+   the lesson nav: this is a secondary shelf, not competing navigation. Nothing
+   here is plugin-specific — any contributor gets the same rendering. */
+
+.tbt-notes-extras {
+	display: flex;
+	flex-direction: column;
+	gap: var(--tbt-s1);
+}
+
+.tbt-notes-extras:not(:empty) {
+	margin-top: var(--tbt-s3);
+	padding-top: var(--tbt-s3);
+	border-top: 1px solid var(--tbt-border);
+}
+
+.tbt-notes-extras__toggle {
+	display: flex;
+	align-items: center;
+	gap: var(--tbt-s1);
+	width: 100%;
+	padding: var(--tbt-s1) 0;
+	border: 0;
+	background: transparent;
+	cursor: pointer;
+	font: inherit;
+	font-size: var(--tbt-fs-label);
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+	color: var(--tbt-muted);
+}
+
+.tbt-notes-extras__toggle:hover {
+	color: var(--tbt-text);
+}
+
+.tbt-notes-extras__caret {
+	font-size: 10px;
+	line-height: 1;
+}
+
+.tbt-notes-extras__count {
+	font-weight: 400;
+}
+
+.tbt-notes-extras__list {
+	list-style: none;
+	margin: var(--tbt-s1) 0 0;
+	padding: 0;
+	display: flex;
+	flex-direction: column;
+	gap: var(--tbt-s1);
+}
+
+.tbt-notes-extras__item {
+	border: 1px solid var(--tbt-border);
+	border-radius: var(--tbt-radius);
+	background: #fff;
+	overflow: hidden;
+}
+
+.tbt-notes-extras__item.is-open {
+	border-color: var(--tbt-accent);
+}
+
+.tbt-notes-extras__row {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	width: 100%;
+	text-align: left;
+	border: 0;
+	background: transparent;
+	cursor: pointer;
+	font: inherit;
+	color: inherit;
+	padding: var(--tbt-s2) var(--tbt-s3);
+}
+
+.tbt-notes-extras__row:hover {
+	background: var(--tbt-hover);
+}
+
+.tbt-notes-extras__title {
+	font-size: var(--tbt-fs-listitem);
+	line-height: 1.3;
+}
+
+.tbt-notes-extras__subtitle {
+	font-size: var(--tbt-fs-label);
+	color: var(--tbt-muted);
+}
+
+.tbt-notes-extras__detail {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: var(--tbt-s2);
+	padding: 0 var(--tbt-s3) var(--tbt-s3);
+}
+
+/* The QR is the primary element here — students scan it off the screen — so it
+   takes whatever width the sidebar has, capped so it never overflows. */
+.tbt-notes-extras__qr {
+	max-width: 100%;
+}
+
+.tbt-notes-extras__qr img,
+.tbt-notes-extras__qr canvas {
+	display: block;
+	width: 100%;
+	max-width: 220px;
+	height: auto;
+}
+
+.tbt-notes-extras__linkrow {
+	display: flex;
+	flex-direction: column;
+	align-items: stretch;
+	gap: var(--tbt-s1);
+	width: 100%;
+	min-width: 0;
+}
+
+.tbt-notes-extras__link {
+	font-size: var(--tbt-fs-label);
+	color: var(--tbt-accent);
+	word-break: break-all;
+}
+
+.tbt-notes-extras__copy {
+	padding: var(--tbt-s1) var(--tbt-s2);
+	font-size: var(--tbt-fs-label);
+}
+
+/* Extras are a screen affordance: a printed note has no use for a QR code. */
+@media print {
+	.tbt-notes-extras {
+		display: none;
+	}
+}
+
 .tbt-notes-detail {
 	flex: 1 1 auto;
 	min-width: 0;
