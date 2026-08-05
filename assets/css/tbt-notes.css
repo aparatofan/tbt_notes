@@ -603,8 +603,8 @@ body.tbt-notes-open {
 }
 
 .tbt-notes-sidebar {
-	flex: 0 0 300px;
-	width: 300px;
+	flex: 0 0 360px;
+	width: 360px;
 	border-right: 1px solid var(--tbt-border);
 	overflow-y: auto;
 	padding: var(--tbt-s3) var(--tbt-s2);
@@ -639,6 +639,15 @@ body.tbt-notes-open {
 
 .tbt-notes-listitem.has-extras {
 	flex-wrap: wrap;
+}
+
+/* wrap is there for the expanded panel, but it also lets the browser push a
+   control onto a second line rather than shrink a long title. A flex-basis of
+   0 takes the title out of that decision: the two controls always share line
+   one, the panel always gets its own. */
+.tbt-notes-listitem.has-extras .tbt-notes-listitem__main {
+	flex: 1 1 0%;
+	min-width: 0;
 }
 
 .tbt-notes-lesson-extras {
@@ -827,7 +836,7 @@ body.tbt-notes-open {
 .tbt-notes-extras__qr canvas {
 	display: block;
 	width: 100%;
-	max-width: 220px;
+	max-width: 260px;
 	height: auto;
 }
 
