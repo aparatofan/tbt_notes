@@ -103,27 +103,52 @@
 	var SVG_NS = 'http://www.w3.org/2000/svg';
 
 	/**
-	 * Inline trash icon for destructive icon buttons. Drawn rather than typed so
-	 * it inherits currentColor and matches the rest of the icon set instead of
-	 * rendering as a colour emoji at the mercy of the platform font.
+	 * Page Mode icon set — one stroked family, drawn rather than typed.
 	 *
-	 * @return {SVGElement}
+	 * Typed glyphs were unreliable: U+2399 (the print symbol) is missing from
+	 * almost every system font and rendered as nothing at all, and an emoji bin
+	 * ignores currentColor, so it could not take the quiet-until-hover treatment
+	 * the Style Spec asks of a destructive control. Paths are Feather Icons (MIT).
+	 *
+	 * @type {Object}
 	 */
-	function trashIcon() {
+	var ICON_PATHS = {
+		back: [ 'M15 18l-6-6 6-6' ],
+		lessons: [ 'M3 6h18', 'M3 12h18', 'M3 18h18' ],
+		print: [ 'M6 9V3h12v6', 'M6 18H4a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2', 'M6 14h12v7H6z' ],
+		settings: [ 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z', 'M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1A1.7 1.7 0 0 0 9 19.4a1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z' ],
+		close: [ 'M18 6L6 18', 'M6 6l12 12' ],
+		trash: [ 'M3 6h18', 'M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2', 'M10 11v6', 'M14 11v6' ],
+	};
+
+	/**
+	 * Build one of the icons above. Strokes use currentColor, so an icon always
+	 * follows its button's hover and focus colours.
+	 *
+	 * @param {string} name Key in ICON_PATHS.
+	 * @return {SVGElement|null}
+	 */
+	function icon( name ) {
+		var paths = ICON_PATHS[ name ];
+		if ( ! paths ) {
+			return null;
+		}
 		var svg = document.createElementNS( SVG_NS, 'svg' );
 		svg.setAttribute( 'viewBox', '0 0 24 24' );
-		svg.setAttribute( 'width', '18' );
-		svg.setAttribute( 'height', '18' );
+		svg.setAttribute( 'width', '20' );
+		svg.setAttribute( 'height', '20' );
+		svg.setAttribute( 'fill', 'none' );
+		svg.setAttribute( 'stroke', 'currentColor' );
+		svg.setAttribute( 'stroke-width', '2' );
+		svg.setAttribute( 'stroke-linecap', 'round' );
+		svg.setAttribute( 'stroke-linejoin', 'round' );
 		svg.setAttribute( 'aria-hidden', 'true' );
 		svg.setAttribute( 'focusable', 'false' );
-		var path = document.createElementNS( SVG_NS, 'path' );
-		path.setAttribute( 'fill', 'currentColor' );
-		path.setAttribute( 'fill-rule', 'evenodd' );
-		path.setAttribute(
-			'd',
-			'M10 4h4l1 1h4v2H5V5h4l1-1Zm-3 5h10l-.8 11.1A2 2 0 0 1 14.2 22H9.8a2 2 0 0 1-2-1.9L7 9Zm3 2v8h1.5v-8H10Zm3.5 0v8H15v-8h-1.5Z'
-		);
-		svg.appendChild( path );
+		paths.forEach( function ( d ) {
+			var path = document.createElementNS( SVG_NS, 'path' );
+			path.setAttribute( 'd', d );
+			svg.appendChild( path );
+		} );
 		return svg;
 	}
 
@@ -293,28 +318,49 @@
 
 	/* --------------------------------------------------------------- Gradients */
 
-	// Deterministic single-hue gradients for class-card headers, one per TBT
-	// domain colour. The same class always maps to the same gradient.
+	// Deterministic two-hue gradients for class-card headers. The same class
+	// always maps to the same gradient.
 	//
-	// DECORATIVE IDENTITY ONLY. The gradient is picked by a hash of the class ID:
-	// it does NOT mean the class belongs to that content domain, and nothing in
-	// the UI may infer a category from it. Do not read meaning back out of this
-	// array, and never reuse a domain colour for a state, an error or a
-	// destructive action (TBT-STYLE-SPEC.md §1).
+	// DECORATIVE ONLY. The gradient is picked by a hash of the class ID: it does
+	// NOT mean the class belongs to a content domain, and nothing in the UI may
+	// infer a category from it. Do not read meaning back out of this array, and
+	// never reuse one of these colours for a state, an error or a destructive
+	// action — coral is decoration, --tbt-error is danger (TBT-STYLE-SPEC.md §1).
+	//
+	// Written as literals rather than var(--tbt-le) etc. because these strings go
+	// into an inline style: a token that a given site's TBT-Hub has not shipped
+	// yet would make the whole declaration invalid and blank the header. They
+	// mirror the domain hues plus the decorative palette in tbt-tokens.css.
 	var classGradients = [
-		'linear-gradient(135deg, #660000, #3D0000)', /* Learn English        */
-		'linear-gradient(135deg, #663366, #3D1F3D)', /* General Interest     */
-		'linear-gradient(135deg, #006600, #003D00)', /* Personal Development */
-		'linear-gradient(135deg, #CC9933, #8F6B24)', /* Bonus Resources      */
+		'linear-gradient(135deg, #660000, #CC9933)', /* maroon → gold   */
+		'linear-gradient(135deg, #663366, #FF6B6B)', /* purple → coral  */
+		'linear-gradient(135deg, #006600, #008080)', /* green  → teal   */
+		'linear-gradient(135deg, #008080, #663366)', /* teal   → purple */
+		'linear-gradient(135deg, #CC9933, #660000)', /* gold   → maroon */
+		'linear-gradient(135deg, #FF6B6B, #CC9933)', /* coral  → gold   */
+		'linear-gradient(135deg, #663366, #008080)', /* purple → teal   */
+		'linear-gradient(135deg, #006600, #CC9933)', /* green  → gold   */
 	];
 
 	function getGradientForClass( cls ) {
 		var source = '' + ( ( cls && cls.id ) || ( cls && cls.title ) || '' );
+		// Scatter, don't accumulate. Summing character codes made consecutive
+		// class IDs land on consecutive gradients, so a freshly created run of
+		// classes stepped through the palette in order instead of looking
+		// unrelated. Shift-and-subtract over the characters (kept in int32 by the
+		// |0), then a murmur3 finalizer — without that last avalanche step a
+		// one- or two-digit ID barely differs from its neighbour and the run
+		// still comes out in order.
 		var hash = 0;
 		for ( var i = 0; i < source.length; i++ ) {
-			hash += source.charCodeAt( i );
+			hash = ( ( hash << 5 ) - hash + source.charCodeAt( i ) ) | 0;
 		}
-		return classGradients[ hash % classGradients.length ];
+		hash ^= hash >>> 16;
+		hash = Math.imul( hash, 0x85ebca6b );
+		hash ^= hash >>> 13;
+		hash = Math.imul( hash, 0xc2b2ae35 );
+		hash ^= hash >>> 16;
+		return classGradients[ ( hash >>> 0 ) % classGradients.length ];
 	}
 
 	// Owned by PHP (filterable via tbt_notes_logo_url) so the hero and the class
@@ -511,12 +557,27 @@
 
 	/* ------------------------------------------------------------------ Chrome */
 
-	function iconButton( symbol, label, onClick ) {
+	/**
+	 * A square icon-only control. Page Mode draws the icon; overlay mode keeps the
+	 * typed glyph it has always used.
+	 *
+	 * @param {string}   symbol   Glyph for overlay mode.
+	 * @param {string}   label    Accessible name. Required — the control has no text.
+	 * @param {Function} onClick  Click handler.
+	 * @param {string}   iconName Key in ICON_PATHS, used in Page Mode.
+	 * @return {HTMLElement}
+	 */
+	function iconButton( symbol, label, onClick, iconName ) {
 		var b = el( 'button', 'tbt-notes-iconbtn' );
 		b.type = 'button';
 		b.setAttribute( 'aria-label', label );
 		b.title = label;
-		b.textContent = symbol;
+		var drawn = isPageMode ? icon( iconName ) : null;
+		if ( drawn ) {
+			b.appendChild( drawn );
+		} else {
+			b.textContent = symbol;
+		}
 		b.addEventListener( 'click', onClick );
 		return b;
 	}
@@ -526,7 +587,7 @@
 		var inner = el( 'div', 'tbt-notes-topbar__inner' );
 		
 		if ( opts.onBack ) {
-			inner.appendChild( iconButton( '‹', t( 'back', 'Back' ), opts.onBack ) );
+			inner.appendChild( iconButton( '‹', t( 'back', 'Back' ), opts.onBack, 'back' ) );
 		}
 
 		// Centered Title Container
@@ -545,12 +606,12 @@
 		inner.appendChild( titleWrap );
 
 		( opts.buttons || [] ).forEach( function ( btn ) {
-			inner.appendChild( iconButton( btn.symbol, btn.label, btn.onClick ) );
+			inner.appendChild( iconButton( btn.symbol, btn.label, btn.onClick, btn.icon ) );
 		} );
 		// Page mode has no overlay to dismiss, so omit the close button (the back
 		// button for class → classes navigation is added separately and stays).
 		if ( ! isPageMode ) {
-			inner.appendChild( iconButton( '✕', t( 'close', 'Close' ), closePanel ) );
+			inner.appendChild( iconButton( '✕', t( 'close', 'Close' ), closePanel, 'close' ) );
 		}
 		bar.appendChild( inner );
 		
@@ -762,7 +823,7 @@
 		) );
 		del.type = 'button';
 		if ( isPageMode ) {
-			del.appendChild( trashIcon() );
+			del.appendChild( icon( 'trash' ) );
 		} else {
 			del.textContent = '🗑';
 		}
@@ -786,7 +847,7 @@
 		b.setAttribute( 'aria-label', label );
 		b.title = label;
 		if ( isPageMode ) {
-			b.appendChild( trashIcon() );
+			b.appendChild( icon( 'trash' ) );
 		} else {
 			b.textContent = '🗑';
 		}
@@ -1326,13 +1387,13 @@
 		var cls = state.currentClass;
 
 		var buttons = [
-			{ symbol: '☰', label: t( 'toggleLessons', 'Show/hide lessons' ), onClick: toggleSidebar },
-			{ symbol: '⎙', label: t( 'print', 'Print' ), onClick: function () {
+			{ symbol: '☰', icon: 'lessons', label: t( 'toggleLessons', 'Show/hide lessons' ), onClick: toggleSidebar },
+			{ symbol: '⎙', icon: 'print', label: t( 'print', 'Print' ), onClick: function () {
 				window.print();
 			} },
 		];
 		if ( isTeacher ) {
-			buttons.push( { symbol: '⚙', label: t( 'manageClass', 'Class settings' ), onClick: function () {
+			buttons.push( { symbol: '⚙', icon: 'settings', label: t( 'manageClass', 'Class settings' ), onClick: function () {
 				state.view = 'classSettings';
 				render();
 			} } );

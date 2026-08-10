@@ -541,7 +541,14 @@ body.tbt-notes-open {
 }
 
 /* Canonical icon button, everywhere in Page Mode (strip controls, lesson rows,
-   class cards). Focus is a ring, never a bare outline. */
+   class cards). Focus is a ring, never a bare outline.
+   LOAD-BEARING: the .tbt-notes-topbar selectors must be listed alongside the
+   plain ones. Overlay mode paints the controls on its dark header white via
+   `.tbt-notes-topbar .tbt-notes-iconbtn`, which carries the same specificity as
+   `.tbt-notes-app--page .tbt-notes-iconbtn` and is declared later in this file —
+   so without the topbar-scoped selector here, the strip's icons come out white
+   on a white surface and the buttons look empty. */
+.tbt-notes-app--page .tbt-notes-topbar .tbt-notes-iconbtn,
 .tbt-notes-app--page .tbt-notes-iconbtn {
 	border: 1px solid var(--tbt-border);
 	border-radius: 10px;
@@ -550,15 +557,59 @@ body.tbt-notes-open {
 	transition: background-color .18s ease, border-color .18s ease, color .18s ease;
 }
 
+.tbt-notes-app--page .tbt-notes-topbar .tbt-notes-iconbtn:hover,
 .tbt-notes-app--page .tbt-notes-iconbtn:hover {
 	border-color: var(--tbt-blue);
 	background: var(--tbt-selected-bg);
 }
 
+.tbt-notes-app--page .tbt-notes-topbar .tbt-notes-iconbtn:focus-visible,
 .tbt-notes-app--page .tbt-notes-iconbtn:focus-visible {
 	border-color: var(--tbt-blue);
 	box-shadow: var(--tbt-focus-ring);
 	outline: none;
+}
+
+/* The drawn icons are strokes on currentColor, so they follow the states above
+   with no extra rules; this only stops a stray line-height from offsetting them. */
+.tbt-notes-app--page .tbt-notes-iconbtn svg {
+	display: block;
+}
+
+/* ------------------------------------------------ Page mode: form fields == */
+
+/* Re-assert the canonical field surface at a specificity Divi cannot outrank.
+   .tbt-input is a single class (0,1,0); the theme styles inputs with selectors
+   like `#page-container input[type="text"]`, which wins and repaints the field
+   flat white with a hairline border. Anchoring on the app's ID puts these back
+   in front. No new values — every declaration is the same token .tbt-input uses,
+   so the field still matches Swipe and every other tool. */
+#tbt-notes-app.tbt-notes-app--page input.tbt-input,
+#tbt-notes-app.tbt-notes-app--page select.tbt-select,
+#tbt-notes-app.tbt-notes-app--page textarea.tbt-textarea {
+	width: 100%;
+	min-height: 44px;
+	padding: 12px 16px;
+	border: 1px solid var(--tbt-border);
+	border-radius: var(--tbt-radius-control);
+	background: var(--tbt-input);
+	color: var(--tbt-ink);
+	font-family: var(--tbt-font-ui);
+	font-size: 16px;
+	line-height: 1.5;
+}
+
+#tbt-notes-app.tbt-notes-app--page input.tbt-input:focus,
+#tbt-notes-app.tbt-notes-app--page select.tbt-select:focus,
+#tbt-notes-app.tbt-notes-app--page textarea.tbt-textarea:focus {
+	border-color: var(--tbt-blue);
+	background: var(--tbt-surface);
+	box-shadow: var(--tbt-focus-ring);
+	outline: none;
+}
+
+#tbt-notes-app.tbt-notes-app--page input.tbt-input::placeholder {
+	color: var(--tbt-muted);
 }
 
 /* --------------------------------------------- Page mode: class list screen == */
