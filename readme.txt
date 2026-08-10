@@ -3,7 +3,7 @@ Contributors: thebluetree
 Requires at least: 6.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 1.3.0
+Stable tag: 1.3.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -48,6 +48,20 @@ No. Each student is assigned to at most one class (v1 design).
 No. The editor autosaves as the teacher types.
 
 == Changelog ==
+
+= 1.3.1 =
+* Fixed: the class strip's buttons rendered as empty boxes. Page Mode's icon
+  colour was losing to the overlay header's white rule, and the print glyph
+  (U+2399) is missing from almost every system font. The strip, lesson list and
+  class cards now use one drawn icon set that follows hover and focus colours.
+* Fixed: the class search field rendered flat white, because the theme styles
+  inputs more specifically than the shared `.tbt-input` class. It now shows the
+  canonical field surface used across the tools.
+* The hero title is larger (40px) and the supporting text takes two lines; the
+  `tbt_notes_hero_support` filter accepts one line or several.
+* Class-card gradients are richer: two-hue blends across a wider decorative
+  palette, and a new hash so consecutive classes no longer step through the
+  colours in order.
 
 = 1.3.0 =
 * Page Mode (`[tbt_notes_page]`) now matches the canonical TBT design system.

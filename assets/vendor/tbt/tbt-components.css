@@ -87,7 +87,11 @@
   padding: 0 !important;
   color: inherit !important;
   font-family: var(--tbt-font-identity) !important;
-  font-size: 34px !important;
+  /* 34px -> 40px. LOCAL AHEAD OF HUB: this value must also land in TBT-Hub's
+     tbt-components.css (and §3 of the Style Spec) or the tools disagree — when
+     Hub is active this bundled copy is never enqueued and the change has no
+     effect at all. See assets/vendor/tbt/README.txt. */
+  font-size: 40px !important;
   font-weight: 700 !important;
   line-height: 1.1 !important;
   letter-spacing: .04em;

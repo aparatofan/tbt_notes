@@ -170,9 +170,17 @@ class TBT_Notes_Frontend {
 		/**
 		 * Filter the Page Mode hero supporting line.
 		 *
-		 * @param string $support Supporting line.
+		 * Each line of the value becomes a line of the rendered support text, so a
+		 * filter can return one line or several without touching the markup.
+		 *
+		 * @param string $support Supporting line(s), one per line.
 		 */
-		$support = (string) apply_filters( 'tbt_notes_hero_support', __( 'Every class, every lesson — notes written in the lesson and ready to read the moment it ends.', 'tbt-notes' ) );
+		$support = (string) apply_filters(
+			'tbt_notes_hero_support',
+			__( "Friendly lesson notes app.\nPacked with useful filtering and AI features.", 'tbt-notes' )
+		);
+
+		$support_lines = array_values( array_filter( array_map( 'trim', preg_split( '/\R/', $support ) ), 'strlen' ) );
 
 		$logo = $this->logo_url();
 		?>
@@ -183,8 +191,15 @@ class TBT_Notes_Frontend {
 						<p class="tbt-tool-hero__eyebrow"><?php echo esc_html( $eyebrow ); ?></p>
 					<?php endif; ?>
 					<h1 class="tbt-tool-hero__title"><?php echo esc_html( $title ); ?></h1>
-					<?php if ( '' !== $support ) : ?>
-						<p class="tbt-tool-hero__support"><?php echo esc_html( $support ); ?></p>
+					<?php if ( $support_lines ) : ?>
+						<p class="tbt-tool-hero__support">
+							<?php
+							// One paragraph, broken by <br>: two <p>s would double the
+							// 18px gap the hero sets under the title. Each line is escaped
+							// individually; only our own <br> separates them.
+							echo implode( '<br>', array_map( 'esc_html', $support_lines ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+							?>
+						</p>
 					<?php endif; ?>
 				</div>
 				<?php if ( '' !== $logo ) : ?>

@@ -29,6 +29,15 @@
     --tbt-pd:           #006600;  /* Personal Development */
     --tbt-bonus:        #CC9933;  /* Bonus Resources      */
 
+    /* --- Decorative Palette -----------------------------------------
+       Extends the domain hues for DECORATION ONLY (e.g. the deterministic
+       gradient on a class-card header). These are not identity, not state,
+       and never a delete/error colour — --tbt-deco-coral in particular is
+       not a substitute for --tbt-error.
+       LOCAL AHEAD OF HUB: must also land in TBT-Hub's tbt-tokens.css.     */
+    --tbt-deco-teal:    #008080;
+    --tbt-deco-coral:   #FF6B6B;
+
     /* --tbt-domain is intentionally NOT defined here.
        Set it per page/category on a wrapper element, e.g.
          .tbt-tool[data-domain="pd"] { --tbt-domain: var(--tbt-pd); }
