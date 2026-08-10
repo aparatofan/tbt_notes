@@ -1,0 +1,83 @@
+/* ==========================================================================
+   THE BLUE TREE — CANONICAL DESIGN TOKENS
+   File:    /assets/css/tbt-tokens.css
+   Owner:   TBT-Hub  (all other plugins declare this as a dependency)
+   Version: 2.0
+   Status:  LOCKED — do not edit values without a Style Spec version bump.
+
+   Every value here is approved. Plugins must NEVER redefine these in a
+   local :root block and must NEVER create near-duplicate local colours
+   (--tbtmg-*, --dd-*, --swipe-* colour variables are forbidden).
+
+   Cascade note: tokens live inside @layer tbt-defaults so that an
+   unlayered per-page override can still win when a page genuinely needs
+   to retheme (e.g. setting --tbt-domain). Components are deliberately
+   NOT layered — see tbt-components.css.
+   ========================================================================== */
+
+@layer tbt-defaults {
+  :root {
+    /* --- Brand & Interaction --------------------------------------- */
+    --tbt-blue:         #0856C9;
+    --tbt-blue-dark:    #063F94;
+
+    /* --- Domain Identity -------------------------------------------
+       Identity only. Never use a domain colour for a state, a delete
+       action, an error, or a default interaction colour.              */
+    --tbt-le:           #660000;  /* Learn English        */
+    --tbt-gi:           #663366;  /* General Interest     */
+    --tbt-pd:           #006600;  /* Personal Development */
+    --tbt-bonus:        #CC9933;  /* Bonus Resources      */
+
+    /* --tbt-domain is intentionally NOT defined here.
+       Set it per page/category on a wrapper element, e.g.
+         .tbt-tool[data-domain="pd"] { --tbt-domain: var(--tbt-pd); }
+       Components fall back to a domain default where specified.       */
+
+    /* --- Surfaces & Canvas ------------------------------------------ */
+    --tbt-canvas:       #F6F8FC;
+    --tbt-surface:      #FFFFFF;
+    --tbt-input:        #F0F5FE;
+    --tbt-selected-bg:  #EDF4FF;
+    --tbt-border:       #D8E3F0;
+
+    /* --- Typography Ink --------------------------------------------- */
+    --tbt-ink:          #1F2937;
+    --tbt-muted:        #667085;
+
+    /* --- Semantic States -------------------------------------------- */
+    --tbt-success:      #16803C;
+    --tbt-success-bg:   #ECFDF3;
+    --tbt-error:        #C62828;
+    --tbt-error-bg:     #FFF1F1;
+
+    /* --- Three-Font Architecture ------------------------------------
+       ui       = interface operation
+       content  = learning / teacher-authored content
+       identity = product & tool identity                              */
+    --tbt-font-ui:       "Roboto", sans-serif;
+    --tbt-font-content:  "Roboto Slab", Georgia, serif;
+    --tbt-font-identity: "Roboto Mono", ui-monospace, monospace;
+
+    /* --- Radius Scale ------------------------------------------------ */
+    --tbt-radius-control: 12px;
+    --tbt-radius-card:    16px;
+    --tbt-radius-panel:   22px;
+    --tbt-radius-pill:    999px;
+
+    /* --- Button Base Tokens ------------------------------------------
+       Supersedes Style Book v1.0 §7 (12px / sentence case).            */
+    --tbt-radius-button:  var(--tbt-radius-pill);
+    --tbt-button-case:    uppercase;
+    --tbt-button-track:   .08em;
+
+    /* --- Elevation & Focus Rings ------------------------------------- */
+    --tbt-shadow:        0 6px 20px rgba(24, 56, 96, .07);
+    --tbt-shadow-raised: 0 10px 28px rgba(8, 86, 201, .12);
+    --tbt-shadow-action: 0 2px 6px rgba(8, 86, 201, .24), 0 10px 24px rgba(8, 86, 201, .18);
+    --tbt-focus-ring:    0 0 0 3px rgba(8, 86, 201, .18);
+
+    /* --- Motion ------------------------------------------------------ */
+    --tbt-ease:          cubic-bezier(.22, .61, .36, 1);
+  }
+}
