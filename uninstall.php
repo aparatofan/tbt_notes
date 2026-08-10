@@ -51,6 +51,7 @@ delete_option( 'tbt_notes_db_version' );
 delete_option( 'tbt_notes_show_launcher' );
 delete_option( 'tbt_notes_manager_roles' );
 delete_option( 'tbt_notes_orphan_owner_backfilled' );
+delete_option( 'tbt_notes_shared_styles_fallback' );
 
 // Revoke the capability from any specific users it was granted to, then clear.
 $manager_users = (array) get_option( 'tbt_notes_manager_users', array() );

@@ -38,6 +38,15 @@ class TBT_Notes_Frontend {
 	protected $assets_enqueued = false;
 
 	/**
+	 * Whether the bundled fallback copies of the TBT-Hub shared stylesheets had to
+	 * be registered because Hub did not register them itself. Drives the admin
+	 * notice; the styles themselves are always registered under the Hub handles.
+	 *
+	 * @var bool
+	 */
+	protected $shared_styles_fallback = false;
+
+	/**
 	 * Hook front-end output.
 	 */
 	public function register() {
@@ -45,6 +54,7 @@ class TBT_Notes_Frontend {
 		add_action( 'wp_footer', array( $this, 'render_container' ) );
 		add_shortcode( 'tbt_notes', array( $this, 'render_shortcode' ) );
 		add_shortcode( 'tbt_notes_page', array( $this, 'render_page_shortcode' ) );
+		add_action( 'admin_notices', array( $this, 'shared_styles_notice' ) );
 	}
 
 	/**
@@ -117,6 +127,7 @@ class TBT_Notes_Frontend {
 		$this->enqueue_assets( true );
 
 		ob_start();
+		$this->render_hero();
 		?>
 		<div id="tbt-notes-app" class="tbt-notes-app tbt-notes-app--page" data-tbt-notes data-tbt-mode="page">
 			<main id="tbt-notes-panel" class="tbt-notes-panel tbt-notes-panel--page" aria-label="<?php echo esc_attr__( 'Notes', 'tbt-notes' ); ?>">
@@ -127,6 +138,61 @@ class TBT_Notes_Frontend {
 		</div>
 		<?php
 		return (string) ob_get_clean();
+	}
+
+	/**
+	 * Print the canonical Tool Hero for Page Mode.
+	 *
+	 * This is the page's identity — the same component Swipe and Matching Game
+	 * use, straight from tbt-components.css with no plugin-local variant. It is
+	 * rendered once, outside #tbt-notes-app, so the app's re-renders never touch
+	 * it, and it appears at full size on both screens (class list and class view).
+	 * It deliberately does not stick: the sticky class strip replaces it on scroll.
+	 *
+	 * Per the Style Spec, no page title is rendered beneath it — the hero owns
+	 * page identity.
+	 */
+	protected function render_hero() {
+		/**
+		 * Filter the Page Mode hero eyebrow (the small line above the title).
+		 *
+		 * @param string $eyebrow Eyebrow text.
+		 */
+		$eyebrow = (string) apply_filters( 'tbt_notes_hero_eyebrow', __( 'THE BLUE TREE TEACHER TOOLS', 'tbt-notes' ) );
+
+		/**
+		 * Filter the Page Mode hero title.
+		 *
+		 * @param string $title Hero title.
+		 */
+		$title = (string) apply_filters( 'tbt_notes_hero_title', __( 'LESSON NOTES', 'tbt-notes' ) );
+
+		/**
+		 * Filter the Page Mode hero supporting line.
+		 *
+		 * @param string $support Supporting line.
+		 */
+		$support = (string) apply_filters( 'tbt_notes_hero_support', __( 'Every class, every lesson — notes written in the lesson and ready to read the moment it ends.', 'tbt-notes' ) );
+
+		$logo = $this->logo_url();
+		?>
+		<div class="tbt-tool">
+			<header class="tbt-tool-hero">
+				<div class="tbt-tool-hero__content">
+					<?php if ( '' !== $eyebrow ) : ?>
+						<p class="tbt-tool-hero__eyebrow"><?php echo esc_html( $eyebrow ); ?></p>
+					<?php endif; ?>
+					<h1 class="tbt-tool-hero__title"><?php echo esc_html( $title ); ?></h1>
+					<?php if ( '' !== $support ) : ?>
+						<p class="tbt-tool-hero__support"><?php echo esc_html( $support ); ?></p>
+					<?php endif; ?>
+				</div>
+				<?php if ( '' !== $logo ) : ?>
+					<img class="tbt-tool-hero__logo" src="<?php echo esc_url( $logo ); ?>" alt="" aria-hidden="true">
+				<?php endif; ?>
+			</header>
+		</div>
+		<?php
 	}
 
 	/**
@@ -164,7 +230,11 @@ class TBT_Notes_Frontend {
 
 		$is_teacher = TBT_Notes_Capabilities::user_can_manage();
 
-		$style_deps  = array();
+		// The canonical tokens and components must be parsed before our own sheet,
+		// so they are a hard dependency rather than a separate enqueue.
+		$this->ensure_shared_styles();
+
+		$style_deps  = array( 'tbt-components' );
 		$script_deps = array();
 
 		// Only the teacher edits, so only the teacher needs Quill (engine +
@@ -227,6 +297,102 @@ class TBT_Notes_Frontend {
 	}
 
 	/**
+	 * Guarantee that the canonical TBT-Hub stylesheets are registered.
+	 *
+	 * TBT-Hub owns `tbt-tokens` and `tbt-components` and registers them on
+	 * wp_enqueue_scripts at priority 5. If Hub is inactive (or has not registered
+	 * yet) we register the bundled fallback copies under **the same handles**, so
+	 * a later Hub activation replaces them wholesale and no page can ever load two
+	 * copies of the design system under different handles.
+	 */
+	protected function ensure_shared_styles() {
+		$this->shared_styles_fallback = false;
+
+		if ( ! wp_style_is( 'tbt-tokens', 'registered' ) ) {
+			wp_register_style(
+				'tbt-tokens',
+				TBT_NOTES_PLUGIN_URL . 'assets/vendor/tbt/tbt-tokens.css',
+				array(),
+				$this->asset_version( 'assets/vendor/tbt/tbt-tokens.css' )
+			);
+			$this->shared_styles_fallback = true;
+		}
+
+		if ( ! wp_style_is( 'tbt-components', 'registered' ) ) {
+			wp_register_style(
+				'tbt-components',
+				TBT_NOTES_PLUGIN_URL . 'assets/vendor/tbt/tbt-components.css',
+				array( 'tbt-tokens' ),
+				$this->asset_version( 'assets/vendor/tbt/tbt-components.css' )
+			);
+			$this->shared_styles_fallback = true;
+		}
+
+		// Hub registers on a front-end hook, so wp-admin cannot ask the same
+		// question and get a meaningful answer. Record what the front end saw and
+		// let the notice read that instead of guessing.
+		$stored = get_option( 'tbt_notes_shared_styles_fallback' ) ? true : false;
+		if ( $stored !== $this->shared_styles_fallback ) {
+			update_option( 'tbt_notes_shared_styles_fallback', $this->shared_styles_fallback ? 1 : 0 );
+		}
+	}
+
+	/**
+	 * Warn an administrator when Notes had to fall back to its bundled copy of the
+	 * design system. The page still renders correctly; the risk is drift, because
+	 * the bundled copy only updates when this plugin is updated.
+	 */
+	public function shared_styles_notice() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			return;
+		}
+		if ( ! $this->shared_styles_fallback && ! get_option( 'tbt_notes_shared_styles_fallback' ) ) {
+			return;
+		}
+		echo '<div class="notice notice-warning"><p>';
+		echo esc_html__( 'TBT Notes: the shared TBT design system (tbt-tokens / tbt-components) was not registered by TBT-Hub, so the bundled fallback copy is being used. Activate TBT-Hub so every tool stays on one source of truth.', 'tbt-notes' );
+		echo '</p></div>';
+	}
+
+	/**
+	 * URL of the white TBT logo used by the Page Mode hero and the class cards.
+	 *
+	 * Single filterable source: PHP owns the value and hands it to the script, so
+	 * it is never hardcoded in two places.
+	 *
+	 * @return string
+	 */
+	protected function logo_url() {
+		/**
+		 * Filter the white TBT logo used in the Notes hero and on class cards.
+		 *
+		 * @param string $url Logo URL.
+		 */
+		return (string) apply_filters( 'tbt_notes_logo_url', 'https://thebluetree.pl/wp-content/uploads/2020/12/TBT-white-logo.png' );
+	}
+
+	/**
+	 * Selectors for elements that may be fixed to the top of the viewport above
+	 * the workspace (the WP admin bar and the theme's fixed menus). The sticky
+	 * class header measures these at scroll time to work out where it can sit.
+	 *
+	 * Kept in PHP so theme-specific selectors never end up hardcoded in the JS.
+	 *
+	 * @return array
+	 */
+	protected function sticky_selectors() {
+		/**
+		 * Filter the selectors measured when positioning the sticky class header.
+		 *
+		 * @param array $selectors CSS selectors, outermost/topmost first.
+		 */
+		return (array) apply_filters(
+			'tbt_notes_sticky_selectors',
+			array( '#wpadminbar', '#main-header', '#top-header', '.et-fixed-header' )
+		);
+	}
+
+	/**
 	 * Cache-busting version for one of the plugin's own assets. Uses the file's
 	 * modification time so a freshly uploaded CSS/JS file is always re-fetched
 	 * (the ?ver= query changes), falling back to the plugin version if the file
@@ -253,6 +419,8 @@ class TBT_Notes_Frontend {
 			'nonce'           => wp_create_nonce( 'wp_rest' ),
 			'isTeacher'       => (bool) $is_teacher,
 			'currentUserId'   => get_current_user_id(),
+			'logoUrl'         => esc_url_raw( $this->logo_url() ),
+			'stickySelectors' => array_values( array_filter( array_map( 'strval', $this->sticky_selectors() ) ) ),
 			'highlightColors' => array(
 				array(
 					'key'   => 'blue',

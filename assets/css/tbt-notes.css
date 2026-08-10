@@ -1,10 +1,22 @@
 /**
  * TBT Notes — front-end styles.
  *
- * Design system first: a shared type scale, role-based styles (one rule per
- * role: labels, buttons, cards, icon buttons), and a 4px spacing scale — all as
- * variables/shared selectors so the UI stays consistent. Specific tweaks build
- * on top.
+ * Requires tbt-components.css (which requires tbt-tokens.css). Both are owned by
+ * TBT-Hub and declared as an enqueue dependency, so every canonical --tbt-*
+ * token is guaranteed to be defined before this file is parsed.
+ *
+ * TWO STYLE WORLDS, ONE FILE
+ *
+ * Page Mode (.tbt-notes-app--page, the /tbt-notes/ page) is migrated to the
+ * canonical TBT design system: it uses --tbt-* tokens and the shared components
+ * (.tbt-tool-hero, .tbt-button, .tbt-input, .tbt-empty, .tbt-notice) directly.
+ *
+ * Overlay mode (the slide-out panel) has NOT been migrated and still runs on the
+ * plugin-local --tbtn-* variables declared below. TBT-STYLE-SPEC.md §2 forbids
+ * plugin-local colour variables; this block is a deliberate, temporary exception
+ * kept out of the canonical namespace so it cannot repaint another TBT component
+ * that happens to render inside the app. It is scheduled for removal when
+ * overlay mode is migrated — do not "fix" it by deleting it before then.
  *
  * Layout: a full-screen notes page that slides in from the left, below the WP
  * admin bar. Inside a class it's master/detail — a collapsible lessons list on
@@ -27,52 +39,70 @@
 	src: url("../vendor/fonts/roboto-slab-latin-700-normal.woff2") format("woff2");
 }
 
+/* The five highlight colours are the one part of the palette that saved note
+   HTML can reference directly, so they live on :root rather than on the app.
+   The legacy --tbt-hl-* aliases exist only for note bodies written before the
+   rename; remove them once those bodies are migrated. */
+:root {
+	--tbtn-hl-blue: #bcdcff;
+	--tbtn-hl-yellow: #fff2a8;
+	--tbtn-hl-red: #ffc2c2;
+	--tbtn-hl-pink: #ffd1e8;
+	--tbtn-hl-green: #c6efc3;
+
+	--tbt-hl-blue: var(--tbtn-hl-blue);     /* legacy alias — remove once note bodies are migrated */
+	--tbt-hl-yellow: var(--tbtn-hl-yellow); /* legacy alias — remove once note bodies are migrated */
+	--tbt-hl-red: var(--tbtn-hl-red);       /* legacy alias — remove once note bodies are migrated */
+	--tbt-hl-pink: var(--tbtn-hl-pink);     /* legacy alias — remove once note bodies are migrated */
+	--tbt-hl-green: var(--tbtn-hl-green);   /* legacy alias — remove once note bodies are migrated */
+}
+
 .tbt-notes-app {
 	/* Colour — one brand blue (#6aa0ef) for surfaces; navy ink for text. */
-	--tbt-accent: #6aa0ef;            /* brand blue: header, buttons, focus, accents */
-	--tbt-accent-hover: #5a93ea;
-	--tbt-accent-soft: #e9f1fd;       /* lightened brand blue: cards, chips, selected */
-	--tbt-accent-soft-hover: #d8e6fb;
-	--tbt-accent-contrast: #11346b;   /* navy text on brand-blue buttons (AA-readable) */
-	--tbt-panel-bg: #ffffff;
-	--tbt-text: #11346b;              /* dark navy ink for all body + heading text */
-	--tbt-muted: #5b6b8c;
-	--tbt-border: #d3ddec;
-	--tbt-hover: #eef3fb;
-	--tbt-danger: #c0392b;
-	--tbt-brand-blue: #0856c9;       /* heading blue (H3) — distinct from the softer brand accent */
-	--tbt-header-image: url("https://thebluetree.pl/wp-content/uploads/2026/06/tbt-notes-header.png");
+	--tbtn-accent: #6aa0ef;            /* brand blue: header, buttons, focus, accents */
+	--tbtn-accent-hover: #5a93ea;
+	--tbtn-accent-soft: #e9f1fd;       /* lightened brand blue: cards, chips, selected */
+	--tbtn-accent-soft-hover: #d8e6fb;
+	--tbtn-accent-contrast: #11346b;   /* navy text on brand-blue buttons (AA-readable) */
+	--tbtn-panel-bg: #ffffff;
+	--tbtn-text: #11346b;              /* dark navy ink for all body + heading text */
+	--tbtn-muted: #5b6b8c;
+	--tbtn-border: #d3ddec;
+	--tbtn-hover: #eef3fb;
+	--tbtn-danger: #c0392b;
+	--tbtn-brand-blue: var(--tbt-blue, #0856c9); /* heading blue (H3) — distinct from the softer brand accent */
+	--tbtn-header-image: url("https://thebluetree.pl/wp-content/uploads/2026/06/tbt-notes-header.png");
 
 	/* Type scale (importance encoded by size). */
-	--tbt-fs-classname: 40px;
-	--tbt-fs-lessontitle: 30px;
-	--tbt-fs-topbar: 22px;
-	--tbt-fs-listitem: 16px;
-	--tbt-fs-body: 22px;
-	--tbt-fs-label: 13px;
-	--tbt-fw-body: 400;
-	--tbt-lh-body: 1.8;               /* generous body line-height (room for handwritten notes when printed) */
+	--tbtn-fs-classname: 40px;
+	--tbtn-fs-lessontitle: 30px;
+	--tbtn-fs-topbar: 22px;
+	--tbtn-fs-listitem: 16px;
+	--tbtn-fs-body: 22px;
+	--tbtn-fs-label: 13px;
+	--tbtn-fw-body: 400;
+	--tbtn-lh-body: 1.8;               /* generous body line-height (room for handwritten notes when printed) */
 
 	/* Spacing scale (multiples of 4). */
-	--tbt-s1: 8px;
-	--tbt-s2: 12px;
-	--tbt-s3: 16px;
-	--tbt-s4: 24px;
-	--tbt-radius: 10px;
+	--tbtn-s1: 8px;
+	--tbtn-s2: 12px;
+	--tbtn-s3: 16px;
+	--tbtn-s4: 24px;
+	--tbtn-radius: 10px;
 
-	--tbt-admin-offset: 0px;
+	--tbtn-admin-offset: 0px;
 	/* Very high so the full-screen panel/header sits above the site's own
 	   floating menus (still below the WP admin bar, which the panel offsets). */
-	--tbt-z: 2147483000;
+	--tbtn-z: 2147483000;
 
-	--tbt-hl-blue: #bcdcff;
-	--tbt-hl-yellow: #fff2a8;
-	--tbt-hl-red: #ffc2c2;
-	--tbt-hl-pink: #ffd1e8;
-	--tbt-hl-green: #c6efc3;
+	/* The JS sticky host in Page Mode. It must clear page content but stay UNDER
+	   the site's fixed menu — it is positioned below the menu, so it never
+	   overlaps it, and it must never use --tbtn-z (the overlay's value), which
+	   would put it above the site menu. */
+	--tbtn-sticky-z: 100;
 
 	font-family: "Roboto Slab", Georgia, "Times New Roman", serif;
-	color: var(--tbt-text);
+	color: var(--tbtn-text);
 }
 
 .tbt-notes-app *,
@@ -87,11 +117,11 @@
 .tbt-notes-field__label,
 .tbt-notes-sidebar__title {
 	display: block;
-	font-size: var(--tbt-fs-label);
+	font-size: var(--tbtn-fs-label);
 	font-weight: 700;
 	text-transform: uppercase;
 	letter-spacing: 0.05em;
-	color: var(--tbt-muted);
+	color: var(--tbtn-muted);
 	margin: 0;
 }
 
@@ -100,12 +130,12 @@
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
-	gap: var(--tbt-s1);
-	padding: var(--tbt-s2) var(--tbt-s4);
-	border-radius: var(--tbt-radius);
-	border: 1px solid var(--tbt-accent);
-	background: var(--tbt-accent);
-	color: var(--tbt-accent-contrast);
+	gap: var(--tbtn-s1);
+	padding: var(--tbtn-s2) var(--tbtn-s4);
+	border-radius: var(--tbtn-radius);
+	border: 1px solid var(--tbtn-accent);
+	background: var(--tbtn-accent);
+	color: var(--tbtn-accent-contrast);
 	font: inherit;
 	font-weight: 700;
 	cursor: pointer;
@@ -113,23 +143,23 @@
 }
 
 .tbt-notes-btn:hover {
-	background: var(--tbt-accent-hover);
-	border-color: var(--tbt-accent-hover);
+	background: var(--tbtn-accent-hover);
+	border-color: var(--tbtn-accent-hover);
 }
 
 .tbt-notes-btn--ghost {
 	background: transparent;
-	color: var(--tbt-accent);
+	color: var(--tbtn-accent);
 }
 
 .tbt-notes-btn--ghost:hover {
-	background: var(--tbt-hover);
+	background: var(--tbtn-hover);
 }
 
 .tbt-notes-btn--danger {
-	border-color: var(--tbt-danger);
+	border-color: var(--tbtn-danger);
 	background: transparent;
-	color: var(--tbt-danger);
+	color: var(--tbtn-danger);
 }
 
 .tbt-notes-btn--danger:hover {
@@ -148,9 +178,9 @@
 	width: 40px;
 	height: 40px;
 	border: 1px solid transparent;
-	border-radius: var(--tbt-radius);
+	border-radius: var(--tbtn-radius);
 	background: transparent;
-	color: var(--tbt-text);
+	color: var(--tbtn-text);
 	cursor: pointer;
 	font-size: 22px;
 	line-height: 1;
@@ -159,11 +189,11 @@
 }
 
 .tbt-notes-iconbtn:hover {
-	background: var(--tbt-hover);
+	background: var(--tbtn-hover);
 }
 
 .tbt-notes-iconbtn:focus-visible {
-	outline: 2px solid var(--tbt-accent);
+	outline: 2px solid var(--tbtn-accent);
 	outline-offset: 1px;
 }
 
@@ -177,7 +207,7 @@
 	left: 14px;
 	bottom: 14px;
 	top: auto;
-	z-index: var(--tbt-z);
+	z-index: var(--tbtn-z);
 	display: inline-flex;
 	flex-direction: row;
 	align-items: center;
@@ -185,7 +215,7 @@
 	padding: 0 12px;
 	border: 0;
 	border-radius: 24px;
-	background: #0859c6;
+	background: var(--tbt-blue, #0856c9);
 	/* Clean primary action: blue background, white text + icon. */
 	color: #ffffff;
 	cursor: pointer;
@@ -262,13 +292,13 @@ body.tbt-notes-open {
 
 .tbt-notes-panel {
 	position: fixed;
-	top: var(--tbt-admin-offset);
+	top: var(--tbtn-admin-offset);
 	left: 0;
-	height: calc(100% - var(--tbt-admin-offset));
+	height: calc(100% - var(--tbtn-admin-offset));
 	width: 100vw;
 	max-width: 100vw;
-	z-index: calc(var(--tbt-z) + 2);
-	background: var(--tbt-panel-bg);
+	z-index: calc(var(--tbtn-z) + 2);
+	background: var(--tbtn-panel-bg);
 	transform: translateX(-100%);
 	transition: transform 0.3s ease;
 	display: flex;
@@ -283,12 +313,12 @@ body.tbt-notes-open {
 }
 
 .admin-bar .tbt-notes-panel {
-	--tbt-admin-offset: 32px;
+	--tbtn-admin-offset: 32px;
 }
 
 @media screen and (max-width: 782px) {
 	.admin-bar .tbt-notes-panel {
-		--tbt-admin-offset: 46px;
+		--tbtn-admin-offset: 46px;
 	}
 }
 
@@ -328,7 +358,7 @@ body.tbt-notes-open {
 	height: auto;
 	min-height: 100vh;
 	z-index: auto;
-	background: var(--tbt-panel-bg);
+	background: var(--tbtn-panel-bg);
 }
 
 .tbt-notes-app--page .tbt-notes-panel__inner {
@@ -358,9 +388,10 @@ body.tbt-notes-open {
 	min-height: 70vh;
 }
 
-/* In page mode the toolbar is pinned by JS (position: fixed) instead of CSS
-   sticky, because a theme wrapper (e.g. Divi overflow/transform) can trap a
-   sticky element. Drop the CSS sticky here so the two don't both add spacing. */
+/* In page mode the class strip and the toolbar are pinned by JS (position:
+   fixed) instead of CSS sticky, because a theme wrapper (e.g. Divi
+   overflow/transform) can trap a sticky element. Drop the CSS sticky here so the
+   two don't both add spacing. */
 .tbt-notes-app--page .tbt-notes-editor-quillwrap .ql-toolbar.ql-snow {
 	position: static;
 	top: auto;
@@ -380,12 +411,32 @@ body.tbt-notes-open {
 }
 
 /* The JS sticky host is a bare fixed bar mounted on <body> (it reuses the app +
-   quillwrap classes so the moved toolbar keeps its styling). Neutralise the
-   app-level full-height/width sizing so it only occupies the toolbar's height. */
+   quillwrap classes so the moved class strip and toolbar keep their styling).
+   Neutralise the app-level full-height sizing so it only occupies the height of
+   whatever is currently pinned. Position, width and visibility are set from JS,
+   which measures the workspace on every scroll tick. */
 .tbt-notes-sticky-host.tbt-notes-app--page {
+	position: fixed;
+	display: none;
+	/* Above page content, below the site's fixed menu: the host is positioned
+	   under the menu (JS offsets it by the menu's height) so the two never
+	   overlap, but the value is set explicitly rather than left to source order.
+	   Deliberately NOT --tbtn-z, which is the overlay's 2147483000 and would put
+	   this strip on top of the site menu. */
+	z-index: var(--tbtn-sticky-z);
 	min-height: 0;
 	height: auto;
 	width: auto;
+	background: var(--tbt-surface);
+	box-sizing: border-box;
+}
+
+/* Desktop-first, but a pinned strip must never eat a phone screen. */
+@media (max-width: 760px) {
+	.tbt-notes-sticky-host.tbt-notes-app--page {
+		max-height: 40vh;
+		overflow-y: auto;
+	}
 }
 
 /* Fill 100% of the available space so the surrounding page (Divi) controls the
@@ -396,15 +447,19 @@ body.tbt-notes-open {
 	margin: 0;
 }
 
-/* Page mode header: the branded image bar becomes a clean black-on-white strip
-   showing just the class title, lesson title and navigation. Banners (logo,
-   coloured rectangle) are rendered by the surrounding page instead. */
+/* ------------------------------------------- Page mode: class title strip == */
+
+/* The branded image bar becomes the canonical class strip: a quiet white band
+   carrying the class name, the lesson header and the view controls. This is also
+   what pins on scroll (see the sticky host above). Page identity is the Tool
+   Hero above the app, so the remote --tbtn-header-image background — which stays
+   for overlay mode — must not be applied here. */
 .tbt-notes-app--page .tbt-notes-topbar {
-	background: var(--tbt-panel-bg);
+	background: var(--tbt-surface);
 	background-image: none;
 	box-shadow: none;
 	border-bottom: 1px solid var(--tbt-border);
-	padding: var(--tbt-s2) var(--tbt-s3);
+	padding: 16px 24px;
 }
 
 .tbt-notes-app--page .tbt-notes-topbar__inner {
@@ -417,7 +472,7 @@ body.tbt-notes-open {
 	flex-direction: row;
 	align-items: baseline;
 	justify-content: center;
-	gap: var(--tbt-s2);
+	gap: var(--tbtn-s2);
 	flex-wrap: wrap;
 }
 
@@ -438,32 +493,279 @@ body.tbt-notes-open {
 	text-align: left;
 }
 
-.tbt-notes-app--page .tbt-notes-topbar__title,
+/* The class name is teacher-authored content, so it takes the content face.
+   Neither uppercase nor tracking: uppercase is reserved for buttons, tags and
+   the Mono hero text. */
+.tbt-notes-app--page .tbt-notes-topbar__title {
+	font-family: var(--tbt-font-content);
+	font-size: 22px;
+	font-weight: 700;
+	letter-spacing: normal;
+	text-transform: none;
+	color: var(--tbt-ink);
+}
+
+/* The lesson header is also teacher-authored: same face, lighter weight. The
+   input stays invisible until pointed at, so the strip reads as a title rather
+   than a form, and never drops below 16px (iOS Safari zooms below that). */
 .tbt-notes-app--page .tbt-notes-topbar__subtitle,
 .tbt-notes-app--page .tbt-notes-topbar__subtitle-input {
-	color: var(--tbt-text);
+	font-family: var(--tbt-font-content);
+	font-size: 18px;
+	font-weight: 400;
+	color: var(--tbt-ink);
+}
+
+.tbt-notes-app--page .tbt-notes-topbar__subtitle-input {
+	padding: 6px 12px;
+	border: 1px solid transparent;
+	border-radius: var(--tbt-radius-control);
+	background: transparent;
+	transition: background-color .18s ease, border-color .18s ease, box-shadow .18s ease;
 }
 
 .tbt-notes-app--page .tbt-notes-topbar__subtitle-input::placeholder {
 	color: var(--tbt-muted);
 }
 
-.tbt-notes-app--page .tbt-notes-topbar__subtitle-input:hover,
-.tbt-notes-app--page .tbt-notes-topbar__subtitle-input:focus {
-	background: var(--tbt-hover);
+.tbt-notes-app--page .tbt-notes-topbar__subtitle-input:hover {
 	border-color: var(--tbt-border);
+	background: var(--tbt-input);
 }
 
-.tbt-notes-app--page .tbt-notes-topbar .tbt-notes-iconbtn {
-	color: var(--tbt-text);
+.tbt-notes-app--page .tbt-notes-topbar__subtitle-input:focus {
+	border-color: var(--tbt-blue);
+	background: var(--tbt-input);
+	box-shadow: var(--tbt-focus-ring);
+	outline: none;
 }
 
-.tbt-notes-app--page .tbt-notes-topbar .tbt-notes-iconbtn:hover {
-	background: var(--tbt-hover);
+/* Canonical icon button, everywhere in Page Mode (strip controls, lesson rows,
+   class cards). Focus is a ring, never a bare outline. */
+.tbt-notes-app--page .tbt-notes-iconbtn {
+	border: 1px solid var(--tbt-border);
+	border-radius: 10px;
+	background: var(--tbt-surface);
+	color: var(--tbt-blue);
+	transition: background-color .18s ease, border-color .18s ease, color .18s ease;
 }
 
-.tbt-notes-app--page .tbt-notes-topbar .tbt-notes-iconbtn:focus-visible {
-	outline: 2px solid var(--tbt-accent);
+.tbt-notes-app--page .tbt-notes-iconbtn:hover {
+	border-color: var(--tbt-blue);
+	background: var(--tbt-selected-bg);
+}
+
+.tbt-notes-app--page .tbt-notes-iconbtn:focus-visible {
+	border-color: var(--tbt-blue);
+	box-shadow: var(--tbt-focus-ring);
+	outline: none;
+}
+
+/* --------------------------------------------- Page mode: class list screen == */
+
+.tbt-notes-app--page .tbt-notes-classes-grid {
+	gap: 24px;
+}
+
+/* An empty/no-matches card is a statement about the whole collection, so it
+   spans the grid instead of pretending to be one more class. */
+.tbt-notes-app--page .tbt-notes-classes-grid > .tbt-empty {
+	grid-column: 1 / -1;
+}
+
+.tbt-notes-app--page .tbt-notes-classcard {
+	border: 1px solid var(--tbt-border);
+	border-radius: var(--tbt-radius-card);
+	background: var(--tbt-surface);
+	box-shadow: var(--tbt-shadow);
+	transition: transform .18s ease, box-shadow .18s ease;
+}
+
+.tbt-notes-app--page .tbt-notes-classcard:hover {
+	transform: translateY(-2px);
+	box-shadow: var(--tbt-shadow-raised);
+}
+
+.tbt-notes-app--page .tbt-notes-classcard__header {
+	min-height: 180px;
+	/* The card clips its own corners, so the header only needs to agree. */
+	border-radius: var(--tbt-radius-card) var(--tbt-radius-card) 0 0;
+	background: var(--tbt-blue); /* fallback before the inline gradient applies */
+}
+
+.tbt-notes-app--page .tbt-notes-classcard__open:focus-visible {
+	outline: none;
+	box-shadow: var(--tbt-focus-ring), 0 0 0 1px var(--tbt-blue) inset;
+}
+
+/* The class name is teacher-authored content: content face, ink, sentence case.
+   Blue is the interaction colour and is not available for a resting title. */
+.tbt-notes-app--page .tbt-notes-classcard__title {
+	font-family: var(--tbt-font-content);
+	font-size: 18px;
+	font-weight: 700;
+	line-height: 1.3;
+	letter-spacing: normal;
+	text-transform: none;
+	color: var(--tbt-ink);
+}
+
+.tbt-notes-app--page .tbt-notes-classcard__meta {
+	margin-top: 12px;
+	font-family: var(--tbt-font-ui);
+	font-size: 13.5px;
+	font-weight: 400;
+	color: var(--tbt-muted);
+}
+
+/* Canonical icon button, floated over the gradient. Quiet until hover, then the
+   error colour — never a domain colour, which here would read as identity. */
+.tbt-notes-app--page .tbt-notes-classcard__delete {
+	width: 40px;
+	height: 40px;
+	border: 1px solid var(--tbt-border);
+	border-radius: 10px;
+	background: var(--tbt-surface);
+	color: var(--tbt-muted);
+	transition: background-color .18s ease, border-color .18s ease, color .18s ease;
+}
+
+.tbt-notes-app--page .tbt-notes-classcard__delete:hover {
+	border-color: var(--tbt-error);
+	background: var(--tbt-error-bg);
+	color: var(--tbt-error);
+}
+
+.tbt-notes-app--page .tbt-notes-classcard__delete:focus-visible {
+	border-color: var(--tbt-blue);
+	box-shadow: var(--tbt-focus-ring);
+	outline: none;
+}
+
+/* ---------------------------------------- Page mode: sidebar, lessons, editor */
+
+.tbt-notes-app--page .tbt-notes-sidebar {
+	background: var(--tbt-surface);
+	border-right-color: var(--tbt-border);
+}
+
+.tbt-notes-app--page .tbt-notes-sidebar__title {
+	font-family: var(--tbt-font-content);
+	font-size: 18px;
+	font-weight: 700;
+	letter-spacing: normal;
+	text-transform: none;
+	color: var(--tbt-ink);
+}
+
+.tbt-notes-app--page .tbt-notes-listitem {
+	border-color: var(--tbt-border);
+	background: var(--tbt-surface);
+	border-radius: var(--tbt-radius-control);
+}
+
+.tbt-notes-app--page .tbt-notes-listitem:hover {
+	border-color: var(--tbt-blue);
+	background: var(--tbt-selected-bg);
+}
+
+.tbt-notes-app--page .tbt-notes-listitem__main {
+	font-family: var(--tbt-font-ui);
+	font-size: 15px;
+	font-weight: 400;
+	color: var(--tbt-ink);
+	border-radius: var(--tbt-radius-control);
+}
+
+.tbt-notes-app--page .tbt-notes-listitem__title {
+	font-size: 15px;
+	font-weight: 400;
+}
+
+/* Selected is blue, never green (TBT-STYLE-SPEC.md §8). The left edge is drawn
+   with an inset shadow rather than a border so selecting a lesson never nudges
+   the row's text. */
+.tbt-notes-app--page .tbt-notes-listitem__main.is-active {
+	background: var(--tbt-selected-bg);
+	box-shadow: inset 3px 0 0 var(--tbt-blue);
+	font-weight: 600;
+}
+
+.tbt-notes-app--page .tbt-notes-listitem__main:focus-visible {
+	box-shadow: var(--tbt-focus-ring);
+	outline: none;
+}
+
+.tbt-notes-app--page .tbt-notes-listitem__main.is-active:focus-visible {
+	box-shadow: inset 3px 0 0 var(--tbt-blue), var(--tbt-focus-ring);
+}
+
+/* Lesson delete: the same icon button as the class cards. */
+.tbt-notes-app--page .tbt-notes-listitem__delete {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	border: 1px solid transparent;
+	border-radius: 10px;
+	background: transparent;
+	color: var(--tbt-muted);
+	transition: background-color .18s ease, border-color .18s ease, color .18s ease;
+}
+
+.tbt-notes-app--page .tbt-notes-listitem__delete:hover {
+	border-color: var(--tbt-error);
+	background: var(--tbt-error-bg);
+	color: var(--tbt-error);
+}
+
+.tbt-notes-app--page .tbt-notes-listitem__delete:focus-visible {
+	border-color: var(--tbt-blue);
+	box-shadow: var(--tbt-focus-ring);
+	outline: none;
+}
+
+/* Quill's internal structure is left alone; only the wrapper is restyled. The
+   sticky host carries the same classes, so the pinned toolbar matches. */
+.tbt-notes-app--page .tbt-notes-editor-quillwrap .ql-toolbar.ql-snow {
+	background: var(--tbt-surface);
+	border-bottom: 1px solid var(--tbt-border);
+}
+
+.tbt-notes-app--page .ql-snow.ql-toolbar button:hover,
+.tbt-notes-app--page .ql-snow.ql-toolbar button:focus,
+.tbt-notes-app--page .ql-snow.ql-toolbar button.ql-active,
+.tbt-notes-app--page .ql-snow.ql-toolbar .ql-picker-label:hover,
+.tbt-notes-app--page .ql-snow.ql-toolbar .ql-picker-item.ql-selected {
+	color: var(--tbt-blue);
+}
+
+.tbt-notes-app--page .ql-snow.ql-toolbar button:hover .ql-stroke,
+.tbt-notes-app--page .ql-snow.ql-toolbar button:focus .ql-stroke,
+.tbt-notes-app--page .ql-snow.ql-toolbar button.ql-active .ql-stroke,
+.tbt-notes-app--page .ql-snow.ql-toolbar .ql-picker-label:hover .ql-stroke {
+	stroke: var(--tbt-blue);
+}
+
+.tbt-notes-app--page .ql-snow.ql-toolbar button:hover .ql-fill,
+.tbt-notes-app--page .ql-snow.ql-toolbar button:focus .ql-fill,
+.tbt-notes-app--page .ql-snow.ql-toolbar button.ql-active .ql-fill {
+	fill: var(--tbt-blue);
+}
+
+/* Anything scrolled into view — keyboard focus, a lesson row, the editor — has
+   to clear whatever is fixed above the workspace. --tbtn-offset-top is published
+   on <html> by the sticky controller, so CSS reads the same measurement instead
+   of taking a second one that can drift from it. */
+.tbt-notes-app--page .tbt-notes-listitem,
+.tbt-notes-app--page .tbt-notes-topbar,
+.tbt-notes-app--page .ql-editor {
+	scroll-margin-top: var(--tbtn-offset-top, 0px);
+}
+
+/* Inline messages use the semantic error colour, never the plugin-local red. */
+.tbt-notes-app--page .tbt-notes-inlinemsg--error {
+	background: var(--tbt-error-bg);
+	color: var(--tbt-error);
 }
 
 /* --------------------------------------------------------------- Panel chrome */
@@ -473,20 +775,20 @@ body.tbt-notes-open {
    with no text background/shadow. Same (tall) size on every screen. */
 .tbt-notes-topbar {
 	flex: 0 0 auto;
-	background-color: var(--tbt-accent);
-	background-image: var(--tbt-header-image);
+	background-color: var(--tbtn-accent);
+	background-image: var(--tbtn-header-image);
 	background-size: cover;
 	background-position: center;
 	background-repeat: no-repeat;
 	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
-	padding: var(--tbt-s4);
+	padding: var(--tbtn-s4);
 }
 
 .tbt-notes-topbar__inner {
 	position: relative;
 	display: flex;
 	align-items: center;
-	gap: var(--tbt-s2);
+	gap: var(--tbtn-s2);
 	width: 100%;
 	min-height: 88px;
 }
@@ -587,11 +889,11 @@ body.tbt-notes-open {
 	width: 100%;
 	max-width: 760px;
 	margin: 0;
-	padding: var(--tbt-s4);
+	padding: var(--tbtn-s4);
 }
 
 .tbt-notes-classsearch {
-	margin-bottom: var(--tbt-s3);
+	margin-bottom: var(--tbtn-s3);
 }
 
 /* ----------------------------------------------------------- Master / detail */
@@ -605,9 +907,9 @@ body.tbt-notes-open {
 .tbt-notes-sidebar {
 	flex: 0 0 360px;
 	width: 360px;
-	border-right: 1px solid var(--tbt-border);
+	border-right: 1px solid var(--tbtn-border);
 	overflow-y: auto;
-	padding: var(--tbt-s3) var(--tbt-s2);
+	padding: var(--tbtn-s3) var(--tbtn-s2);
 	background: #fbfcfe;
 }
 
@@ -619,8 +921,8 @@ body.tbt-notes-open {
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
-	gap: var(--tbt-s1);
-	margin-bottom: var(--tbt-s3);
+	gap: var(--tbtn-s1);
+	margin-bottom: var(--tbtn-s3);
 }
 
 .tbt-notes-lesson-nav {
@@ -629,7 +931,7 @@ body.tbt-notes-open {
 	padding: 0;
 	display: flex;
 	flex-direction: column;
-	gap: var(--tbt-s1);
+	gap: var(--tbtn-s1);
 }
 
 /* ------------------------------------------------- Extras on a lesson row */
@@ -658,10 +960,10 @@ body.tbt-notes-open {
 	padding: 4px 6px;
 	margin-right: 2px;
 	border: 0;
-	border-radius: var(--tbt-radius);
+	border-radius: var(--tbtn-radius);
 	background: transparent;
 	cursor: pointer;
-	color: var(--tbt-muted);
+	color: var(--tbtn-muted);
 	line-height: 0;
 	opacity: 0.85;
 	transition: opacity 0.12s ease, transform 0.12s ease, background 0.12s ease;
@@ -673,12 +975,12 @@ body.tbt-notes-open {
 .tbt-notes-lesson-extras:focus-visible {
 	opacity: 1;
 	transform: scale(1.08);
-	background: var(--tbt-hover);
+	background: var(--tbtn-hover);
 }
 
 .tbt-notes-lesson-extras.is-open {
 	opacity: 1;
-	background: var(--tbt-accent-soft);
+	background: var(--tbtn-accent-soft);
 }
 
 /* Sized by height, with width following the artwork's own aspect ratio — a
@@ -695,8 +997,8 @@ body.tbt-notes-open {
 	font-size: 11px;
 	font-weight: 700;
 	line-height: 1;
-	color: var(--tbt-accent-contrast);
-	background: var(--tbt-accent-soft);
+	color: var(--tbtn-accent-contrast);
+	background: var(--tbtn-accent-soft);
 	border-radius: 999px;
 	padding: 2px 5px;
 }
@@ -704,8 +1006,8 @@ body.tbt-notes-open {
 .tbt-notes-lesson-extras__panel {
 	flex: 0 0 100%;
 	width: 100%;
-	border-top: 1px solid var(--tbt-border);
-	padding: var(--tbt-s2) var(--tbt-s3) var(--tbt-s3);
+	border-top: 1px solid var(--tbtn-border);
+	padding: var(--tbtn-s2) var(--tbtn-s3) var(--tbtn-s3);
 	display: flex;
 	flex-direction: column;
 	align-items: center;
@@ -719,11 +1021,11 @@ body.tbt-notes-open {
 
 .tbt-notes-lesson-extras__panel .tbt-notes-extras__list {
 	width: 100%;
-	margin-top: var(--tbt-s1);
+	margin-top: var(--tbtn-s1);
 }
 
 .tbt-notes-lesson-extras__panel .tbt-notes-extras__detail {
-	padding: var(--tbt-s2) 0 0;
+	padding: var(--tbtn-s2) 0 0;
 }
 
 /* ------------------------------------------------------------ Class extras */
@@ -735,34 +1037,34 @@ body.tbt-notes-open {
 .tbt-notes-extras {
 	display: flex;
 	flex-direction: column;
-	gap: var(--tbt-s1);
+	gap: var(--tbtn-s1);
 }
 
 .tbt-notes-extras:not(:empty) {
-	margin-top: var(--tbt-s3);
-	padding-top: var(--tbt-s3);
-	border-top: 1px solid var(--tbt-border);
+	margin-top: var(--tbtn-s3);
+	padding-top: var(--tbtn-s3);
+	border-top: 1px solid var(--tbtn-border);
 }
 
 .tbt-notes-extras__toggle {
 	display: flex;
 	align-items: center;
-	gap: var(--tbt-s1);
+	gap: var(--tbtn-s1);
 	width: 100%;
-	padding: var(--tbt-s1) 0;
+	padding: var(--tbtn-s1) 0;
 	border: 0;
 	background: transparent;
 	cursor: pointer;
 	font: inherit;
-	font-size: var(--tbt-fs-label);
+	font-size: var(--tbtn-fs-label);
 	font-weight: 700;
 	text-transform: uppercase;
 	letter-spacing: 0.05em;
-	color: var(--tbt-muted);
+	color: var(--tbtn-muted);
 }
 
 .tbt-notes-extras__toggle:hover {
-	color: var(--tbt-text);
+	color: var(--tbtn-text);
 }
 
 .tbt-notes-extras__caret {
@@ -776,22 +1078,22 @@ body.tbt-notes-open {
 
 .tbt-notes-extras__list {
 	list-style: none;
-	margin: var(--tbt-s1) 0 0;
+	margin: var(--tbtn-s1) 0 0;
 	padding: 0;
 	display: flex;
 	flex-direction: column;
-	gap: var(--tbt-s1);
+	gap: var(--tbtn-s1);
 }
 
 .tbt-notes-extras__item {
-	border: 1px solid var(--tbt-border);
-	border-radius: var(--tbt-radius);
+	border: 1px solid var(--tbtn-border);
+	border-radius: var(--tbtn-radius);
 	background: #fff;
 	overflow: hidden;
 }
 
 .tbt-notes-extras__item.is-open {
-	border-color: var(--tbt-accent);
+	border-color: var(--tbtn-accent);
 }
 
 .tbt-notes-extras__row {
@@ -805,29 +1107,29 @@ body.tbt-notes-open {
 	cursor: pointer;
 	font: inherit;
 	color: inherit;
-	padding: var(--tbt-s2) var(--tbt-s3);
+	padding: var(--tbtn-s2) var(--tbtn-s3);
 }
 
 .tbt-notes-extras__row:hover {
-	background: var(--tbt-hover);
+	background: var(--tbtn-hover);
 }
 
 .tbt-notes-extras__title {
-	font-size: var(--tbt-fs-listitem);
+	font-size: var(--tbtn-fs-listitem);
 	line-height: 1.3;
 }
 
 .tbt-notes-extras__subtitle {
-	font-size: var(--tbt-fs-label);
-	color: var(--tbt-muted);
+	font-size: var(--tbtn-fs-label);
+	color: var(--tbtn-muted);
 }
 
 .tbt-notes-extras__detail {
 	display: flex;
 	flex-direction: column;
 	align-items: center;
-	gap: var(--tbt-s2);
-	padding: 0 var(--tbt-s3) var(--tbt-s3);
+	gap: var(--tbtn-s2);
+	padding: 0 var(--tbtn-s3) var(--tbtn-s3);
 }
 
 /* The QR is the primary element here — students scan it off the screen — so it
@@ -848,20 +1150,20 @@ body.tbt-notes-open {
 	display: flex;
 	flex-direction: column;
 	align-items: stretch;
-	gap: var(--tbt-s1);
+	gap: var(--tbtn-s1);
 	width: 100%;
 	min-width: 0;
 }
 
 .tbt-notes-extras__link {
-	font-size: var(--tbt-fs-label);
-	color: var(--tbt-accent);
+	font-size: var(--tbtn-fs-label);
+	color: var(--tbtn-accent);
 	word-break: break-all;
 }
 
 .tbt-notes-extras__copy {
-	padding: var(--tbt-s1) var(--tbt-s2);
-	font-size: var(--tbt-fs-label);
+	padding: var(--tbtn-s1) var(--tbtn-s2);
+	font-size: var(--tbtn-fs-label);
 }
 
 /* Extras are a screen affordance: a printed note has no use for a QR code. */
@@ -883,7 +1185,7 @@ body.tbt-notes-open {
 	flex: 1 1 auto;
 	min-height: 0;
 	overflow-y: auto;
-	padding: var(--tbt-s4) var(--tbt-s4) 56px;
+	padding: var(--tbtn-s4) var(--tbtn-s4) 56px;
 	width: 100%;
 	max-width: none;
 }
@@ -896,33 +1198,33 @@ body.tbt-notes-open {
 	padding: 0;
 	display: flex;
 	flex-direction: column;
-	gap: var(--tbt-s1);
+	gap: var(--tbtn-s1);
 }
 
 .tbt-notes-listitem {
 	display: flex;
 	align-items: center;
-	gap: var(--tbt-s1);
-	border: 1px solid var(--tbt-border);
-	border-radius: var(--tbt-radius);
+	gap: var(--tbtn-s1);
+	border: 1px solid var(--tbtn-border);
+	border-radius: var(--tbtn-radius);
 	background: #fff;
 	transition: background 0.12s ease, border-color 0.12s ease;
 }
 
 .tbt-notes-listitem:hover {
-	background: var(--tbt-hover);
-	border-color: var(--tbt-accent);
+	background: var(--tbtn-hover);
+	border-color: var(--tbtn-accent);
 }
 
 /* Class cards: light-blue (lightened brand blue) so they read as tappable. */
 .tbt-notes-list .tbt-notes-listitem {
-	background: var(--tbt-accent-soft);
+	background: var(--tbtn-accent-soft);
 	border-color: transparent;
 }
 
 .tbt-notes-list .tbt-notes-listitem:hover {
-	background: var(--tbt-accent-soft-hover);
-	border-color: var(--tbt-accent);
+	background: var(--tbtn-accent-soft-hover);
+	border-color: var(--tbtn-accent);
 }
 
 .tbt-notes-listitem__main {
@@ -931,20 +1233,20 @@ body.tbt-notes-open {
 	border: 0;
 	background: transparent;
 	cursor: pointer;
-	padding: var(--tbt-s2) var(--tbt-s3);
+	padding: var(--tbtn-s2) var(--tbtn-s3);
 	font: inherit;
 	color: inherit;
 	min-width: 0;
-	border-radius: var(--tbt-radius);
+	border-radius: var(--tbtn-radius);
 }
 
 .tbt-notes-listitem__main.is-active {
-	background: var(--tbt-accent-soft);
-	box-shadow: inset 3px 0 0 var(--tbt-accent);
+	background: var(--tbtn-accent-soft);
+	box-shadow: inset 3px 0 0 var(--tbtn-accent);
 }
 
 .tbt-notes-listitem__title {
-	font-size: var(--tbt-fs-listitem);
+	font-size: var(--tbtn-fs-listitem);
 	font-weight: 600;
 	display: block;
 	overflow: hidden;
@@ -955,26 +1257,26 @@ body.tbt-notes-open {
 .tbt-notes-listitem__meta {
 	display: block;
 	font-size: 13px;
-	color: var(--tbt-text);
+	color: var(--tbtn-text);
 	margin-top: 4px;
 }
 
 .tbt-notes-listitem__delete {
 	flex: 0 0 auto;
-	margin-right: var(--tbt-s1);
+	margin-right: var(--tbtn-s1);
 	border: 0;
 	background: transparent;
-	color: var(--tbt-muted);
+	color: var(--tbtn-muted);
 	cursor: pointer;
 	font-size: 18px;
 	width: 40px;
 	height: 40px;
-	border-radius: var(--tbt-radius);
+	border-radius: var(--tbtn-radius);
 	line-height: 1;
 }
 
 .tbt-notes-listitem__delete:hover {
-	color: var(--tbt-danger);
+	color: var(--tbtn-danger);
 	background: #fdecea;
 }
 
@@ -993,19 +1295,21 @@ body.tbt-notes-open {
 	display: flex;
 	align-items: center;
 	justify-content: flex-end;
-	gap: var(--tbt-s2);
-	margin-bottom: var(--tbt-s3);
+	gap: var(--tbtn-s2);
+	margin-bottom: var(--tbtn-s3);
 }
 
-/* Smaller, lighter New class button (was a full-width heavy block before). */
-.tbt-notes-newclass-btn {
-	padding: var(--tbt-s1) 16px;
+/* Smaller, lighter New class button (was a full-width heavy block before).
+   Overlay only: in Page Mode the button is a canonical .tbt-button--primary and
+   takes its pill shape, size and tracking from tbt-components.css. */
+.tbt-notes-app:not( .tbt-notes-app--page ) .tbt-notes-newclass-btn {
+	padding: var(--tbtn-s1) 16px;
 	font-size: 15px;
 }
 
 /* Clear breathing room between the search field and the first card. */
 .tbt-notes-body--classes .tbt-notes-classsearch {
-	margin-bottom: var(--tbt-s4);
+	margin-bottom: var(--tbtn-s4);
 }
 
 /* Responsive card grid: 3-up on desktop, 2-up on tablet, 1-up on mobile. */
@@ -1019,7 +1323,7 @@ body.tbt-notes-open {
 	position: relative;
 	display: flex;
 	flex-direction: column;
-	border-radius: var(--tbt-radius);
+	border-radius: var(--tbtn-radius);
 	overflow: hidden;
 	background: #ffffff;
 	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
@@ -1048,7 +1352,7 @@ body.tbt-notes-open {
 }
 
 .tbt-notes-classcard__open:focus-visible {
-	outline: 3px solid var(--tbt-accent);
+	outline: 3px solid var(--tbtn-accent);
 	outline-offset: -3px;
 }
 
@@ -1058,7 +1362,7 @@ body.tbt-notes-open {
 	position: relative;
 	min-height: 150px;
 	overflow: hidden;
-	background: var(--tbt-brand-blue); /* fallback before the inline gradient applies */
+	background: var(--tbtn-brand-blue); /* fallback before the inline gradient applies */
 }
 
 .tbt-notes-classcard__logo {
@@ -1078,7 +1382,7 @@ body.tbt-notes-open {
 }
 
 .tbt-notes-classcard__title {
-	color: #0859c6;
+	color: var(--tbt-blue, #0856c9);
 	font-weight: 700;
 	font-size: 20px;
 	line-height: 1.25;
@@ -1088,7 +1392,7 @@ body.tbt-notes-open {
 }
 
 .tbt-notes-classcard__meta {
-	color: #0859c6;
+	color: var(--tbt-blue, #0856c9);
 	margin-top: 20px;
 	line-height: 1.6;
 	font-size: 15px;
@@ -1109,7 +1413,7 @@ body.tbt-notes-open {
 	border: 0;
 	border-radius: 8px;
 	background: rgba(255, 255, 255, 0.85);
-	color: var(--tbt-danger);
+	color: var(--tbtn-danger);
 	cursor: pointer;
 	font-size: 16px;
 	line-height: 1;
@@ -1133,23 +1437,23 @@ body.tbt-notes-open {
 
 .tbt-notes-empty,
 .tbt-notes-loading {
-	color: var(--tbt-muted);
-	font-size: var(--tbt-fs-body);
+	color: var(--tbtn-muted);
+	font-size: var(--tbtn-fs-body);
 	text-align: center;
-	padding: var(--tbt-s4) var(--tbt-s3);
+	padding: var(--tbtn-s4) var(--tbtn-s3);
 	display: flex;
 	flex-direction: column;
 	align-items: center;
-	gap: var(--tbt-s2);
+	gap: var(--tbtn-s2);
 }
 
 /* -------------------------------------------------------------------- Buttons */
 
 .tbt-notes-toolbar-row {
 	display: flex;
-	gap: var(--tbt-s2);
+	gap: var(--tbtn-s2);
 	align-items: center;
-	margin-bottom: var(--tbt-s3);
+	margin-bottom: var(--tbtn-s3);
 }
 
 .tbt-notes-toolbar-row .tbt-notes-btn {
@@ -1159,30 +1463,30 @@ body.tbt-notes-open {
 /* ---------------------------------------------------------------- Form fields */
 
 .tbt-notes-field {
-	margin-bottom: var(--tbt-s4);
+	margin-bottom: var(--tbtn-s4);
 	position: relative;
 }
 
 .tbt-notes-field__label {
-	margin-bottom: var(--tbt-s1);
+	margin-bottom: var(--tbtn-s1);
 }
 
 .tbt-notes-input,
 .tbt-notes-select {
 	width: 100%;
-	padding: var(--tbt-s2) var(--tbt-s2);
-	border: 1px solid var(--tbt-border);
-	border-radius: var(--tbt-radius);
+	padding: var(--tbtn-s2) var(--tbtn-s2);
+	border: 1px solid var(--tbtn-border);
+	border-radius: var(--tbtn-radius);
 	font: inherit;
 	background: #fff;
-	color: var(--tbt-text);
+	color: var(--tbtn-text);
 }
 
 .tbt-notes-input:focus,
 .tbt-notes-select:focus {
-	outline: 2px solid var(--tbt-accent);
+	outline: 2px solid var(--tbtn-accent);
 	outline-offset: 0;
-	border-color: var(--tbt-accent);
+	border-color: var(--tbtn-accent);
 }
 
 /* --------------------------------------------------------- Student picker */
@@ -1190,19 +1494,19 @@ body.tbt-notes-open {
 .tbt-notes-chips {
 	display: flex;
 	flex-wrap: wrap;
-	gap: var(--tbt-s1);
-	margin-bottom: var(--tbt-s2);
+	gap: var(--tbtn-s1);
+	margin-bottom: var(--tbtn-s2);
 }
 
 .tbt-notes-chip {
 	display: inline-flex;
 	align-items: center;
-	gap: var(--tbt-s1);
+	gap: var(--tbtn-s1);
 	padding: 6px 6px 6px 14px;
-	border: 1px solid var(--tbt-accent);
+	border: 1px solid var(--tbtn-accent);
 	border-radius: 20px;
-	background: var(--tbt-accent-soft);
-	color: var(--tbt-text);
+	background: var(--tbtn-accent-soft);
+	color: var(--tbtn-text);
 	max-width: 100%;
 }
 
@@ -1216,7 +1520,7 @@ body.tbt-notes-open {
 .tbt-notes-chip__remove {
 	border: 0;
 	background: transparent;
-	color: var(--tbt-muted);
+	color: var(--tbtn-muted);
 	cursor: pointer;
 	font-size: 16px;
 	line-height: 1;
@@ -1225,16 +1529,16 @@ body.tbt-notes-open {
 }
 
 .tbt-notes-chip__remove:hover {
-	color: var(--tbt-danger);
+	color: var(--tbtn-danger);
 	background: #fdecea;
 }
 
 .tbt-notes-userresults {
 	list-style: none;
-	margin: var(--tbt-s1) 0 0;
+	margin: var(--tbtn-s1) 0 0;
 	padding: 4px;
-	border: 1px solid var(--tbt-border);
-	border-radius: var(--tbt-radius);
+	border: 1px solid var(--tbtn-border);
+	border-radius: var(--tbtn-radius);
 	background: #fff;
 	box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
 	max-height: 320px;
@@ -1247,20 +1551,20 @@ body.tbt-notes-open {
 	border: 0;
 	background: transparent;
 	border-radius: 7px;
-	padding: var(--tbt-s2);
+	padding: var(--tbtn-s2);
 	font: inherit;
-	color: var(--tbt-text);
+	color: var(--tbtn-text);
 	cursor: pointer;
 	display: block;
 }
 
 .tbt-notes-userresult:hover:not([disabled]),
 .tbt-notes-userresult:focus {
-	background: var(--tbt-hover);
+	background: var(--tbtn-hover);
 }
 
 .tbt-notes-userresult[disabled] {
-	color: var(--tbt-muted);
+	color: var(--tbtn-muted);
 	cursor: not-allowed;
 }
 
@@ -1270,29 +1574,29 @@ body.tbt-notes-open {
 
 .tbt-notes-userresult__sub {
 	font-size: 13px;
-	color: var(--tbt-muted);
+	color: var(--tbtn-muted);
 }
 
 .tbt-notes-hint {
 	font-size: 13px;
-	color: var(--tbt-muted);
-	margin: var(--tbt-s1) 0 0;
+	color: var(--tbtn-muted);
+	margin: var(--tbtn-s1) 0 0;
 }
 
 /* --------------------------------------------------------------- Read view */
 
 .tbt-notes-read {
-	font-size: var(--tbt-fs-body);
-	font-weight: var(--tbt-fw-body);
-	line-height: var(--tbt-lh-body);
-	color: var(--tbt-text);
+	font-size: var(--tbtn-fs-body);
+	font-weight: var(--tbtn-fw-body);
+	line-height: var(--tbtn-lh-body);
+	color: var(--tbtn-text);
 	word-wrap: break-word;
 	overflow-wrap: anywhere;
 }
 
 .tbt-notes-read p {
 	margin: 0 0 0.85em;
-	font-weight: var(--tbt-fw-body);
+	font-weight: var(--tbtn-fw-body);
 }
 
 .tbt-notes-read strong,
@@ -1317,7 +1621,7 @@ body.tbt-notes-open {
 	font-size: 1.5em;
 	line-height: 1.3;
 	margin: 1.5em 0 0.7em;
-	color: var(--tbt-text);
+	color: var(--tbtn-text);
 }
 
 .tbt-notes-read h2,
@@ -1325,7 +1629,7 @@ body.tbt-notes-open {
 	font-size: 1.35em;
 	line-height: 1.3;
 	margin: 1.5em 0 0.7em;
-	color: var(--tbt-text);
+	color: var(--tbtn-text);
 }
 
 .tbt-notes-read h3,
@@ -1333,20 +1637,20 @@ body.tbt-notes-open {
 	font-size: 1.15em;
 	line-height: 1.35;
 	margin: 1.25em 0 0.55em;
-	color: var(--tbt-brand-blue);
+	color: var(--tbtn-brand-blue);
 }
 
 .tbt-notes-read a {
-	color: var(--tbt-text);
+	color: var(--tbtn-text);
 	text-decoration: underline;
-	text-decoration-color: var(--tbt-accent);
+	text-decoration-color: var(--tbtn-accent);
 }
 
 .tbt-notes-read blockquote {
-	border-left: 4px solid var(--tbt-border);
+	border-left: 4px solid var(--tbtn-border);
 	margin: 0.6em 0;
 	padding-left: 14px;
-	color: var(--tbt-muted);
+	color: var(--tbtn-muted);
 }
 
 .tbt-notes-read ul,
@@ -1357,14 +1661,14 @@ body.tbt-notes-open {
 
 .tbt-notes-read li {
 	margin: 0.4em 0;
-	line-height: var(--tbt-lh-body);
+	line-height: var(--tbtn-lh-body);
 }
 
 /* Match the editor's list spacing to the read view so multi-line numbered items
    don't look cramped while typing. */
 .tbt-notes-app .ql-editor li {
 	margin: 0.4em 0;
-	line-height: var(--tbt-lh-body);
+	line-height: var(--tbtn-lh-body);
 }
 
 .tbt-notes-read ol {
@@ -1410,9 +1714,9 @@ body.tbt-notes-open {
 .tbt-notes-filterbar {
 	display: flex;
 	align-items: center;
-	gap: var(--tbt-s1);
-	padding: var(--tbt-s2) var(--tbt-s4);
-	border-bottom: 1px solid var(--tbt-border);
+	gap: var(--tbtn-s1);
+	padding: var(--tbtn-s2) var(--tbtn-s4);
+	border-bottom: 1px solid var(--tbtn-border);
 	background: #fff;
 	flex: 0 0 auto;
 }
@@ -1420,17 +1724,17 @@ body.tbt-notes-open {
 .tbt-notes-filterbar label {
 	display: inline-flex;
 	align-items: center;
-	gap: var(--tbt-s1);
+	gap: var(--tbtn-s1);
 	font-size: 14px;
-	color: var(--tbt-muted);
+	color: var(--tbtn-muted);
 	font-weight: 700;
 }
 
 .tbt-notes-filterbar select {
 	font: inherit;
-	color: var(--tbt-text);
-	border: 1px solid var(--tbt-border);
-	border-radius: var(--tbt-radius);
+	color: var(--tbtn-text);
+	border: 1px solid var(--tbtn-border);
+	border-radius: var(--tbtn-radius);
 	padding: 6px 10px;
 	background: #fff;
 }
@@ -1444,7 +1748,7 @@ body.tbt-notes-open {
 	margin-right: 8px;
 	font-size: 14px;
 	font-weight: 700;
-	color: var(--tbt-muted);
+	color: var(--tbtn-muted);
 	vertical-align: middle;
 }
 
@@ -1452,10 +1756,10 @@ body.tbt-notes-open {
 	min-width: 180px;
 	max-width: 240px;
 	padding: 5px 28px 5px 10px;
-	border: 1px solid var(--tbt-border);
+	border: 1px solid var(--tbtn-border);
 	border-radius: 8px;
 	background: #fff;
-	color: var(--tbt-text);
+	color: var(--tbtn-text);
 	font: inherit;
 	font-weight: 700;
 }
@@ -1478,18 +1782,18 @@ body.tbt-notes-open {
 
 /* Extracted-highlights list, grouped by semantic category. */
 .tbt-notes-highlight-summary {
-	font-size: var(--tbt-fs-body);
+	font-size: var(--tbtn-fs-body);
 	line-height: 1.6;
-	color: var(--tbt-text);
+	color: var(--tbtn-text);
 }
 
 .tbt-notes-highlight-group {
-	margin-bottom: var(--tbt-s4);
+	margin-bottom: var(--tbtn-s4);
 }
 
 .tbt-notes-highlight-group h2 {
 	font-size: 1.1em;
-	margin: 0 0 var(--tbt-s1);
+	margin: 0 0 var(--tbtn-s1);
 }
 
 .tbt-notes-highlight-group ul {
@@ -1499,14 +1803,14 @@ body.tbt-notes-open {
 
 .tbt-notes-highlight-group li {
 	margin: 0.5em 0;
-	line-height: var(--tbt-lh-body);
-	font-weight: var(--tbt-fw-body);
+	line-height: var(--tbtn-lh-body);
+	font-weight: var(--tbtn-fw-body);
 }
 
 /* The highlighted phrase keeps its colour but not extra weight — easier to read
    as a scannable list. */
 .tbt-notes-highlight-group li span {
-	font-weight: var(--tbt-fw-body);
+	font-weight: var(--tbtn-fw-body);
 }
 
 /* ------------------------------------------------------ Pronunciation audio */
@@ -1521,11 +1825,11 @@ body.tbt-notes-open {
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
-	gap: var(--tbt-s2);
+	gap: var(--tbtn-s2);
 	flex-wrap: wrap;
 	margin: 0.35em 0;
 	padding: 0.3em 0;
-	border-bottom: 1px solid var(--tbt-border);
+	border-bottom: 1px solid var(--tbtn-border);
 }
 
 .tbt-pronunciation-text {
@@ -1537,7 +1841,7 @@ body.tbt-notes-open {
 	flex: 0 0 auto;
 	display: inline-flex;
 	align-items: center;
-	gap: var(--tbt-s1);
+	gap: var(--tbtn-s1);
 }
 
 /* Compact action buttons sized down from the standard plugin button. */
@@ -1552,7 +1856,7 @@ body.tbt-notes-open {
 }
 
 .tbt-pronunciation-error {
-	color: var(--tbt-danger);
+	color: var(--tbtn-danger);
 	font-size: 14px;
 }
 
@@ -1567,14 +1871,14 @@ body.tbt-notes-open {
 .tbt-expression-item {
 	margin: 0.6em 0;
 	padding: 0.5em 0;
-	border-bottom: 1px solid var(--tbt-border);
+	border-bottom: 1px solid var(--tbtn-border);
 }
 
 .tbt-expression-head {
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
-	gap: var(--tbt-s2);
+	gap: var(--tbtn-s2);
 	flex-wrap: wrap;
 }
 
@@ -1601,7 +1905,7 @@ body.tbt-notes-open {
 .tbt-expression-field label {
 	font-size: 13px;
 	font-weight: 600;
-	color: var(--tbt-muted, #555);
+	color: var(--tbtn-muted, #555);
 }
 
 .tbt-expression-field textarea {
@@ -1611,7 +1915,7 @@ body.tbt-notes-open {
 	resize: vertical;
 	font: inherit;
 	padding: 6px 8px;
-	border: 1px solid var(--tbt-border);
+	border: 1px solid var(--tbtn-border);
 	border-radius: 4px;
 }
 
@@ -1622,7 +1926,7 @@ body.tbt-notes-open {
 
 .tbt-expression-status--draft {
 	font-weight: 600;
-	color: var(--tbt-muted, #777);
+	color: var(--tbtn-muted, #777);
 }
 
 .tbt-expression-status--approved {
@@ -1635,7 +1939,7 @@ body.tbt-notes-open {
 	display: inline-flex;
 	align-items: center;
 	flex-wrap: wrap;
-	gap: var(--tbt-s1);
+	gap: var(--tbtn-s1);
 }
 
 .tbt-expression-generate,
@@ -1645,12 +1949,12 @@ body.tbt-notes-open {
 }
 
 .tbt-expression-error {
-	color: var(--tbt-danger);
+	color: var(--tbtn-danger);
 	font-size: 14px;
 }
 
 .tbt-expression-msg {
-	color: var(--tbt-muted, #777);
+	color: var(--tbtn-muted, #777);
 	font-size: 14px;
 }
 
@@ -1670,7 +1974,7 @@ body.tbt-notes-open {
 	background: transparent;
 	border: none;
 	border-radius: 4px;
-	color: var(--tbt-text);
+	color: var(--tbtn-text);
 	cursor: pointer;
 	opacity: 0;
 	transition: opacity 0.12s ease;
@@ -1709,17 +2013,17 @@ body.tbt-notes-open {
    border, shadow), but fixed-positioned on <body> — the notes panel is
    transformed and scroll-clipped, so it cannot host a floating child. The
    element also carries .tbt-notes-app for the --tbt-* tokens.
-   LOAD-BEARING: z-index must exceed the overlay panel's (--tbt-z + 2). */
+   LOAD-BEARING: z-index must exceed the overlay panel's (--tbtn-z + 2). */
 .tbt-dict-menu {
 	position: fixed;
-	z-index: calc(var(--tbt-z, 2147483000) + 3);
+	z-index: calc(var(--tbtn-z, 2147483000) + 3);
 	min-width: 200px;
 	max-width: 280px;
 	max-height: 300px;
 	overflow-y: auto;
 	padding: 6px;
-	background: var(--tbt-panel-bg);
-	border: 1px solid var(--tbt-border);
+	background: var(--tbtn-panel-bg);
+	border: 1px solid var(--tbtn-border);
 	border-radius: 10px;
 	box-shadow: 0 4px 14px rgba( 17, 52, 107, 0.18 );
 }
@@ -1732,7 +2036,7 @@ body.tbt-notes-open {
 	padding: 2px 8px 6px;
 	font-size: 12px;
 	font-weight: 600;
-	color: var(--tbt-muted, #777);
+	color: var(--tbtn-muted, #777);
 }
 
 .tbt-dict-menu__item {
@@ -1742,7 +2046,7 @@ body.tbt-notes-open {
 	font: inherit;
 	font-size: 14px;
 	text-align: left;
-	color: var(--tbt-text);
+	color: var(--tbtn-text);
 	background: transparent;
 	border: none;
 	border-radius: 6px;
@@ -1784,11 +2088,11 @@ body.tbt-notes-open {
 .tbt-dict-menu__msg {
 	padding: 4px 8px;
 	font-size: 13px;
-	color: var(--tbt-muted, #777);
+	color: var(--tbtn-muted, #777);
 }
 
 .tbt-dict-menu__msg--error {
-	color: var(--tbt-danger);
+	color: var(--tbtn-danger);
 }
 
 /* --------------------------------------------------------------- Editor view */
@@ -1818,12 +2122,12 @@ body.tbt-notes-open {
 	border-left: 0;
 	border-right: 0;
 	border-top: 1px solid transparent;
-	border-bottom: 1px solid var(--tbt-border);
+	border-bottom: 1px solid var(--tbtn-border);
 	position: sticky;
 	top: 0;
 	background: #fff;
 	z-index: 2;
-	padding: var(--tbt-s1) var(--tbt-s4);
+	padding: var(--tbtn-s1) var(--tbtn-s4);
 }
 
 .tbt-notes-editor-quillwrap .ql-container.ql-snow {
@@ -1836,11 +2140,11 @@ body.tbt-notes-open {
 /* Editor body matches read view: same size, weight and spacious line-height. */
 .tbt-notes-app .ql-editor {
 	font-family: "Roboto Slab", Georgia, "Times New Roman", serif;
-	font-size: var(--tbt-fs-body);
-	font-weight: var(--tbt-fw-body);
-	line-height: var(--tbt-lh-body);
-	color: var(--tbt-text);
-	padding: var(--tbt-s3) var(--tbt-s4) 48px;
+	font-size: var(--tbtn-fs-body);
+	font-weight: var(--tbtn-fw-body);
+	line-height: var(--tbtn-lh-body);
+	color: var(--tbtn-text);
+	padding: var(--tbtn-s3) var(--tbtn-s4) 48px;
 }
 
 .tbt-notes-app .ql-editor p {
@@ -1856,19 +2160,19 @@ body.tbt-notes-open {
 
 /* Match the read view's blockquote styling in the editor. */
 .tbt-notes-app .ql-editor blockquote {
-	border-left: 4px solid var(--tbt-border);
+	border-left: 4px solid var(--tbtn-border);
 	margin: 0.6em 0;
 	padding-left: 14px;
-	color: var(--tbt-muted);
+	color: var(--tbtn-muted);
 }
 
 .tbt-notes-editor-footer {
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
-	gap: var(--tbt-s2);
-	padding: var(--tbt-s2) var(--tbt-s4);
-	border-top: 1px solid var(--tbt-border);
+	gap: var(--tbtn-s2);
+	padding: var(--tbtn-s2) var(--tbtn-s4);
+	border-top: 1px solid var(--tbtn-border);
 	flex: 0 0 auto;
 }
 
@@ -1876,10 +2180,10 @@ body.tbt-notes-open {
 
 .tbt-notes-saveind {
 	font-size: 14px;
-	color: var(--tbt-muted);
+	color: var(--tbtn-muted);
 	display: inline-flex;
 	align-items: center;
-	gap: var(--tbt-s1);
+	gap: var(--tbtn-s1);
 }
 
 .tbt-notes-saveind::before {
@@ -1900,7 +2204,7 @@ body.tbt-notes-open {
 }
 
 .tbt-notes-saveind.is-error {
-	color: var(--tbt-danger);
+	color: var(--tbtn-danger);
 }
 
 /* ------------------------------------------------------------- Highlights */
@@ -1908,35 +2212,35 @@ body.tbt-notes-open {
 .tbt-notes-app .tbt-hl-blue,
 .tbt-notes-read .tbt-hl-blue,
 .ql-editor .tbt-hl-blue {
-	background-color: var(--tbt-hl-blue);
+	background-color: var(--tbtn-hl-blue);
 	border-radius: 2px;
 }
 
 .tbt-notes-app .tbt-hl-yellow,
 .tbt-notes-read .tbt-hl-yellow,
 .ql-editor .tbt-hl-yellow {
-	background-color: var(--tbt-hl-yellow);
+	background-color: var(--tbtn-hl-yellow);
 	border-radius: 2px;
 }
 
 .tbt-notes-app .tbt-hl-red,
 .tbt-notes-read .tbt-hl-red,
 .ql-editor .tbt-hl-red {
-	background-color: var(--tbt-hl-red);
+	background-color: var(--tbtn-hl-red);
 	border-radius: 2px;
 }
 
 .tbt-notes-app .tbt-hl-pink,
 .tbt-notes-read .tbt-hl-pink,
 .ql-editor .tbt-hl-pink {
-	background-color: var(--tbt-hl-pink);
+	background-color: var(--tbtn-hl-pink);
 	border-radius: 2px;
 }
 
 .tbt-notes-app .tbt-hl-green,
 .tbt-notes-read .tbt-hl-green,
 .ql-editor .tbt-hl-green {
-	background-color: var(--tbt-hl-green);
+	background-color: var(--tbtn-hl-green);
 	border-radius: 2px;
 }
 
@@ -1950,37 +2254,37 @@ body.tbt-notes-open {
 }
 
 .tbt-notes-editor-quillwrap .ql-toolbar .tbt-hl-btn[data-color="blue"] {
-	background: var(--tbt-hl-blue);
+	background: var(--tbtn-hl-blue);
 }
 
 .tbt-notes-editor-quillwrap .ql-toolbar .tbt-hl-btn[data-color="yellow"] {
-	background: var(--tbt-hl-yellow);
+	background: var(--tbtn-hl-yellow);
 }
 
 .tbt-notes-editor-quillwrap .ql-toolbar .tbt-hl-btn[data-color="red"] {
-	background: var(--tbt-hl-red);
+	background: var(--tbtn-hl-red);
 }
 
 .tbt-notes-editor-quillwrap .ql-toolbar .tbt-hl-btn[data-color="pink"] {
-	background: var(--tbt-hl-pink);
+	background: var(--tbtn-hl-pink);
 }
 
 .tbt-notes-editor-quillwrap .ql-toolbar .tbt-hl-btn[data-color="green"] {
-	background: var(--tbt-hl-green);
+	background: var(--tbtn-hl-green);
 }
 
 .tbt-notes-editor-quillwrap .ql-toolbar .tbt-hl-clear {
 	font-size: 13px !important;
 	width: auto !important;
 	padding: 0 4px !important;
-	color: var(--tbt-muted);
+	color: var(--tbtn-muted);
 }
 
 /* -------------------------------------------- Floating highlight popup (F3) */
 
 /* Shown just above a non-empty selection in the editor; positioned in JS and
    anchored inside the (position:relative) editor wrapper. Swatch colours are
-   sourced from the same --tbt-hl-* variables the applied highlights use, so the
+   sourced from the same --tbtn-hl-* variables the applied highlights use, so the
    popup and the resulting highlight always match. */
 .tbt-notes-editor-quillwrap .tbt-hl-popup {
 	position: absolute;
@@ -1989,8 +2293,8 @@ body.tbt-notes-open {
 	align-items: center;
 	gap: 4px;
 	padding: 5px 6px;
-	background: var(--tbt-panel-bg);
-	border: 1px solid var(--tbt-border);
+	background: var(--tbtn-panel-bg);
+	border: 1px solid var(--tbtn-border);
 	border-radius: 999px;
 	box-shadow: 0 4px 14px rgba( 17, 52, 107, 0.18 );
 }
@@ -2014,23 +2318,23 @@ body.tbt-notes-open {
 }
 
 .tbt-notes-editor-quillwrap .tbt-hl-popup__swatch[data-color="blue"] {
-	background: var(--tbt-hl-blue);
+	background: var(--tbtn-hl-blue);
 }
 
 .tbt-notes-editor-quillwrap .tbt-hl-popup__swatch[data-color="red"] {
-	background: var(--tbt-hl-red);
+	background: var(--tbtn-hl-red);
 }
 
 .tbt-notes-editor-quillwrap .tbt-hl-popup__swatch[data-color="yellow"] {
-	background: var(--tbt-hl-yellow);
+	background: var(--tbtn-hl-yellow);
 }
 
 .tbt-notes-editor-quillwrap .tbt-hl-popup__swatch[data-color="pink"] {
-	background: var(--tbt-hl-pink);
+	background: var(--tbtn-hl-pink);
 }
 
 .tbt-notes-editor-quillwrap .tbt-hl-popup__swatch[data-color="green"] {
-	background: var(--tbt-hl-green);
+	background: var(--tbtn-hl-green);
 }
 
 .tbt-notes-editor-quillwrap .tbt-hl-popup__remove {
@@ -2043,16 +2347,16 @@ body.tbt-notes-open {
 	padding: 0 0 0 6px;
 	font-size: 13px;
 	line-height: 1;
-	color: var(--tbt-muted);
+	color: var(--tbtn-muted);
 	background: transparent;
 	border: none;
-	border-left: 1px solid var(--tbt-border);
+	border-left: 1px solid var(--tbtn-border);
 	border-radius: 0;
 	cursor: pointer;
 }
 
 .tbt-notes-editor-quillwrap .tbt-hl-popup__remove:hover {
-	color: var(--tbt-text);
+	color: var(--tbtn-text);
 }
 
 /* -------------------------------------------------- Link tooltip icons (F2) */
@@ -2070,7 +2374,7 @@ body.tbt-notes-open {
 
 .tbt-notes-editor-quillwrap .ql-snow .ql-tooltip:not(.ql-editing) a.ql-preview {
 	vertical-align: middle;
-	color: var(--tbt-muted);
+	color: var(--tbtn-muted);
 }
 
 /* The four actions share one icon-button box: size, spacing, hover. */
@@ -2086,7 +2390,7 @@ body.tbt-notes-open {
 	padding: 0;
 	margin: 0 1px;
 	border-radius: 4px;
-	color: var(--tbt-text);
+	color: var(--tbtn-text);
 	vertical-align: middle;
 	cursor: pointer;
 }
@@ -2166,7 +2470,7 @@ body.tbt-notes-open {
 }
 
 .tbt-notes-editorwrap .ql-editor img.is-selected {
-	outline: 2px solid var(--tbt-accent);
+	outline: 2px solid var(--tbtn-accent);
 	outline-offset: 2px;
 }
 
@@ -2177,8 +2481,8 @@ body.tbt-notes-open {
 	display: flex;
 	gap: 6px;
 	padding: 4px;
-	background: var(--tbt-panel-bg);
-	border: 1px solid var(--tbt-border);
+	background: var(--tbtn-panel-bg);
+	border: 1px solid var(--tbtn-border);
 	border-radius: 999px;
 	box-shadow: 0 4px 14px rgba( 17, 52, 107, 0.18 );
 }
@@ -2195,12 +2499,12 @@ body.tbt-notes-open {
 	font-weight: 600;
 	line-height: 1.4;
 	cursor: pointer;
-	background: var(--tbt-accent-soft);
-	color: var(--tbt-accent-contrast);
+	background: var(--tbtn-accent-soft);
+	color: var(--tbtn-accent-contrast);
 }
 
 .tbt-notes-image-controls__btn:hover {
-	background: var(--tbt-accent-soft-hover);
+	background: var(--tbtn-accent-soft-hover);
 }
 
 .tbt-notes-image-controls__btn--danger {
@@ -2223,10 +2527,10 @@ body.tbt-notes-open {
 	width: auto !important;
 	height: auto !important;
 	padding: 3px 10px !important;
-	border: 1px solid var(--tbt-accent);
+	border: 1px solid var(--tbtn-accent);
 	border-radius: 999px;
-	background: var(--tbt-accent-soft);
-	color: var(--tbt-accent-contrast);
+	background: var(--tbtn-accent-soft);
+	color: var(--tbtn-accent-contrast);
 	font-size: 13px;
 	font-weight: 600;
 	cursor: pointer;
@@ -2234,7 +2538,7 @@ body.tbt-notes-open {
 }
 
 .tbt-notes-editor-quillwrap .ql-toolbar .tbt-ai-trigger:hover {
-	background: var(--tbt-accent-soft-hover);
+	background: var(--tbtn-accent-soft-hover);
 }
 
 .tbt-ai-trigger__icon {
@@ -2252,14 +2556,14 @@ body.tbt-notes-open {
 	/* Stay inside the editor area; scroll internally if the content is tall. */
 	max-height: calc(100% - 16px);
 	overflow-y: auto;
-	background: var(--tbt-panel-bg);
-	border: 1px solid var(--tbt-border);
-	border-radius: var(--tbt-radius);
+	background: var(--tbtn-panel-bg);
+	border: 1px solid var(--tbtn-border);
+	border-radius: var(--tbtn-radius);
 	box-shadow: 0 8px 28px rgba( 17, 52, 107, 0.18 );
-	padding: var(--tbt-s2) var(--tbt-s3);
+	padding: var(--tbtn-s2) var(--tbtn-s3);
 	display: flex;
 	flex-direction: column;
-	gap: var(--tbt-s2);
+	gap: var(--tbtn-s2);
 }
 
 .tbt-ai-panel[hidden] {
@@ -2275,13 +2579,13 @@ body.tbt-notes-open {
 .tbt-ai-panel__title {
 	font-size: 14px;
 	font-weight: 700;
-	color: var(--tbt-text);
+	color: var(--tbtn-text);
 }
 
 .tbt-ai-panel__close {
 	border: 0;
 	background: transparent;
-	color: var(--tbt-muted);
+	color: var(--tbtn-muted);
 	font-size: 15px;
 	line-height: 1;
 	cursor: pointer;
@@ -2290,8 +2594,8 @@ body.tbt-notes-open {
 }
 
 .tbt-ai-panel__close:hover {
-	background: var(--tbt-hover);
-	color: var(--tbt-text);
+	background: var(--tbtn-hover);
+	color: var(--tbtn-text);
 }
 
 .tbt-ai-presets {
@@ -2301,9 +2605,9 @@ body.tbt-notes-open {
 }
 
 .tbt-ai-preset {
-	border: 1px solid var(--tbt-border);
+	border: 1px solid var(--tbtn-border);
 	background: #fff;
-	color: var(--tbt-text);
+	color: var(--tbtn-text);
 	font-size: 12px;
 	padding: 4px 10px;
 	border-radius: 999px;
@@ -2312,19 +2616,19 @@ body.tbt-notes-open {
 }
 
 .tbt-ai-preset:hover {
-	background: var(--tbt-hover);
+	background: var(--tbtn-hover);
 }
 
 .tbt-ai-preset.is-active {
-	background: var(--tbt-accent);
-	border-color: var(--tbt-accent);
-	color: var(--tbt-accent-contrast);
+	background: var(--tbtn-accent);
+	border-color: var(--tbtn-accent);
+	color: var(--tbtn-accent-contrast);
 	font-weight: 600;
 }
 
 .tbt-ai-input-row {
 	display: flex;
-	gap: var(--tbt-s2);
+	gap: var(--tbtn-s2);
 	align-items: flex-end;
 }
 
@@ -2333,19 +2637,19 @@ body.tbt-notes-open {
 	resize: vertical;
 	min-height: 40px;
 	max-height: 200px;
-	padding: var(--tbt-s1) var(--tbt-s2);
-	border: 1px solid var(--tbt-border);
+	padding: var(--tbtn-s1) var(--tbtn-s2);
+	border: 1px solid var(--tbtn-border);
 	border-radius: 8px;
 	font: inherit;
 	font-size: 14px;
-	color: var(--tbt-text);
+	color: var(--tbtn-text);
 	background: #fff;
 }
 
 .tbt-ai-input:focus {
 	outline: none;
-	border-color: var(--tbt-accent);
-	box-shadow: 0 0 0 2px var(--tbt-accent-soft);
+	border-color: var(--tbtn-accent);
+	box-shadow: 0 0 0 2px var(--tbtn-accent-soft);
 }
 
 .tbt-ai-submit {
@@ -2360,23 +2664,23 @@ body.tbt-notes-open {
 
 .tbt-ai-status {
 	font-size: 13px;
-	color: var(--tbt-muted);
+	color: var(--tbtn-muted);
 	padding: 2px 0;
 }
 
 .tbt-ai-status.is-error {
-	color: var(--tbt-danger);
+	color: var(--tbtn-danger);
 }
 
 /* Response card — light blue, calm, matching the selected-note style. */
 .tbt-ai-response {
-	background: var(--tbt-accent-soft);
-	border: 1px solid var(--tbt-border);
+	background: var(--tbtn-accent-soft);
+	border: 1px solid var(--tbtn-border);
 	border-radius: 8px;
-	padding: var(--tbt-s2);
+	padding: var(--tbtn-s2);
 	display: flex;
 	flex-direction: column;
-	gap: var(--tbt-s2);
+	gap: var(--tbtn-s2);
 }
 
 .tbt-ai-response[hidden] {
@@ -2386,7 +2690,7 @@ body.tbt-notes-open {
 .tbt-ai-response__text {
 	font-size: 14px;
 	line-height: 1.6;
-	color: var(--tbt-text);
+	color: var(--tbtn-text);
 	white-space: pre-wrap;
 	word-wrap: break-word;
 	max-height: 240px;
@@ -2431,32 +2735,32 @@ body.tbt-notes-open {
 
 .tbt-notes-inlinemsg {
 	font-size: 14px;
-	padding: var(--tbt-s1) var(--tbt-s2);
+	padding: var(--tbtn-s1) var(--tbtn-s2);
 	border-radius: 8px;
-	margin-bottom: var(--tbt-s2);
+	margin-bottom: var(--tbtn-s2);
 }
 
 .tbt-notes-inlinemsg--error {
 	background: #fdecea;
-	color: var(--tbt-danger);
+	color: var(--tbtn-danger);
 }
 
 .tbt-notes-shortcode-btn {
 	display: inline-flex;
 	align-items: center;
-	gap: var(--tbt-s1);
-	padding: var(--tbt-s1) 14px;
-	border: 1px solid var(--tbt-accent);
-	border-radius: var(--tbt-radius);
-	background: var(--tbt-accent);
-	color: var(--tbt-accent-contrast);
+	gap: var(--tbtn-s1);
+	padding: var(--tbtn-s1) 14px;
+	border: 1px solid var(--tbtn-accent);
+	border-radius: var(--tbtn-radius);
+	background: var(--tbtn-accent);
+	color: var(--tbtn-accent-contrast);
 	font: inherit;
 	font-weight: 700;
 	cursor: pointer;
 }
 
 .tbt-notes-shortcode-btn:hover {
-	background: var(--tbt-accent-hover);
+	background: var(--tbtn-accent-hover);
 }
 
 /* ------------------------------------------------------------- Responsive */
@@ -2483,7 +2787,7 @@ body.tbt-notes-open {
 	.tbt-notes-editor-quillwrap .ql-toolbar .tbt-filter-group {
 		display: flex;
 		width: 100%;
-		margin-bottom: var(--tbt-s1);
+		margin-bottom: var(--tbtn-s1);
 	}
 	.tbt-notes-filter-select {
 		flex: 1 1 auto;
@@ -2519,7 +2823,11 @@ body.tbt-notes-open {
 		box-shadow: none !important;
 	}
 
-	/* Hide the chrome: launcher, overlay, top bar and lessons sidebar. */
+	/* Hide the chrome: launcher, overlay, top bar and lessons sidebar. The Page
+	   Mode hero and the fixed sticky strip are screen furniture too — a printed
+	   note carries its own print header instead. */
+	.tbt-notes-sticky-host,
+	.tbt-tool-hero,
 	.tbt-notes-launcher,
 	.tbt-notes-overlay,
 	.tbt-notes-topbar,

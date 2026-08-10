@@ -61,6 +61,8 @@
 
 	var activeSaver = null;
 	var unloading = false;
+	// Page Mode only: the sticky class-header controller (see initPageStickyHeader).
+	var pageSticky = null;
 
 	/* --------------------------------------------------------------- Helpers */
 
@@ -79,6 +81,50 @@
 		while ( node.firstChild ) {
 			node.removeChild( node.firstChild );
 		}
+	}
+
+	/**
+	 * Pick a class list per render mode.
+	 *
+	 * Page Mode is migrated to the canonical TBT components (.tbt-button,
+	 * .tbt-input, .tbt-empty, .tbt-notice, .tbt-icon-button); overlay mode has not
+	 * been migrated and must keep rendering exactly what it renders today. Every
+	 * shared control therefore names both variants here rather than growing a
+	 * second copy of the markup.
+	 *
+	 * @param {string} pageCls    Classes to use in Page Mode.
+	 * @param {string} overlayCls Classes to use in overlay mode.
+	 * @return {string}
+	 */
+	function modeCls( pageCls, overlayCls ) {
+		return isPageMode ? pageCls : overlayCls;
+	}
+
+	var SVG_NS = 'http://www.w3.org/2000/svg';
+
+	/**
+	 * Inline trash icon for destructive icon buttons. Drawn rather than typed so
+	 * it inherits currentColor and matches the rest of the icon set instead of
+	 * rendering as a colour emoji at the mercy of the platform font.
+	 *
+	 * @return {SVGElement}
+	 */
+	function trashIcon() {
+		var svg = document.createElementNS( SVG_NS, 'svg' );
+		svg.setAttribute( 'viewBox', '0 0 24 24' );
+		svg.setAttribute( 'width', '18' );
+		svg.setAttribute( 'height', '18' );
+		svg.setAttribute( 'aria-hidden', 'true' );
+		svg.setAttribute( 'focusable', 'false' );
+		var path = document.createElementNS( SVG_NS, 'path' );
+		path.setAttribute( 'fill', 'currentColor' );
+		path.setAttribute( 'fill-rule', 'evenodd' );
+		path.setAttribute(
+			'd',
+			'M10 4h4l1 1h4v2H5V5h4l1-1Zm-3 5h10l-.8 11.1A2 2 0 0 1 14.2 22H9.8a2 2 0 0 1-2-1.9L7 9Zm3 2v8h1.5v-8H10Zm3.5 0v8H15v-8h-1.5Z'
+		);
+		svg.appendChild( path );
+		return svg;
 	}
 
 	function t( key, fallback ) {
@@ -247,15 +293,19 @@
 
 	/* --------------------------------------------------------------- Gradients */
 
-	// Deterministic branded gradients for class-card headers, built from the
-	// official TBT colours. The same class always maps to the same gradient.
+	// Deterministic single-hue gradients for class-card headers, one per TBT
+	// domain colour. The same class always maps to the same gradient.
+	//
+	// DECORATIVE IDENTITY ONLY. The gradient is picked by a hash of the class ID:
+	// it does NOT mean the class belongs to that content domain, and nothing in
+	// the UI may infer a category from it. Do not read meaning back out of this
+	// array, and never reuse a domain colour for a state, an error or a
+	// destructive action (TBT-STYLE-SPEC.md §1).
 	var classGradients = [
-		'linear-gradient(135deg, #0859C6, #663366)',
-		'linear-gradient(135deg, #008080, #0859C6)',
-		'linear-gradient(135deg, #660000, #CC9933)',
-		'linear-gradient(135deg, #006600, #008080)',
-		'linear-gradient(135deg, #663366, #660000)',
-		'linear-gradient(135deg, #CC9933, #0859C6)',
+		'linear-gradient(135deg, #660000, #3D0000)', /* Learn English        */
+		'linear-gradient(135deg, #663366, #3D1F3D)', /* General Interest     */
+		'linear-gradient(135deg, #006600, #003D00)', /* Personal Development */
+		'linear-gradient(135deg, #CC9933, #8F6B24)', /* Bonus Resources      */
 	];
 
 	function getGradientForClass( cls ) {
@@ -267,7 +317,9 @@
 		return classGradients[ hash % classGradients.length ];
 	}
 
-	var TBT_LOGO_URL = 'https://thebluetree.pl/wp-content/uploads/2020/12/TBT-white-logo.png';
+	// Owned by PHP (filterable via tbt_notes_logo_url) so the hero and the class
+	// cards can never drift apart.
+	var TBT_LOGO_URL = cfg.logoUrl || '';
 
 	function api( method, path, body ) {
 		var opts = {
@@ -506,16 +558,43 @@
 	}
 
 	function emptyBlock( msg ) {
-		return el( 'div', 'tbt-notes-empty', msg );
+		if ( ! isPageMode ) {
+			return el( 'div', 'tbt-notes-empty', msg );
+		}
+		var box = el( 'div', 'tbt-empty' );
+		box.appendChild( el( 'p', 'tbt-empty__text', msg ) );
+		return box;
 	}
 
 	function errorBlock( msg ) {
-		return el( 'div', 'tbt-notes-inlinemsg tbt-notes-inlinemsg--error', msg );
+		return el( 'div', modeCls(
+			'tbt-notice tbt-notice--error',
+			'tbt-notes-inlinemsg tbt-notes-inlinemsg--error'
+		), msg );
 	}
 
 	/* --------------------------------------------------------------- Render root */
 
+	/**
+	 * Re-render the whole surface.
+	 *
+	 * In Page Mode this replaces the class strip and the editor wholesale, so
+	 * anything the sticky controller has pinned is put back into the document
+	 * first — otherwise it would be torn away from its spacer and left orphaned
+	 * inside the fixed host. Afterwards the controller re-measures, so switching
+	 * lesson while scrolled down re-pins the new strip and toolbar immediately.
+	 */
 	function render() {
+		if ( pageSticky ) {
+			pageSticky.unpinAll();
+		}
+		renderView();
+		if ( pageSticky ) {
+			pageSticky.update();
+		}
+	}
+
+	function renderView() {
 		clear( content );
 
 		// Keep the browser tab title in step with whatever is on screen.
@@ -574,7 +653,10 @@
 		// A small "New class" action sits near the page header (the big "CLASSES"
 		// lives in the branded top bar), rather than a heavy full-width button.
 		var head = el( 'div', 'tbt-notes-classes-head' );
-		var newBtn = el( 'button', 'tbt-notes-btn tbt-notes-newclass-btn', '+ ' + t( 'newClass', 'New class' ) );
+		var newBtn = el( 'button', modeCls(
+			'tbt-button tbt-button--primary tbt-notes-newclass-btn',
+			'tbt-notes-btn tbt-notes-newclass-btn'
+		), '+ ' + t( 'newClass', 'New class' ) );
 		newBtn.type = 'button';
 		newBtn.addEventListener( 'click', createClassFlow );
 		head.appendChild( newBtn );
@@ -587,7 +669,10 @@
 		}
 
 		// Filter-as-you-type search (classes are already loaded client-side).
-		var search = el( 'input', 'tbt-notes-input tbt-notes-classsearch' );
+		var search = el( 'input', modeCls(
+			'tbt-input tbt-notes-classsearch',
+			'tbt-notes-input tbt-notes-classsearch'
+		) );
 		search.type = 'text';
 		search.placeholder = t( 'searchClasses', 'Search classes…' );
 		search.setAttribute( 'autocomplete', 'off' );
@@ -603,7 +688,7 @@
 				return ! q || ( cls.title || '' ).toLowerCase().indexOf( q ) !== -1;
 			} );
 			if ( ! matches.length ) {
-				grid.appendChild( el( 'div', 'tbt-notes-empty', t( 'noResults', 'No matches' ) ) );
+				grid.appendChild( emptyBlock( t( 'noResults', 'No matches' ) ) );
 				return;
 			}
 			matches.forEach( function ( cls ) {
@@ -636,16 +721,20 @@
 		// Gradient header (deterministic per class) + decorative logo.
 		var header = el( 'div', 'tbt-notes-classcard__header' );
 		header.style.background = getGradientForClass( cls );
-		var logo = el( 'img', 'tbt-notes-classcard__logo' );
-		logo.src = TBT_LOGO_URL;
-		logo.alt = '';
-		logo.setAttribute( 'aria-hidden', 'true' );
-		logo.setAttribute( 'loading', 'lazy' );
-		// If the remote logo ever fails, just drop it — the card still looks good.
-		logo.addEventListener( 'error', function () {
-			logo.style.display = 'none';
-		} );
-		header.appendChild( logo );
+		// The logo is decorative: skip it entirely if the site has filtered it away
+		// rather than requesting the current page as an image.
+		if ( TBT_LOGO_URL ) {
+			var logo = el( 'img', 'tbt-notes-classcard__logo' );
+			logo.src = TBT_LOGO_URL;
+			logo.alt = '';
+			logo.setAttribute( 'aria-hidden', 'true' );
+			logo.setAttribute( 'loading', 'lazy' );
+			// If the remote logo ever fails, just drop it — the card still looks good.
+			logo.addEventListener( 'error', function () {
+				logo.style.display = 'none';
+			} );
+			header.appendChild( logo );
+		}
 		open.appendChild( header );
 
 		// Body: title + metadata on separate lines, grammatically correct.
@@ -667,9 +756,16 @@
 		card.appendChild( open );
 
 		// Delete stays available (edit lives behind opening the class → settings).
-		var del = el( 'button', 'tbt-notes-classcard__delete' );
+		var del = el( 'button', modeCls(
+			'tbt-notes-classcard__delete tbt-icon-button tbt-icon-button--danger',
+			'tbt-notes-classcard__delete'
+		) );
 		del.type = 'button';
-		del.textContent = '🗑';
+		if ( isPageMode ) {
+			del.appendChild( trashIcon() );
+		} else {
+			del.textContent = '🗑';
+		}
 		del.title = t( 'deleteClass', 'Delete class' );
 		del.setAttribute( 'aria-label', t( 'deleteClass', 'Delete class' ) );
 		del.addEventListener( 'click', function ( e ) {
@@ -682,11 +778,18 @@
 	}
 
 	function iconDelete( label, onClick ) {
-		var b = el( 'button', 'tbt-notes-listitem__delete' );
+		var b = el( 'button', modeCls(
+			'tbt-notes-listitem__delete tbt-icon-button tbt-icon-button--danger',
+			'tbt-notes-listitem__delete'
+		) );
 		b.type = 'button';
 		b.setAttribute( 'aria-label', label );
 		b.title = label;
-		b.textContent = '🗑';
+		if ( isPageMode ) {
+			b.appendChild( trashIcon() );
+		} else {
+			b.textContent = '🗑';
+		}
 		b.addEventListener( 'click', function ( e ) {
 			e.stopPropagation();
 			onClick();
@@ -1267,7 +1370,10 @@
 		var sbHead = el( 'div', 'tbt-notes-sidebar__head' );
 		sbHead.appendChild( el( 'span', 'tbt-notes-sidebar__title', t( 'lessons', 'Lessons' ) ) );
 		if ( isTeacher ) {
-			var addLesson = el( 'button', 'tbt-notes-btn', t( 'newLessonShort', '+ NEW' ) );
+			var addLesson = el( 'button', modeCls(
+				'tbt-button tbt-button--small',
+				'tbt-notes-btn'
+			), t( 'newLessonShort', '+ NEW' ) );
 			addLesson.type = 'button';
 			addLesson.addEventListener( 'click', createLessonFlow );
 			sbHead.appendChild( addLesson );
@@ -1327,9 +1433,12 @@
 				renderLessonContent( contentArea, state.currentLesson );
 			}
 		} else if ( isTeacher ) {
-			var prompt = el( 'div', 'tbt-notes-empty' );
-			prompt.appendChild( el( 'p', null, t( 'noLessons', 'No lessons yet.' ) ) );
-			var first = el( 'button', 'tbt-notes-btn', t( 'newLesson', 'New lesson' ) );
+			var prompt = el( 'div', modeCls( 'tbt-empty', 'tbt-notes-empty' ) );
+			prompt.appendChild( el( 'p', modeCls( 'tbt-empty__text', null ), t( 'noLessons', 'No lessons yet.' ) ) );
+			var first = el( 'button', modeCls(
+				'tbt-button tbt-button--primary',
+				'tbt-notes-btn'
+			), t( 'newLesson', 'New lesson' ) );
 			first.type = 'button';
 			first.addEventListener( 'click', createLessonFlow );
 			prompt.appendChild( first );
@@ -3883,118 +3992,264 @@
 		};
 	}
 
-	/* --------------------------------------------------- Sticky toolbar (page) */
+	/* ---------------------------------------------------- Sticky header (page) */
 
 	/**
-	 * Page-mode sticky editor toolbar — a single, persistent controller bound at
-	 * startup. It re-finds the current toolbar on every scroll, so it does not
-	 * depend on the editor render lifecycle. When the toolbar reaches the top of
-	 * the window it is MOVED into a position:fixed host mounted on <body> (which
-	 * no theme wrapper can trap with overflow/transform), with an in-flow spacer
-	 * holding its place; it is moved back when scrolled away from the top.
+	 * Page-mode sticky class header — a single, persistent controller bound at
+	 * startup. It re-finds the live elements on every scroll, so it does not
+	 * depend on the render lifecycle.
+	 *
+	 * Two members pin, in this order, as an ordered group:
+	 *
+	 *   1. the class title strip (.tbt-notes-topbar) — so the class name is
+	 *      visible at every scroll position;
+	 *   2. the Quill editor toolbar (.ql-toolbar).
+	 *
+	 * Each member is optional: students have no toolbar, and the strip still pins
+	 * on its own.
+	 *
+	 * Both are MOVED (never cloned) into a position:fixed host mounted on <body>,
+	 * with an in-flow spacer holding each one's place. Cloning would silently
+	 * break them — the strip carries the live lesson-header input bound to the
+	 * autosave controller, and the toolbar is bound to the Quill instance. The
+	 * host lives on <body> rather than using position:sticky because a theme
+	 * wrapper (e.g. a Divi element with overflow or transform) creates a
+	 * containing block that traps a sticky element; see the matching note in
+	 * tbt-notes.css.
+	 *
+	 * @return {Object} Controller with update() and unpinAll().
 	 */
-	function initPageStickyToolbar() {
+	function initPageStickyHeader() {
 		var host = null;
-		var hostInner = null;
-		var spacer = null;
-		var pinnedTb = null;
-		var pinnedWrap = null;
+		var toolbarSlot = null;
+		var lastOffset = null;
+
+		// Ordered group, top to bottom. `find` locates the live element, `owner`
+		// the block it belongs to (once that block has scrolled past, the member
+		// unpins), and `mount` puts it in the right slot inside the host.
+		var members = [
+			{
+				name: 'topbar',
+				spacerCls: 'tbt-notes-topbar-spacer',
+				find: function ( appEl ) {
+					return appEl.querySelector( '.tbt-notes-topbar' );
+				},
+				owner: function ( elm ) {
+					return elm.parentNode;
+				},
+				mount: function ( elm ) {
+					// Always ahead of the toolbar slot, whatever order they pin in.
+					host.insertBefore( elm, toolbarSlot );
+				},
+				el: null,
+				spacer: null,
+				box: null,
+			},
+			{
+				name: 'toolbar',
+				spacerCls: 'tbt-notes-toolbar-spacer',
+				find: function ( appEl ) {
+					return appEl.querySelector( '.tbt-notes-editor-quillwrap .ql-toolbar' );
+				},
+				owner: function ( elm ) {
+					return elm.closest( '.tbt-notes-editor-quillwrap' );
+				},
+				mount: function ( elm ) {
+					toolbarSlot.appendChild( elm );
+				},
+				el: null,
+				spacer: null,
+				box: null,
+			},
+		];
 
 		function ensureHost() {
 			if ( host ) {
 				return;
 			}
+			// The app classes come along so the moved elements keep their Page Mode
+			// styling and can still resolve the --tbtn-* variables.
 			host = el( 'div', 'tbt-notes-app tbt-notes-app--page tbt-notes-sticky-host' );
-			hostInner = el( 'div', 'tbt-notes-editor-quillwrap' );
-			host.appendChild( hostInner );
-			host.style.cssText = 'position:fixed;z-index:50;background:#fff;box-sizing:border-box;display:none;';
+			// The toolbar's own styling is written against this wrapper.
+			toolbarSlot = el( 'div', 'tbt-notes-editor-quillwrap' );
+			host.appendChild( toolbarSlot );
 			document.body.appendChild( host );
 		}
 
-		function adminOffset() {
-			var bar = document.getElementById( 'wpadminbar' );
-			if ( bar && window.getComputedStyle( bar ).position === 'fixed' ) {
-				return bar.getBoundingClientRect().height;
-			}
-			return 0;
+		/**
+		 * Distance from the top of the viewport to the first pixel this strip may
+		 * occupy: the bottom edge of whatever is currently fixed above it (the WP
+		 * admin bar, the theme's fixed menu, or both).
+		 *
+		 * Recomputed on every tick rather than cached, because a fixed theme header
+		 * that shrinks on scroll makes any value measured at load wrong within one
+		 * screen of scrolling.
+		 *
+		 * Uses the largest bottom edge rather than a sum of heights: an admin bar
+		 * and a fixed menu are already stacked, so summing double-counts.
+		 */
+		function topOffset() {
+			var total = 0;
+			var selectors = cfg.stickySelectors && cfg.stickySelectors.length
+				? cfg.stickySelectors
+				: [ '#wpadminbar' ];
+			selectors.forEach( function ( sel ) {
+				var elm;
+				try {
+					elm = document.querySelector( sel );
+				} catch ( e ) {
+					return; // A filtered-in selector that the browser cannot parse.
+				}
+				if ( ! elm ) {
+					return;
+				}
+				var cs = window.getComputedStyle( elm );
+				if ( cs.position !== 'fixed' || cs.display === 'none' ) {
+					return;
+				}
+				var r = elm.getBoundingClientRect();
+				if ( r.top > 4 ) {
+					return; // Fixed, but not pinned to the top of the viewport.
+				}
+				total = Math.max( total, r.bottom );
+			} );
+			return total;
 		}
 
-		function unpin() {
-			if ( pinnedTb ) {
-				// Move the toolbar back to where the spacer is holding its place. If
-				// the spacer is gone (editor was rebuilt), just drop the orphan.
-				if ( spacer && spacer.parentNode ) {
-					spacer.parentNode.insertBefore( pinnedTb, spacer );
-					spacer.parentNode.removeChild( spacer );
-				} else if ( pinnedTb.parentNode === hostInner ) {
-					hostInner.removeChild( pinnedTb );
+		// Published so CSS can react to the same measurement instead of the page
+		// growing a second, independently drifting one.
+		function publishOffset( offset ) {
+			if ( offset === lastOffset ) {
+				return;
+			}
+			lastOffset = offset;
+			document.documentElement.style.setProperty( '--tbtn-offset-top', offset + 'px' );
+		}
+
+		function pin( member, elm, box, height ) {
+			ensureHost();
+			var spacer = el( 'div', member.spacerCls );
+			spacer.style.height = height + 'px';
+			elm.parentNode.insertBefore( spacer, elm );
+			member.mount( elm );
+			member.el = elm;
+			member.spacer = spacer;
+			member.box = box;
+		}
+
+		function unpin( member ) {
+			if ( member.el ) {
+				// Back to where the spacer is holding its place. If the spacer is gone
+				// (the view was rebuilt under us), drop the orphan instead.
+				if ( member.spacer && member.spacer.parentNode ) {
+					member.spacer.parentNode.insertBefore( member.el, member.spacer );
+					member.spacer.parentNode.removeChild( member.spacer );
+				} else if ( member.el.parentNode ) {
+					member.el.parentNode.removeChild( member.el );
 				}
 			}
-			pinnedTb = null;
-			pinnedWrap = null;
-			spacer = null;
+			member.el = null;
+			member.spacer = null;
+			member.box = null;
+		}
+
+		function unpinAll() {
+			members.forEach( unpin );
 			if ( host ) {
 				host.style.display = 'none';
 			}
 		}
 
-		function place( offset, rect ) {
-			host.style.top = offset + 'px';
-			host.style.left = rect.left + 'px';
-			host.style.width = rect.width + 'px';
-			host.style.display = 'block';
-		}
-
 		function update() {
-			var offset = adminOffset();
+			var offset = topOffset();
+			publishOffset( offset );
 
-			if ( pinnedTb ) {
-				// If the editor was re-rendered, our spacer is detached — clean up.
-				if ( ! spacer || ! spacer.isConnected || ! pinnedWrap.isConnected ) {
-					unpin();
-					return;
-				}
-				var sRect = spacer.getBoundingClientRect();
-				var wRect = pinnedWrap.getBoundingClientRect();
-				var sh = spacer.offsetHeight;
-				if ( sRect.top <= offset && wRect.bottom > offset + sh ) {
-					place( offset, wRect );
-				} else {
-					unpin();
-				}
-				return;
-			}
-
-			// Not pinned: look for the live editor toolbar at the top of the window.
 			var appEl = document.getElementById( 'tbt-notes-app' );
 			if ( ! appEl ) {
+				unpinAll();
 				return;
 			}
-			var tb = appEl.querySelector( '.tbt-notes-editor-quillwrap .ql-toolbar' );
-			if ( ! tb ) {
+
+			var appRect = appEl.getBoundingClientRect();
+			var stackTop = offset;
+			var pinnedAny = false;
+
+			members.forEach( function ( member ) {
+				if ( member.el ) {
+					// A re-render detaches our spacer (and the owning block). Nothing
+					// left to return the element to, so let it go.
+					if ( ! member.spacer || ! member.spacer.isConnected ||
+						! member.box || ! member.box.isConnected ) {
+						unpin( member );
+						return;
+					}
+					var height = member.el.offsetHeight;
+					var spacerTop = member.spacer.getBoundingClientRect().top;
+					var boxBottom = member.box.getBoundingClientRect().bottom;
+					// Stay pinned while the original position is still above the line
+					// and the block it belongs to has not scrolled past.
+					if ( spacerTop <= stackTop + 1 && boxBottom > stackTop + height ) {
+						stackTop += height;
+						pinnedAny = true;
+						placeMember( member, appRect );
+					} else {
+						unpin( member );
+					}
+					return;
+				}
+
+				var elm = member.find( appEl );
+				if ( ! elm ) {
+					return;
+				}
+				var box = member.owner( elm );
+				if ( ! box ) {
+					return;
+				}
+				var h = elm.offsetHeight;
+				if ( elm.getBoundingClientRect().top <= stackTop &&
+					box.getBoundingClientRect().bottom > stackTop + h ) {
+					pin( member, elm, box, h );
+					stackTop += h;
+					pinnedAny = true;
+					placeMember( member, appRect );
+				}
+			} );
+
+			if ( ! host ) {
 				return;
 			}
-			var wrap = tb.closest( '.tbt-notes-editor-quillwrap' );
-			if ( ! wrap ) {
+			if ( pinnedAny ) {
+				host.style.top = offset + 'px';
+				host.style.left = appRect.left + 'px';
+				host.style.width = appRect.width + 'px';
+				host.style.display = 'block';
+			} else {
+				host.style.display = 'none';
+			}
+		}
+
+		/**
+		 * The strip spans the workspace, but the toolbar has to keep the width and
+		 * inset of the editor column it came from, so its slot is offset inside the
+		 * host rather than filling it.
+		 */
+		function placeMember( member, appRect ) {
+			if ( member.name !== 'toolbar' ) {
 				return;
 			}
-			var tRect = tb.getBoundingClientRect();
-			var wRect2 = wrap.getBoundingClientRect();
-			var h = tb.offsetHeight;
-			if ( tRect.top <= offset && wRect2.bottom > offset + h ) {
-				ensureHost();
-				spacer = el( 'div', 'tbt-notes-toolbar-spacer' );
-				spacer.style.height = h + 'px';
-				tb.parentNode.insertBefore( spacer, tb );
-				hostInner.appendChild( tb );
-				pinnedTb = tb;
-				pinnedWrap = wrap;
-				place( offset, wRect2 );
-			}
+			var boxRect = member.box.getBoundingClientRect();
+			toolbarSlot.style.marginLeft = ( boxRect.left - appRect.left ) + 'px';
+			toolbarSlot.style.width = boxRect.width + 'px';
 		}
 
 		window.addEventListener( 'scroll', update, true );
 		window.addEventListener( 'resize', update );
+
+		return {
+			update: update,
+			unpinAll: unpinAll,
+		};
 	}
 
 	/* --------------------------------------------------------------- Autosave */
@@ -4099,8 +4354,9 @@
 		// or focus trap — the browser window scrolls normally.
 		root.classList.add( 'is-open' );
 		panel.setAttribute( 'aria-hidden', 'false' );
+		// Bound before the first render so render() can hand it the new DOM.
+		pageSticky = initPageStickyHeader();
 		bootstrap();
-		initPageStickyToolbar();
 	} else {
 		// The launcher is a plain link to the Page Mode workspace; let the browser
 		// handle navigation. Other triggers below still open the in-page overlay.
