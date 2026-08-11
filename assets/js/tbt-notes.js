@@ -205,28 +205,213 @@
 
 	/* ----------------------------------------------------------- Note templates */
 
-	// Default lesson-notes template, inserted into the body of a brand-new note.
-	// Hardcoded for this iteration (a template editor can come later). Once
-	// inserted the note is normal editable content — changing this template never
-	// touches existing notes. Kept as semantic HTML (the editor's native format)
-	// so headings and the nested list survive the sanitiser untouched.
+	// The two starting points offered when a teacher creates a note. Kept as
+	// semantic HTML (the editor's native format) so headings and the nested list
+	// survive the sanitiser untouched.
+	//
+	// Once inserted, a template is normal editable content: editing this array
+	// never touches a note that already exists.
+	//
+	// LOAD-BEARING — nested <ol> in LESSON PLAN. It renders as "a." at level two
+	// (Quill's own counter(list-1, lower-alpha) in the editor; .tbt-notes-read ol ol
+	// in the read view). This only survives a save because the save path uses
+	// quill.getSemanticHTML(), which rebuilds real nesting from Quill's flat
+	// ql-indent-1 classes. The sanitiser strips class/data-list off <li>, so
+	// switching that call to quill.root.innerHTML would permanently flatten every
+	// nested list to a single decimal level. Do not change it.
 	var noteTemplates = [
 		{
-			id: 'default-template',
-			name: 'Default Template',
+			id: 'lesson',
+			nameKey: 'tplLessonName',
+			nameFallback: 'Lesson template',
+			descKey: 'tplLessonDesc',
+			descFallback: 'The standard running order, headings ready to fill in.',
+			blank: false,
 			html:
+				'<h3>SWIPE</h3>' +
+				'<ol><li>link</li></ol>' +
+				'<h3>HOW TO SAY IT</h3>' +
+				'<ol><li>function</li></ol>' +
 				'<h3>LESSON PLAN</h3>' +
-				'<ol><li>Update on work and life<ol><li>one good thing</li></ol></li>' +
-				'<li>Warmup</li></ol>' +
+				'<ol><li>Update on work and life<ol><li>one good thing</li></ol></li></ol>' +
 				'<h3>OPTIONS</h3><p><br></p>' +
 				'<h3>LESSON NOTES</h3><p><br></p>' +
 				'<h3>NEXT STEPS</h3><p><br></p>' +
 				'<h3>HOMEWORK</h3><p><br></p>',
 		},
+		{
+			id: 'empty',
+			nameKey: 'tplEmptyName',
+			nameFallback: 'Empty page',
+			descKey: 'tplEmptyDesc',
+			descFallback: 'A blank note. Start from nothing and structure it your own way.',
+			blank: true,
+			// One empty paragraph, not an empty string: Quill needs a valid block
+			// to place the cursor in, and a truly empty body leaves the editor in
+			// an odd state on first focus.
+			html: '<p><br></p>',
+		},
 	];
 
-	function defaultNoteTemplateHtml() {
-		return noteTemplates[ 0 ].html;
+	// The template pre-selected in the picker.
+	var DEFAULT_TEMPLATE_ID = 'lesson';
+
+	function findTemplate( id ) {
+		for ( var i = 0; i < noteTemplates.length; i++ ) {
+			if ( noteTemplates[ i ].id === id ) {
+				return noteTemplates[ i ];
+			}
+		}
+		return noteTemplates[ 0 ];
+	}
+
+	/**
+	 * Ask which template a new note should start from.
+	 *
+	 * Mounted on <body> rather than inside the app: in overlay mode the panel is
+	 * a transformed, scroll-clipped fixed element and cannot host a fixed child.
+	 * The backdrop carries .tbt-notes-app so the --tbtn-* tokens resolve there.
+	 *
+	 * @param {Function} onChoose Called with the chosen template object.
+	 */
+	function openTemplateDialog( onChoose ) {
+		var previouslyFocused = document.activeElement;
+		var chosenId = DEFAULT_TEMPLATE_ID;
+
+		var backdrop = el( 'div', 'tbt-notes-app tbt-notes-dialog-backdrop' );
+		var dialog = el( 'div', 'tbt-notes-dialog' );
+		dialog.setAttribute( 'role', 'dialog' );
+		dialog.setAttribute( 'aria-modal', 'true' );
+
+		var titleId = 'tbt-notes-dialog-title-' + Date.now();
+		var title = el( 'h2', 'tbt-notes-dialog__title', t( 'newNoteTitle', 'New note' ) );
+		title.id = titleId;
+		dialog.setAttribute( 'aria-labelledby', titleId );
+		dialog.appendChild( title );
+
+		dialog.appendChild( el(
+			'p',
+			'tbt-notes-dialog__intro',
+			t( 'newNoteIntro', 'Choose how this note starts. You can edit or delete anything afterwards.' )
+		) );
+
+		var group = el( 'div', 'tbt-notes-tpl-group' );
+		group.setAttribute( 'role', 'radiogroup' );
+
+		var radios = [];
+
+		noteTemplates.forEach( function ( tpl ) {
+			var label = el( 'label', 'tbt-notes-tpl' );
+
+			var radio = el( 'input', 'tbt-notes-tpl__radio' );
+			radio.type = 'radio';
+			radio.name = 'tbt-notes-tpl';
+			radio.value = tpl.id;
+			radio.checked = ( tpl.id === DEFAULT_TEMPLATE_ID );
+			radio.addEventListener( 'change', function () {
+				chosenId = tpl.id;
+			} );
+			label.appendChild( radio );
+			radios.push( radio );
+
+			var name = el( 'span', 'tbt-notes-tpl__name' );
+			name.appendChild( el( 'span', 'tbt-notes-tpl__tick' ) );
+			name.appendChild( document.createTextNode( t( tpl.nameKey, tpl.nameFallback ) ) );
+			label.appendChild( name );
+
+			label.appendChild( el( 'span', 'tbt-notes-tpl__desc', t( tpl.descKey, tpl.descFallback ) ) );
+
+			// The preview is the template itself, scaled down by CSS, so it can
+			// never drift out of step with what the note will actually contain.
+			// tpl.html is a trusted in-file constant, never user input.
+			var preview = el( 'div', 'tbt-notes-tpl__preview' );
+			if ( tpl.blank ) {
+				preview.className += ' tbt-notes-tpl__preview--blank';
+				preview.appendChild( el( 'span', null, t( 'tplBlank', 'Blank' ) ) );
+			} else {
+				preview.innerHTML = tpl.html;
+			}
+			label.appendChild( preview );
+
+			group.appendChild( label );
+		} );
+
+		dialog.appendChild( group );
+
+		var actions = el( 'div', 'tbt-notes-dialog__actions' );
+
+		var cancel = el( 'button', modeCls(
+			'tbt-button tbt-button--secondary',
+			'tbt-notes-btn tbt-notes-btn--ghost'
+		), t( 'cancel', 'Cancel' ) );
+		cancel.type = 'button';
+		cancel.addEventListener( 'click', close );
+		actions.appendChild( cancel );
+
+		var confirm = el( 'button', modeCls(
+			'tbt-button tbt-button--primary',
+			'tbt-notes-btn'
+		), t( 'createNote', 'Create note' ) );
+		confirm.type = 'button';
+		confirm.addEventListener( 'click', function () {
+			var tpl = findTemplate( chosenId );
+			close();
+			onChoose( tpl );
+		} );
+		actions.appendChild( confirm );
+
+		dialog.appendChild( actions );
+		backdrop.appendChild( dialog );
+
+		backdrop.addEventListener( 'click', function ( e ) {
+			if ( e.target === backdrop ) {
+				close();
+			}
+		} );
+
+		function onKeydown( e ) {
+			if ( e.key === 'Escape' ) {
+				e.preventDefault();
+				close();
+				return;
+			}
+			if ( e.key !== 'Tab' ) {
+				return;
+			}
+			// Minimal focus trap: keep Tab inside the dialog while it is open.
+			var focusable = dialog.querySelectorAll(
+				'input:not([disabled]), button:not([disabled])'
+			);
+			if ( ! focusable.length ) {
+				return;
+			}
+			var first = focusable[ 0 ];
+			var last = focusable[ focusable.length - 1 ];
+			if ( e.shiftKey && document.activeElement === first ) {
+				e.preventDefault();
+				last.focus();
+			} else if ( ! e.shiftKey && document.activeElement === last ) {
+				e.preventDefault();
+				first.focus();
+			}
+		}
+
+		function close() {
+			document.removeEventListener( 'keydown', onKeydown, true );
+			if ( backdrop.parentNode ) {
+				backdrop.parentNode.removeChild( backdrop );
+			}
+			if ( previouslyFocused && previouslyFocused.focus ) {
+				previouslyFocused.focus();
+			}
+		}
+
+		document.addEventListener( 'keydown', onKeydown, true );
+		document.body.appendChild( backdrop );
+
+		if ( radios.length ) {
+			radios[ 0 ].focus();
+		}
 	}
 
 	/* ---------------------------------------------------------------- Note title */
@@ -2882,13 +3067,20 @@
 	}
 
 	function createLessonFlow() {
-		// New notes start with the default lesson template pre-inserted and an
-		// auto-numbered header ("{n} - {date}") the server computes from the class's
-		// existing lessons — sending an empty header opts into that. Both the header
-		// and body become normal editable content immediately.
+		openTemplateDialog( createLessonFromTemplate );
+	}
+
+	/**
+	 * Create a note from the chosen template. The server computes the
+	 * auto-numbered header ("{n} - {date}") when an empty header is sent; both
+	 * header and body become normal editable content immediately.
+	 *
+	 * @param {Object} tpl A member of noteTemplates.
+	 */
+	function createLessonFromTemplate( tpl ) {
 		api( 'POST', 'classes/' + state.currentClass.id + '/lessons', {
 			header: '',
-			body: defaultNoteTemplateHtml(),
+			body: tpl.html,
 		} ).then( function ( data ) {
 			state.lessons.unshift( data.lesson );
 			state.currentLesson = data.lesson;
