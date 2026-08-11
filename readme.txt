@@ -3,7 +3,7 @@ Contributors: thebluetree
 Requires at least: 6.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 1.3.1
+Stable tag: 1.3.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -48,6 +48,12 @@ No. Each student is assigned to at most one class (v1 design).
 No. The editor autosaves as the teacher types.
 
 == Changelog ==
+
+= 1.3.2 =
+* The bundled fallback copy of the shared design tokens is back in step with
+  TBT-Hub, which now ships and registers the canonical file. The decorative
+  palette Notes had been carrying ahead of Hub is part of the shared set, so
+  the local copy no longer runs ahead of anything. Nothing changes on screen.
 
 = 1.3.1 =
 * Fixed: the class strip's buttons rendered as empty boxes. Page Mode's icon
