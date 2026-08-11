@@ -115,6 +115,7 @@
 	var ICON_PATHS = {
 		back: [ 'M15 18l-6-6 6-6' ],
 		lessons: [ 'M3 6h18', 'M3 12h18', 'M3 18h18' ],
+		arrowUp: [ 'M12 19V5', 'M5 12l7-7 7 7' ],
 		print: [ 'M6 9V3h12v6', 'M6 18H4a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2', 'M6 14h12v7H6z' ],
 		settings: [ 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z', 'M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1A1.7 1.7 0 0 0 9 19.4a1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z' ],
 		close: [ 'M18 6L6 18', 'M6 6l12 12' ],
@@ -1388,10 +1389,22 @@
 
 		var buttons = [
 			{ symbol: '☰', icon: 'lessons', label: t( 'toggleLessons', 'Show/hide lessons' ), onClick: toggleSidebar },
-			{ symbol: '⎙', icon: 'print', label: t( 'print', 'Print' ), onClick: function () {
-				window.print();
-			} },
 		];
+		// Back to top sits with the other navigation control, and is offered to
+		// students as well as teachers — a long lesson is long for both.
+		//
+		// Page Mode only: there, the window scrolls and the strip is pinned, so the
+		// button is always reachable and always does something. Overlay mode locks
+		// body scroll and scrolls an inner container instead, so the same control
+		// would be a dead glyph in a header that is a different visual system.
+		if ( isPageMode ) {
+			buttons.push( { symbol: '↑', icon: 'arrowUp', label: t( 'backToTop', 'Back to top' ), onClick: function () {
+				window.scrollTo( { top: 0, behavior: 'smooth' } );
+			} } );
+		}
+		buttons.push( { symbol: '⎙', icon: 'print', label: t( 'print', 'Print' ), onClick: function () {
+			window.print();
+		} } );
 		if ( isTeacher ) {
 			buttons.push( { symbol: '⚙', icon: 'settings', label: t( 'manageClass', 'Class settings' ), onClick: function () {
 				state.view = 'classSettings';
