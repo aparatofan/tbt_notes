@@ -3120,10 +3120,38 @@ body.tbt-notes-open {
    host page, drop the panel back into normal document flow, and expand every
    nested scroll container so the lesson prints once, top to bottom. */
 @media print {
-	/* Hide everything on the host page except our app. The app is appended at
-	   wp_footer, so it is a direct child of <body>. */
-	body > *:not( #tbt-notes-app ) {
+	/* Hide the host page while preserving the chain of ancestors that leads to
+	   the app. In overlay mode the app is a direct child of <body>, nothing is
+	   tagged, and this collapses to the single rule it replaces. In Page Mode
+	   the app is nested inside the theme's post-content markup, and tagging the
+	   chain (see markPrintAncestors) is what stops the theme wrapper from being
+	   hidden and taking the app down with it.
+	   The .tbt-tool-hero is a sibling of the app inside that chain, so it is
+	   hidden here as well as by name below. */
+	body > *:not( #tbt-notes-app ):not( .tbt-notes-print-ancestor ),
+	.tbt-notes-print-ancestor > *:not( #tbt-notes-app ):not( .tbt-notes-print-ancestor ) {
 		display: none !important;
+	}
+
+	/* Neutralise the theme wrappers we are keeping. Divi's containers carry
+	   column widths, fixed positioning, padding and overflow clipping that would
+	   otherwise crop the note or push it onto a blank first sheet. */
+	.tbt-notes-print-ancestor {
+		display: block !important;
+		position: static !important;
+		overflow: visible !important;
+		float: none !important;
+		width: auto !important;
+		min-width: 0 !important;
+		max-width: none !important;
+		height: auto !important;
+		min-height: 0 !important;
+		max-height: none !important;
+		margin: 0 !important;
+		padding: 0 !important;
+		transform: none !important;
+		background: none !important;
+		box-shadow: none !important;
 	}
 
 	/* Drop the app + panel out of the fixed/transformed overlay and into

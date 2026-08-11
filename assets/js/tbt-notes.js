@@ -36,6 +36,32 @@
 	var mode = root.getAttribute( 'data-tbt-mode' ) || 'overlay';
 	var isPageMode = mode === 'page';
 
+	/**
+	 * Tag every ancestor of the app container so the print stylesheet can hide
+	 * siblings level by level instead of assuming the app is a direct child of
+	 * <body>.
+	 *
+	 * It IS a direct child in overlay mode — render_container() runs on
+	 * wp_footer — and there the loop below does nothing, so print behaviour is
+	 * unchanged. Page Mode emits the app from the [tbt_notes_page] shortcode, so
+	 * it sits inside the theme's post-content markup; hiding `body > *` there
+	 * hides the theme wrapper and the app with it, which is what produced a
+	 * blank print preview.
+	 *
+	 * Marked once at init and never removed: the class has no effect outside
+	 * @media print, and the app container does not move for the life of the page.
+	 * Deliberately not driven by beforeprint — that event is unreliable in Safari
+	 * and would leave Ctrl+P racing the DOM write.
+	 */
+	function markPrintAncestors() {
+		var node = root.parentNode;
+		while ( node && 1 === node.nodeType && node !== document.body ) {
+			node.classList.add( 'tbt-notes-print-ancestor' );
+			node = node.parentNode;
+		}
+	}
+	markPrintAncestors();
+
 	/* ---------------------------------------------------------------- State */
 
 	var state = {
