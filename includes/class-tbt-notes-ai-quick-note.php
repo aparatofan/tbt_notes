@@ -144,12 +144,49 @@ class TBT_Notes_AI_Quick_Note {
 	 */
 	protected static function preset_instructions() {
 		return array(
-			'define'   => 'Define this word or phrase for an English lesson. Include the part of speech if relevant, a short simple definition, a natural Polish translation, and one B1/B2 example sentence.',
-			'translate' => 'Translate the following between English and Polish, choosing the natural translation rather than a literal one. If it is a single word or short phrase, add one short B1/B2 example sentence.',
-			'example'  => 'Give 2–3 natural example sentences that use the following word or phrase at B1/B2 level. Do not add definitions or explanations.',
-			'flashcard' => 'Create one vocabulary flashcard for the following word or phrase in exactly this format:' . "\n" . 'Phonetic: Translation: Example: Keep the example at B1/B2 level.',
-			'questions' => 'Create 3 short B1/B2 discussion questions about the following topic. Return them as a numbered list with nothing else.',
-			'compare'  => 'Compare the two words or expressions from the teacher request. Explain the difference in simple B1 English. Format the answer in Markdown. Begin with a level-2 heading "## Difference between X and Y", replacing X and Y with the actual items from the request. For each item, write a level-3 heading "### " with the item, followed by a short definition, a natural Polish translation, and one short example sentence. End with a level-3 heading "### Difference" summarising the difference in one or two sentences. Use level-3 headings (###) for all subheadings; never use bold (**) for them. Keep the answer short and practical for an English lesson. Do not add a long introduction.',
+			'define'    => 'Define this word or phrase for an English lesson. '
+				. 'Return exactly two lines and nothing else. '
+				. 'Line 1: the term in bold, followed by a short, simple definition. '
+				. 'Line 2: one natural B1/B2 example sentence, prefixed with "> " so it renders as a quote. '
+				. 'Do not add a Polish translation, a heading, a title, or a label.',
+
+			'translate' => 'Translate the following between English and Polish, choosing the natural '
+				. 'translation rather than a literal one. '
+				. 'Return exactly one line: the source term, an em dash, then the translation. '
+				. 'For example: serendipity — szczęśliwy traf. '
+				. 'Do not add a heading, a title, a label, or an example sentence.',
+
+			'example'   => 'Give exactly 3 natural example sentences using the following word or phrase '
+				. 'at B1/B2 level. '
+				. 'Begin with a level-2 heading (##) containing only the word or phrase in capitals. '
+				. 'Then a numbered Markdown list of the 3 sentences, using "1. ", "2. ", "3. ". '
+				. 'Do not add definitions, translations, explanations, or a label.',
+
+			'questions' => 'Create exactly 3 short B1/B2 discussion questions about the following topic. '
+				. 'Begin with a level-2 heading (##) reading "LET\'S TALK ABOUT X" in capitals, '
+				. 'replacing X with the topic. '
+				. 'Then a numbered Markdown list of the 3 questions, using "1. ", "2. ", "3. ". '
+				. 'Do not add anything else.',
+
+			'compare'   => 'Compare the two words or expressions from the teacher request in simple B1 English. '
+				. 'Begin with a level-2 heading (##) reading "X VS Y" in capitals, replacing X and Y with '
+				. 'the actual items. '
+				. 'Then one paragraph per item: the item in bold, a short explanation, then '
+				. '"For example: " followed by one example sentence in italics (wrapped in single asterisks). '
+				. 'End with one short paragraph summarising the difference in a single sentence, with both '
+				. 'items in bold. '
+				. 'Do not use level-3 headings, bullet points, or a label.',
+
+			'thesaurus' => 'Give near-synonyms and natural alternatives for the following word or phrase, '
+				. 'for use in an English lesson. '
+				. 'Begin with a level-2 heading (##) containing only the word or phrase in capitals. '
+				. 'Then one short paragraph defining it, with the key idea in bold. '
+				. 'Then a bulleted Markdown list of exactly 3 alternatives, each written as: '
+				. '"- " then the alternative in bold, then " – ", then one short example sentence in italics '
+				. '(wrapped in single asterisks). '
+				. 'End with one line beginning "**Key idea:** " followed by three or four words joined by '
+				. 'plus signs. '
+				. 'Do not add a label or any other section.',
 		);
 	}
 
@@ -173,16 +210,16 @@ class TBT_Notes_AI_Quick_Note {
 				'label' => __( 'Example', 'tbt-notes' ),
 			),
 			array(
-				'key'   => 'flashcard',
-				'label' => __( 'Flashcard', 'tbt-notes' ),
-			),
-			array(
 				'key'   => 'questions',
 				'label' => __( 'Questions', 'tbt-notes' ),
 			),
 			array(
 				'key'   => 'compare',
 				'label' => __( 'Compare', 'tbt-notes' ),
+			),
+			array(
+				'key'   => 'thesaurus',
+				'label' => __( 'Thesaurus', 'tbt-notes' ),
 			),
 		);
 	}
@@ -287,7 +324,10 @@ class TBT_Notes_AI_Quick_Note {
 		return 'You are an assistant for an English teacher using The Blue Tree lesson notes during live lessons. '
 			. 'Give concise, practical, lesson-friendly answers. '
 			. 'Default to ' . $level . ' English unless the user asks for another level. '
-			. 'When explaining vocabulary, include a simple definition, a natural Polish translation, and one example sentence. '
+			. 'Follow the requested output format exactly: emit no section label, no title, and no '
+			. 'commentary beyond what the format asks for. '
+			. 'Use Markdown only — "##" for headings, "**bold**", "*italics*", "1. " numbered lists, '
+			. '"- " bulleted lists, "> " quotes. Never emit HTML. '
 			. 'Avoid long explanations. '
 			. 'Do not add introductions like "Certainly" or "Here is the answer". '
 			. 'Return only the answer, formatted so it can be pasted directly into a lesson note.';

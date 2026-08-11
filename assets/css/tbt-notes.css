@@ -2774,6 +2774,31 @@ body.tbt-notes-open {
 	font-weight: 700;
 }
 
+.tbt-ai-response__text ol,
+.tbt-ai-response__text ul {
+	margin: 0 0 8px;
+	padding-left: 1.5em;
+}
+
+.tbt-ai-response__text ol {
+	list-style-type: decimal;
+}
+
+.tbt-ai-response__text ul {
+	list-style-type: disc;
+}
+
+.tbt-ai-response__text li {
+	margin: 0 0 2px;
+}
+
+.tbt-ai-response__text blockquote {
+	margin: 0 0 8px;
+	padding-left: 10px;
+	border-left: 3px solid var(--tbtn-border);
+	color: var(--tbtn-muted);
+}
+
 .tbt-ai-response__text > :last-child {
 	margin-bottom: 0;
 }

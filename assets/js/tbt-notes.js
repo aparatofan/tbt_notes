@@ -3930,35 +3930,107 @@
 
 	/**
 	 * Convert the small Markdown subset the AI returns into HTML so Quill renders
-	 * real formatting instead of literal "###"/"**" characters. Supported:
-	 *   - "## " / "# "  -> <h2>   (note title)
-	 *   - "### "+        -> <h3>   (subheadings)
-	 *   - "**bold**"     -> <strong>
-	 * Every other non-empty line becomes a <p>, so presets that return plain text
-	 * (define, translate, …) are unaffected beyond paragraph wrapping. The text is
-	 * escaped before the inline markers are applied, so it is safe to paste.
+	 * real formatting instead of literal "##"/"**"/"1." characters. Supported:
+	 *   - "# " / "## "   -> <h2>          (note title)
+	 *   - "### "+        -> <h3>          (subheadings)
+	 *   - "1. " etc.     -> <ol><li>      (consecutive lines group into one list)
+	 *   - "- " / "* "    -> <ul><li>
+	 *   - "> "           -> <blockquote>
+	 *   - **bold**       -> <strong>
+	 *   - *italic*       -> <em>
 	 *
-	 * @param {string} answer The AI answer text.
-	 * @return {string} HTML markup.
+	 * Every tag the sanitiser allows, and nothing it does not.
+	 *
+	 * LOAD-BEARING: tags are concatenated with no whitespace between them. The
+	 * preview (.tbt-ai-response__text) is white-space: pre-wrap, so any newline
+	 * or indentation added here shows up as a visible gap in the panel.
+	 *
+	 * @param {string} answer Raw Markdown from the endpoint.
+	 * @return {string} HTML.
 	 */
 	function answerToHtml( answer ) {
 		var lines = String( answer == null ? '' : answer ).split( /\r?\n/ );
 		var html = '';
+		var openList = '';  // 'ol', 'ul', or '' when no list is open.
+
+		function closeList() {
+			if ( openList ) {
+				html += '</' + openList + '>';
+				openList = '';
+			}
+		}
+
+		/**
+		 * Inline formatting. Escape first, then promote markers, so no
+		 * AI-authored angle bracket can ever become a tag. Bold runs before
+		 * italic: "**x**" must not be read as an empty italic wrapping "*x*".
+		 *
+		 * @param {string} s Raw line content.
+		 * @return {string}
+		 */
+		function inline( s ) {
+			return escapeHtml( s )
+				.replace( /\*\*([^*]+)\*\*/g, '<strong>$1</strong>' )
+				.replace( /(^|[^*])\*([^*\n]+)\*(?!\*)/g, '$1<em>$2</em>' );
+		}
+
 		for ( var i = 0; i < lines.length; i++ ) {
 			var line = lines[ i ].trim();
+
 			if ( '' === line ) {
+				// A blank line ends a list but is not itself rendered.
+				closeList();
 				continue;
 			}
-			var tag = 'p';
-			var m = line.match( /^(#{1,6})\s+(.*)$/ );
-			if ( m ) {
-				// The note only styles two heading levels: # / ## -> h2, ### -> h3.
-				tag = m[ 1 ].length <= 2 ? 'h2' : 'h3';
-				line = m[ 2 ];
+
+			// Headings.
+			var heading = line.match( /^(#{1,6})\s+(.*)$/ );
+			if ( heading ) {
+				closeList();
+				html += '<' + ( heading[ 1 ].length <= 2 ? 'h2' : 'h3' ) + '>'
+					+ inline( heading[ 2 ] )
+					+ '</' + ( heading[ 1 ].length <= 2 ? 'h2' : 'h3' ) + '>';
+				continue;
 			}
-			var content = escapeHtml( line ).replace( /\*\*([^*]+)\*\*/g, '<strong>$1</strong>' );
-			html += '<' + tag + '>' + content + '</' + tag + '>';
+
+			// Ordered list item: "1. ", "2) ", etc.
+			var ordered = line.match( /^\d+[.)]\s+(.*)$/ );
+			if ( ordered ) {
+				if ( 'ol' !== openList ) {
+					closeList();
+					html += '<ol>';
+					openList = 'ol';
+				}
+				html += '<li>' + inline( ordered[ 1 ] ) + '</li>';
+				continue;
+			}
+
+			// Bulleted list item: "- ", "* ", "• ". Requires the trailing space,
+			// so an italic line starting with "*word*" is not mistaken for a bullet.
+			var bulleted = line.match( /^[-*•]\s+(.*)$/ );
+			if ( bulleted ) {
+				if ( 'ul' !== openList ) {
+					closeList();
+					html += '<ul>';
+					openList = 'ul';
+				}
+				html += '<li>' + inline( bulleted[ 1 ] ) + '</li>';
+				continue;
+			}
+
+			// Blockquote.
+			var quoted = line.match( /^>\s+(.*)$/ );
+			if ( quoted ) {
+				closeList();
+				html += '<blockquote>' + inline( quoted[ 1 ] ) + '</blockquote>';
+				continue;
+			}
+
+			closeList();
+			html += '<p>' + inline( line ) + '</p>';
 		}
+
+		closeList();
 		return html;
 	}
 

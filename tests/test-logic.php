@@ -969,11 +969,12 @@ function test_ai_presets() {
 	foreach ( $choices as $c ) {
 		$keys[] = $c['key'];
 	}
-	$expected = array( 'define', 'translate', 'example', 'flashcard', 'questions', 'compare' );
+	$expected = array( 'define', 'translate', 'example', 'questions', 'compare', 'thesaurus' );
 	ok( $keys === $expected, 'all six preset choices are exposed in order' );
 
 	ok( call_ai_static( 'normalize_preset', array( 'Define' ) ) === 'define', 'preset keys are case-insensitive' );
-	ok( call_ai_static( 'normalize_preset', array( '  flashcard ' ) ) === 'flashcard', 'preset keys are trimmed' );
+	ok( call_ai_static( 'normalize_preset', array( '  thesaurus ' ) ) === 'thesaurus', 'preset keys are trimmed' );
+	ok( call_ai_static( 'normalize_preset', array( 'flashcard' ) ) === '', 'the retired flashcard preset is rejected' );
 	ok( call_ai_static( 'normalize_preset', array( 'nonsense' ) ) === '', 'unknown presets are dropped' );
 	ok( call_ai_static( 'normalize_preset', array( '' ) ) === '', 'empty preset is dropped' );
 }
