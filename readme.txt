@@ -3,7 +3,7 @@ Contributors: thebluetree
 Requires at least: 6.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 1.3.5
+Stable tag: 1.3.6
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -48,6 +48,13 @@ No. Each student is assigned to at most one class (v1 design).
 No. The editor autosaves as the teacher types.
 
 == Changelog ==
+
+= 1.3.6 =
+* Class-card gradients now vary in direction as well as hue: the same eight
+  two-hue pairs across four diagonals, so a wall of cards has 32 looks instead
+  of 8. Note that existing class tiles will change gradient, because the
+  mapping changed. Nothing else changes — the gradient is decoration and
+  carries no meaning.
 
 = 1.3.5 =
 * Page Mode: the "+ NEW" lesson button now reads as the same button as

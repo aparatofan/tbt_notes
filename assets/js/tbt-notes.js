@@ -320,28 +320,36 @@
 	/* --------------------------------------------------------------- Gradients */
 
 	// Deterministic two-hue gradients for class-card headers. The same class
-	// always maps to the same gradient.
+	// always maps to the same hue pair AND the same direction.
 	//
-	// DECORATIVE ONLY. The gradient is picked by a hash of the class ID: it does
-	// NOT mean the class belongs to a content domain, and nothing in the UI may
-	// infer a category from it. Do not read meaning back out of this array, and
-	// never reuse one of these colours for a state, an error or a destructive
-	// action — coral is decoration, --tbt-error is danger (TBT-STYLE-SPEC.md §1).
+	// DECORATIVE ONLY. Both the pair and the angle are picked by a hash of the
+	// class ID: they do NOT mean the class belongs to a content domain, and
+	// nothing in the UI may infer a category from either. In particular, the
+	// direction is not a second signal to read — a card facing 225deg means
+	// nothing more than one facing 45deg. Do not read meaning back out of this
+	// array, and never reuse one of these colours for a state, an error or a
+	// destructive action — coral is decoration, --tbt-error is danger
+	// (TBT-STYLE-SPEC.md §1).
 	//
 	// Written as literals rather than var(--tbt-le) etc. because these strings go
 	// into an inline style: a token that a given site's TBT-Hub has not shipped
 	// yet would make the whole declaration invalid and blank the header. They
 	// mirror the domain hues plus the decorative palette in tbt-tokens.css.
-	var classGradients = [
-		'linear-gradient(135deg, #660000, #CC9933)', /* maroon → gold   */
-		'linear-gradient(135deg, #663366, #FF6B6B)', /* purple → coral  */
-		'linear-gradient(135deg, #006600, #008080)', /* green  → teal   */
-		'linear-gradient(135deg, #008080, #663366)', /* teal   → purple */
-		'linear-gradient(135deg, #CC9933, #660000)', /* gold   → maroon */
-		'linear-gradient(135deg, #FF6B6B, #CC9933)', /* coral  → gold   */
-		'linear-gradient(135deg, #663366, #008080)', /* purple → teal   */
-		'linear-gradient(135deg, #006600, #CC9933)', /* green  → gold   */
+	var classGradientHues = [
+		[ '#660000', '#CC9933' ], /* maroon → gold   */
+		[ '#663366', '#FF6B6B' ], /* purple → coral  */
+		[ '#006600', '#008080' ], /* green  → teal   */
+		[ '#008080', '#663366' ], /* teal   → purple */
+		[ '#CC9933', '#660000' ], /* gold   → maroon */
+		[ '#FF6B6B', '#CC9933' ], /* coral  → gold   */
+		[ '#663366', '#008080' ], /* purple → teal   */
+		[ '#006600', '#CC9933' ], /* green  → gold   */
 	];
+
+	// The four diagonals. Direction is the second decorative axis: eight hue
+	// pairs across four angles give 32 distinct headers instead of 8, so a wall
+	// of class cards repeats far less often, without adding a single colour.
+	var classGradientAngles = [ 45, 135, 225, 315 ];
 
 	function getGradientForClass( cls ) {
 		var source = '' + ( ( cls && cls.id ) || ( cls && cls.title ) || '' );
@@ -361,7 +369,17 @@
 		hash ^= hash >>> 13;
 		hash = Math.imul( hash, 0xc2b2ae35 );
 		hash ^= hash >>> 16;
-		return classGradients[ ( hash >>> 0 ) % classGradients.length ];
+
+		// Hue pair and angle come from ONE finalised hash, but from disjoint
+		// bits: the pair from the low three, the angle from the top two. A second
+		// hash loop would be waste, and deriving the angle from the pair index
+		// would tie the two axes together and put the marching pattern back —
+		// every maroon→gold card would face the same way. The finaliser's
+		// avalanche is what makes the high bits independent of the low ones.
+		var bits = hash >>> 0;
+		var hues = classGradientHues[ bits % classGradientHues.length ];
+		var angle = classGradientAngles[ ( bits >>> 24 ) % classGradientAngles.length ];
+		return 'linear-gradient(' + angle + 'deg, ' + hues[ 0 ] + ', ' + hues[ 1 ] + ')';
 	}
 
 	// Owned by PHP (filterable via tbt_notes_logo_url) so the hero and the class
