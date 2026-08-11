@@ -2853,6 +2853,240 @@ body.tbt-notes-open {
 	}
 }
 
+/* ====================================================== Template picker ==== */
+
+/* The new-note template dialog. Mounted on <body> (the overlay panel is a
+   transformed fixed element and cannot host a fixed child), so the backdrop
+   also carries .tbt-notes-app for the --tbtn-* tokens.
+   LOAD-BEARING: z-index must clear both the overlay panel (--tbtn-z) and the
+   dictionary menu (--tbtn-z + 3). */
+.tbt-notes-dialog-backdrop {
+	position: fixed;
+	inset: 0;
+	z-index: calc(var(--tbtn-z, 2147483000) + 4);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: var(--tbt-s5, 24px);
+	background: rgba(24, 56, 96, 0.42);
+	-webkit-backdrop-filter: blur(2px);
+	backdrop-filter: blur(2px);
+	animation: tbt-notes-dialog-fade 0.18s var(--tbt-ease, ease);
+}
+
+@keyframes tbt-notes-dialog-fade {
+	from { opacity: 0; }
+	to   { opacity: 1; }
+}
+
+.tbt-notes-dialog {
+	width: 100%;
+	max-width: 620px;
+	max-height: calc(100vh - 48px);
+	overflow-y: auto;
+	padding: var(--tbt-s6, 32px);
+	background: var(--tbt-surface, #fff);
+	border-radius: var(--tbt-radius-panel, 22px);
+	box-shadow: 0 24px 64px rgba(24, 56, 96, 0.24);
+	animation: tbt-notes-dialog-rise 0.22s var(--tbt-ease, ease);
+}
+
+@keyframes tbt-notes-dialog-rise {
+	from { opacity: 0; transform: translateY(12px) scale(0.98); }
+	to   { opacity: 1; transform: none; }
+}
+
+/* Title takes the note H3 treatment — Roboto 700 in TBT blue — so the dialog
+   reads as part of the same product as the notes themselves. Sized flat at
+   22px rather than 1.15em: there is no 22px body context here to inherit. */
+.tbt-notes-dialog__title {
+	margin: 0;
+	font-family: var(--tbt-font-ui, Roboto, sans-serif);
+	font-size: 22px;
+	font-weight: 700;
+	line-height: 1.35;
+	color: var(--tbtn-brand-blue, #0856c9);
+}
+
+.tbt-notes-dialog__intro {
+	margin: var(--tbt-s2, 8px) 0 var(--tbt-s5, 24px);
+	font-family: var(--tbt-font-ui, Roboto, sans-serif);
+	font-size: 15px;
+	line-height: 1.5;
+	color: var(--tbt-muted, #667085);
+}
+
+.tbt-notes-tpl-group {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: var(--tbt-s4, 16px);
+	margin-bottom: var(--tbt-s6, 32px);
+}
+
+.tbt-notes-tpl {
+	position: relative;
+	display: block;
+	padding: var(--tbt-s4, 16px);
+	background: var(--tbt-input, #f0f5fe);
+	border: 2px solid transparent;
+	border-radius: var(--tbt-radius-card, 16px);
+	cursor: pointer;
+	transition: border-color 0.18s var(--tbt-ease, ease),
+	            background-color 0.18s var(--tbt-ease, ease),
+	            transform 0.18s var(--tbt-ease, ease);
+}
+
+.tbt-notes-tpl:hover {
+	background: var(--tbt-selected-bg, #edf4ff);
+	transform: translateY(-1px);
+}
+
+.tbt-notes-tpl__radio {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	opacity: 0;
+	pointer-events: none;
+}
+
+.tbt-notes-tpl:has(.tbt-notes-tpl__radio:checked) {
+	border-color: var(--tbt-blue, #0856c9);
+	background: var(--tbt-selected-bg, #edf4ff);
+}
+
+.tbt-notes-tpl:has(.tbt-notes-tpl__radio:focus-visible) {
+	box-shadow: var(--tbt-focus-ring, 0 0 0 3px rgba(8, 86, 201, 0.18));
+}
+
+.tbt-notes-tpl__name {
+	display: flex;
+	align-items: center;
+	gap: var(--tbt-s2, 8px);
+	margin-bottom: var(--tbt-s1, 4px);
+	font-family: var(--tbt-font-ui, Roboto, sans-serif);
+	font-size: 15px;
+	font-weight: 700;
+	color: var(--tbt-ink, #1f2937);
+}
+
+.tbt-notes-tpl__tick {
+	flex: none;
+	display: grid;
+	place-items: center;
+	width: 18px;
+	height: 18px;
+	background: var(--tbt-surface, #fff);
+	border: 2px solid var(--tbt-border, #d8e3f0);
+	border-radius: 50%;
+}
+
+.tbt-notes-tpl:has(.tbt-notes-tpl__radio:checked) .tbt-notes-tpl__tick {
+	background: var(--tbt-blue, #0856c9);
+	border-color: var(--tbt-blue, #0856c9);
+}
+
+.tbt-notes-tpl:has(.tbt-notes-tpl__radio:checked) .tbt-notes-tpl__tick::after {
+	content: "";
+	width: 5px;
+	height: 9px;
+	margin-top: -2px;
+	border: solid #fff;
+	border-width: 0 2px 2px 0;
+	transform: rotate(45deg);
+}
+
+.tbt-notes-tpl__desc {
+	display: block;
+	margin-bottom: var(--tbt-s3, 12px);
+	font-family: var(--tbt-font-ui, Roboto, sans-serif);
+	font-size: 13px;
+	line-height: 1.4;
+	color: var(--tbt-muted, #667085);
+}
+
+/* The preview holds the real template markup, shrunk. It must mirror the read
+   view's own rules (blue Roboto headings, Roboto Slab body, lower-alpha at
+   depth two) or the teacher is previewing something the note will not be. */
+.tbt-notes-tpl__preview {
+	height: 150px;
+	padding: var(--tbt-s3, 12px);
+	overflow: hidden;
+	background: var(--tbt-surface, #fff);
+	border: 1px solid var(--tbt-border, #d8e3f0);
+	border-radius: 10px;
+	font-family: var(--tbt-font-content, "Roboto Slab", Georgia, serif);
+	font-size: 9px;
+	line-height: 1.5;
+	color: var(--tbt-muted, #667085);
+	pointer-events: none;
+}
+
+.tbt-notes-tpl__preview h3 {
+	margin: 6px 0 2px;
+	font-family: var(--tbt-font-ui, Roboto, sans-serif);
+	font-size: 9px;
+	font-weight: 700;
+	letter-spacing: 0.04em;
+	color: var(--tbtn-brand-blue, #0856c9);
+}
+
+.tbt-notes-tpl__preview h3:first-child {
+	margin-top: 0;
+}
+
+.tbt-notes-tpl__preview p {
+	margin: 0 0 2px;
+	min-height: 1em;
+}
+
+.tbt-notes-tpl__preview ol {
+	margin: 0;
+	padding-left: 1.7em;
+	list-style-type: decimal;
+}
+
+.tbt-notes-tpl__preview ol ol {
+	list-style-type: lower-alpha;
+}
+
+.tbt-notes-tpl__preview--blank {
+	display: grid;
+	place-items: center;
+	font-family: var(--tbt-font-ui, Roboto, sans-serif);
+	font-size: 12px;
+}
+
+.tbt-notes-dialog__actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: var(--tbt-s3, 12px);
+}
+
+@media (max-width: 720px) {
+	.tbt-notes-tpl-group {
+		grid-template-columns: 1fr;
+	}
+
+	.tbt-notes-tpl__preview {
+		height: 110px;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.tbt-notes-dialog-backdrop,
+	.tbt-notes-dialog {
+		animation: none;
+	}
+
+	.tbt-notes-tpl {
+		transition: none;
+	}
+
+	.tbt-notes-tpl:hover {
+		transform: none;
+	}
+}
+
 /* ------------------------------------------------------------------- Print */
 
 /* The notes panel is a fixed, transformed full-screen overlay. Printing it
