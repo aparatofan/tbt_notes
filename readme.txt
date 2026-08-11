@@ -3,7 +3,7 @@ Contributors: thebluetree
 Requires at least: 6.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 1.3.2
+Stable tag: 1.3.6
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -48,6 +48,30 @@ No. Each student is assigned to at most one class (v1 design).
 No. The editor autosaves as the teacher types.
 
 == Changelog ==
+
+= 1.3.6 =
+* Class-card gradients now vary in direction as well as hue: the same eight
+  two-hue pairs across four diagonals, so a wall of cards has 32 looks instead
+  of 8. Note that existing class tiles will change gradient, because the
+  mapping changed. Nothing else changes — the gradient is decoration and
+  carries no meaning.
+
+= 1.3.5 =
+* Page Mode: the "+ NEW" lesson button now reads as the same button as
+  "+ NEW CLASS", one size smaller, instead of an outline variant. Overlay mode
+  is unchanged.
+
+= 1.3.4 =
+* Page Mode: a Back to top button in the class strip, next to Show / hide
+  lessons. It is always visible rather than appearing on scroll, like the other
+  strip controls, and is available to students as well as teachers. It does not
+  print.
+
+= 1.3.3 =
+* The class strip reads as one line: the lesson header is the same size as the
+  class name (22px) instead of a step smaller, and the class name is TBT blue
+  while the lesson header stays ink. Both still take the content face, and the
+  lesson header keeps its hover/focus treatment so it still reads as editable.
 
 = 1.3.2 =
 * The bundled fallback copy of the shared design tokens is back in step with
