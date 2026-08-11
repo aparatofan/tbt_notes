@@ -3,7 +3,7 @@ Contributors: thebluetree
 Requires at least: 6.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 1.3.2
+Stable tag: 1.3.3
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -48,6 +48,12 @@ No. Each student is assigned to at most one class (v1 design).
 No. The editor autosaves as the teacher types.
 
 == Changelog ==
+
+= 1.3.3 =
+* The class strip reads as one line: the lesson header is the same size as the
+  class name (22px) instead of a step smaller, and the class name is TBT blue
+  while the lesson header stays ink. Both still take the content face, and the
+  lesson header keeps its hover/focus treatment so it still reads as editable.
 
 = 1.3.2 =
 * The bundled fallback copy of the shared design tokens is back in step with

@@ -495,23 +495,30 @@ body.tbt-notes-open {
 
 /* The class name is teacher-authored content, so it takes the content face.
    Neither uppercase nor tracking: uppercase is reserved for buttons, tags and
-   the Mono hero text. */
+   the Mono hero text. Blue rather than ink, so the class the strip belongs to
+   is the one thing that reads first — it is the only coloured text in the bar,
+   and the lesson line beside it stays ink. */
 .tbt-notes-app--page .tbt-notes-topbar__title {
 	font-family: var(--tbt-font-content);
-	font-size: 22px;
+	font-size: var(--tbtn-fs-topbar);
 	font-weight: 700;
 	letter-spacing: normal;
 	text-transform: none;
-	color: var(--tbt-ink);
+	color: var(--tbt-blue);
 }
 
-/* The lesson header is also teacher-authored: same face, lighter weight. The
-   input stays invisible until pointed at, so the strip reads as a title rather
-   than a form, and never drops below 16px (iOS Safari zooms below that). */
+/* The lesson header is also teacher-authored: same face, same size as the class
+   name, lighter weight. Weight and colour now carry the whole difference
+   between the two, which is deliberate — they are one line of the same
+   sentence, not a heading and its caption.
+   The input stays invisible until pointed at, so the strip reads as a title
+   rather than a form, and never drops below 16px (iOS Safari zooms below that).
+   With the size difference gone, the hover and focus treatment below is the
+   only remaining signal that the lesson line is editable — do not weaken it. */
 .tbt-notes-app--page .tbt-notes-topbar__subtitle,
 .tbt-notes-app--page .tbt-notes-topbar__subtitle-input {
 	font-family: var(--tbt-font-content);
-	font-size: 18px;
+	font-size: var(--tbtn-fs-topbar);
 	font-weight: 400;
 	color: var(--tbt-ink);
 }
