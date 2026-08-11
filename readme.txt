@@ -3,7 +3,7 @@ Contributors: thebluetree
 Requires at least: 6.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 1.3.4
+Stable tag: 1.3.5
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -48,6 +48,11 @@ No. Each student is assigned to at most one class (v1 design).
 No. The editor autosaves as the teacher types.
 
 == Changelog ==
+
+= 1.3.5 =
+* Page Mode: the "+ NEW" lesson button now reads as the same button as
+  "+ NEW CLASS", one size smaller, instead of an outline variant. Overlay mode
+  is unchanged.
 
 = 1.3.4 =
 * Page Mode: a Back to top button in the class strip, next to Show / hide

@@ -1444,8 +1444,13 @@
 		var sbHead = el( 'div', 'tbt-notes-sidebar__head' );
 		sbHead.appendChild( el( 'span', 'tbt-notes-sidebar__title', t( 'lessons', 'Lessons' ) ) );
 		if ( isTeacher ) {
+			// Same button as "+ NEW CLASS" on the classes page, one size down: both
+			// are the create action for their view, so they take --primary and
+			// differ only by --small. The pill, the uppercase and the tracking come
+			// from the .tbt-button base; --primary adds only the filled colour and
+			// --small only the metrics, so the two modifiers compose cleanly.
 			var addLesson = el( 'button', modeCls(
-				'tbt-button tbt-button--small',
+				'tbt-button tbt-button--primary tbt-button--small',
 				'tbt-notes-btn'
 			), t( 'newLessonShort', '+ NEW' ) );
 			addLesson.type = 'button';
