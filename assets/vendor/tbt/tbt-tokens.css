@@ -2,8 +2,12 @@
    THE BLUE TREE — CANONICAL DESIGN TOKENS
    File:    /assets/css/tbt-tokens.css
    Owner:   TBT-Hub  (all other plugins declare this as a dependency)
-   Version: 2.0
+   Version: 2.1
    Status:  LOCKED — do not edit values without a Style Spec version bump.
+
+   2.1 is additive only: it adopts the decorative palette that TBT Notes had
+   been carrying locally, and names the Style Book §4 spacing scale so that
+   plugins can reference it. No existing value changed.
 
    Every value here is approved. Plugins must NEVER redefine these in a
    local :root block and must NEVER create near-duplicate local colours
@@ -33,8 +37,7 @@
        Extends the domain hues for DECORATION ONLY (e.g. the deterministic
        gradient on a class-card header). These are not identity, not state,
        and never a delete/error colour — --tbt-deco-coral in particular is
-       not a substitute for --tbt-error.
-       LOCAL AHEAD OF HUB: must also land in TBT-Hub's tbt-tokens.css.     */
+       not a substitute for --tbt-error.                                */
     --tbt-deco-teal:    #008080;
     --tbt-deco-coral:   #FF6B6B;
 
@@ -67,6 +70,22 @@
     --tbt-font-ui:       "Roboto", sans-serif;
     --tbt-font-content:  "Roboto Slab", Georgia, serif;
     --tbt-font-identity: "Roboto Mono", ui-monospace, monospace;
+
+    /* --- Spacing Scale -----------------------------------------------
+       The Style Book §4 scale (4 · 8 · 12 · 16 · 24 · 32 · 48 · 64),
+       named so a plugin can reference it instead of hard-coding a pixel
+       value. Names follow the set TBT Swipe already uses, whose values
+       are exactly this scale, so a later Swipe migration needs no rename.
+       Use these for padding, margin and gap — not for radius or border
+       width, which have their own scales.                              */
+    --tbt-s1:  4px;
+    --tbt-s2:  8px;
+    --tbt-s3: 12px;
+    --tbt-s4: 16px;
+    --tbt-s5: 24px;
+    --tbt-s6: 32px;
+    --tbt-s7: 48px;
+    --tbt-s8: 64px;
 
     /* --- Radius Scale ------------------------------------------------ */
     --tbt-radius-control: 12px;
