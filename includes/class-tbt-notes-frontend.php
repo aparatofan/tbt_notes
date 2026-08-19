@@ -112,12 +112,34 @@ class TBT_Notes_Frontend {
 	 * on the same request so the two never share duplicate IDs, and the floating
 	 * launcher is not shown.
 	 *
+	 * @param array|string $atts Shortcode attributes.
 	 * @return string
 	 */
-	public function render_page_shortcode() {
+	public function render_page_shortcode( $atts = array() ) {
 		if ( ! is_user_logged_in() ) {
 			return '';
 		}
+
+		/*
+		 * The Tool Hero is now supplied by the global Divi header row on the
+		 * page. hero="no" suppresses the built-in one so the two do not stack.
+		 * The default stays "yes" so a page that has not been migrated is
+		 * never left without a header.
+		 */
+		$atts = shortcode_atts(
+			array( 'hero' => 'yes' ),
+			is_array( $atts ) ? $atts : array(),
+			'tbt_notes_page'
+		);
+
+		$show_hero = 'yes' === strtolower( trim( (string) $atts['hero'] ) );
+
+		/**
+		 * Filter whether Page Mode renders the built-in Tool Hero.
+		 *
+		 * @param bool $show_hero Whether to render the hero.
+		 */
+		$show_hero = (bool) apply_filters( 'tbt_notes_show_hero', $show_hero );
 
 		// Suppress the footer overlay for this request (see render_container).
 		$this->page_mode_rendered = true;
@@ -127,7 +149,9 @@ class TBT_Notes_Frontend {
 		$this->enqueue_assets( true );
 
 		ob_start();
-		$this->render_hero();
+		if ( $show_hero ) {
+			$this->render_hero();
+		}
 		?>
 		<div id="tbt-notes-app" class="tbt-notes-app tbt-notes-app--page" data-tbt-notes data-tbt-mode="page">
 			<main id="tbt-notes-panel" class="tbt-notes-panel tbt-notes-panel--page" aria-label="<?php echo esc_attr__( 'Notes', 'tbt-notes' ); ?>">
