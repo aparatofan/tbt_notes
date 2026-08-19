@@ -1219,9 +1219,25 @@ body.tbt-notes-open {
 	word-break: break-all;
 }
 
+/* Open deck is the primary action (solid, inherits .tbt-notes-btn).
+   Copy link is a utility beside it, so it steps down to the secondary
+   treatment — Style Book §7: one primary per view. */
+.tbt-notes-extras__open,
 .tbt-notes-extras__copy {
-	padding: var(--tbtn-s1) var(--tbtn-s2);
+	padding: var(--tbtn-s2) var(--tbtn-s3);
 	font-size: var(--tbtn-fs-label);
+	text-decoration: none;
+}
+
+.tbt-notes-extras__copy {
+	background: transparent;
+	border-color: var(--tbtn-border);
+	color: var(--tbtn-accent);
+}
+
+.tbt-notes-extras__copy:hover {
+	background: var(--tbtn-surface-soft, transparent);
+	border-color: var(--tbtn-accent);
 }
 
 /* Extras are a screen affordance: a printed note has no use for a QR code. */

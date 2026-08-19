@@ -1581,11 +1581,14 @@
 
 		var linkRow = el( 'div', 'tbt-notes-extras__linkrow' );
 
-		var link = el( 'a', 'tbt-notes-extras__link', url );
-		link.href = url;
-		link.target = '_blank';
-		link.rel = 'noopener noreferrer';
-		linkRow.appendChild( link );
+		// An anchor, not a button: this navigates. It is styled as a button
+		// because opening the deck is the primary action here, but middle-click,
+		// "open in new tab" and copy-link-address must keep working.
+		var open = el( 'a', 'tbt-notes-btn tbt-notes-extras__open', t( 'extrasOpenDeck', 'Pokaż fiszki' ) );
+		open.href = url;
+		open.target = '_blank';
+		open.rel = 'noopener noreferrer';
+		linkRow.appendChild( open );
 
 		var copy = el( 'button', 'tbt-notes-btn tbt-notes-extras__copy', t( 'extrasCopy', 'Kopiuj link' ) );
 		copy.type = 'button';
