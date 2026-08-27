@@ -464,22 +464,27 @@ class TBT_Notes_Frontend {
 				array(
 					'key'   => 'blue',
 					'label' => __( 'Useful expression', 'tbt-notes' ),
+					'short' => __( 'Expressions', 'tbt-notes' ),
 				),
 				array(
 					'key'   => 'red',
 					'label' => __( 'Mistake / correction', 'tbt-notes' ),
+					'short' => __( 'Mistakes', 'tbt-notes' ),
 				),
 				array(
 					'key'   => 'yellow',
 					'label' => __( 'Important idea', 'tbt-notes' ),
+					'short' => __( 'Important', 'tbt-notes' ),
 				),
 				array(
 					'key'   => 'pink',
 					'label' => __( 'Pronunciation', 'tbt-notes' ),
+					'short' => __( 'Pronunciation', 'tbt-notes' ),
 				),
 				array(
 					'key'   => 'green',
 					'label' => __( 'Grammar', 'tbt-notes' ),
+					'short' => __( 'Grammar', 'tbt-notes' ),
 				),
 			),
 			'i18n'            => $this->strings(),
@@ -593,6 +598,7 @@ class TBT_Notes_Frontend {
 			'show'              => __( 'Show', 'tbt-notes' ),
 			'fullNote'          => __( 'Full note', 'tbt-notes' ),
 			'allHighlights'     => __( 'All highlights', 'tbt-notes' ),
+			'filterAllShort'    => __( 'Highlights', 'tbt-notes' ),
 			'noHighlightsFound' => __( 'No highlighted items in this category.', 'tbt-notes' ),
 			'highlightsFromNote' => __( 'Highlights from this lesson', 'tbt-notes' ),
 			'pronunciation'     => __( 'Pronunciation', 'tbt-notes' ),
