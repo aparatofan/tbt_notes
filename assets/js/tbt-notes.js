@@ -1891,11 +1891,67 @@
 	}
 
 	/**
-	 * Student-only filter bar: the filter select above the read-only note.
+	 * Student-only filter control: one button per view instead of a dropdown.
+	 * Category buttons are tinted with their highlight colour via data-color;
+	 * 'full' and 'all' stay neutral because they are not categories. Exactly one
+	 * button is pressed at a time. `onChange` runs after state is updated.
+	 */
+	function buildHighlightFilterButtons( onChange ) {
+		var wrap = el( 'div', 'tbt-notes-filterbtns' );
+		wrap.setAttribute( 'role', 'group' );
+		wrap.setAttribute( 'aria-label', t( 'show', 'Show' ) );
+
+		wrap.appendChild( el( 'span', 'tbt-notes-filterbtns__label', t( 'show', 'Show' ) + ':' ) );
+
+		var options = [
+			{ value: 'full', label: t( 'fullNote', 'Full note' ), color: null },
+			{ value: 'all', label: t( 'filterAllShort', 'Highlights' ), color: null },
+		];
+		( cfg.highlightColors || [] ).forEach( function ( c ) {
+			options.push( { value: c.key, label: c.short || c.label, color: c.key } );
+		} );
+
+		var buttons = [];
+
+		function sync() {
+			var active = state.highlightFilter || 'full';
+			buttons.forEach( function ( b ) {
+				var on = b.getAttribute( 'data-filter' ) === active;
+				b.setAttribute( 'aria-pressed', on ? 'true' : 'false' );
+			} );
+		}
+
+		options.forEach( function ( o ) {
+			var b = el( 'button', 'tbt-notes-filterbtn', o.label );
+			b.type = 'button';
+			b.setAttribute( 'data-filter', o.value );
+			if ( o.color ) {
+				b.setAttribute( 'data-color', o.color );
+			}
+			b.addEventListener( 'click', function () {
+				if ( state.highlightFilter === o.value ) {
+					return;
+				}
+				state.highlightFilter = o.value;
+				sync();
+				if ( onChange ) {
+					onChange();
+				}
+			} );
+			buttons.push( b );
+			wrap.appendChild( b );
+		} );
+
+		sync();
+		return wrap;
+	}
+
+	/**
+	 * Student-only filter bar: the filter buttons above the read-only note.
 	 */
 	function buildFilterBar( lesson, contentArea ) {
 		var bar = el( 'div', 'tbt-notes-filterbar' );
-		bar.appendChild( buildHighlightFilterSelect( function () {
+		bar.appendChild( buildHighlightFilterButtons( function () {
 			renderLessonContent( contentArea, lesson );
 		} ) );
 		return bar;

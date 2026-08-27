@@ -1784,7 +1784,7 @@ body.tbt-notes-open {
 	flex-direction: column;
 }
 
-/* Compact "Show: [Full note ▼]" control above the lesson content. */
+/* Compact filter bar above the lesson content. */
 .tbt-notes-filterbar {
 	display: flex;
 	align-items: center;
@@ -1793,24 +1793,65 @@ body.tbt-notes-open {
 	border-bottom: 1px solid var(--tbtn-border);
 	background: #fff;
 	flex: 0 0 auto;
+	flex-wrap: wrap;
 }
 
-.tbt-notes-filterbar label {
-	display: inline-flex;
+/* Student filter buttons — one per view, category buttons tinted with their
+   highlight colour. Replaces the old "Show: [Full note ▾]" select. */
+.tbt-notes-filterbtns {
+	display: flex;
+	flex-wrap: wrap;
 	align-items: center;
 	gap: var(--tbtn-s1);
-	font-size: 14px;
-	color: var(--tbtn-muted);
-	font-weight: 700;
 }
 
-.tbt-notes-filterbar select {
+.tbt-notes-filterbtns__label {
+	font-size: 14px;
+	font-weight: 700;
+	color: var(--tbtn-muted);
+	margin-right: 2px;
+}
+
+.tbt-notes-filterbtn {
 	font: inherit;
+	font-size: 13px;
+	font-weight: 700;
+	line-height: 1.2;
 	color: var(--tbtn-text);
+	background: #eef2f8;
 	border: 1px solid var(--tbtn-border);
-	border-radius: var(--tbtn-radius);
-	padding: 6px 10px;
-	background: #fff;
+	border-radius: 8px;
+	padding: 6px 12px;
+	cursor: pointer;
+}
+
+.tbt-notes-filterbtn:hover {
+	filter: brightness(0.96);
+}
+
+.tbt-notes-filterbtn:focus-visible {
+	outline: 2px solid var(--tbtn-accent);
+	outline-offset: 2px;
+}
+
+.tbt-notes-filterbtn[aria-pressed="true"] {
+	box-shadow: inset 0 0 0 2px var(--tbtn-text);
+}
+
+.tbt-notes-filterbtn[data-color] {
+	border-color: transparent;
+}
+
+.tbt-notes-filterbtn[data-color="blue"]   { background: var(--tbtn-hl-blue); }
+.tbt-notes-filterbtn[data-color="red"]    { background: var(--tbtn-hl-red); }
+.tbt-notes-filterbtn[data-color="yellow"] { background: var(--tbtn-hl-yellow); }
+.tbt-notes-filterbtn[data-color="pink"]   { background: var(--tbtn-hl-pink); }
+.tbt-notes-filterbtn[data-color="green"]  { background: var(--tbtn-hl-green); }
+
+@media (prefers-reduced-motion: reduce) {
+	.tbt-notes-filterbtn {
+		transition: none;
+	}
 }
 
 /* Reusable inline filter control — used both in the student filter bar and,
