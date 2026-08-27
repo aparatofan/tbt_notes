@@ -187,6 +187,18 @@ class TBT_Notes_AI_Quick_Note {
 				. 'End with one line beginning "**Key idea:** " followed by three or four words joined by '
 				. 'plus signs. '
 				. 'Do not add a label or any other section.',
+
+			'collocations' => 'Give practical collocations for the following word or phrase, '
+				. 'for use in an English lesson. '
+				. 'Begin with a level-2 heading (##) reading "COLLOCATIONS WITH X" in capitals, '
+				. 'replacing X with the word or phrase. '
+				. 'Then give exactly 5 collocations. For each one, output three lines: '
+				. 'line 1 is the collocation in bold; '
+				. 'line 2 is a short plain-English meaning, no more than about eight words; '
+				. 'line 3 is one natural example sentence, prefixed with "> " so it renders as a quote. '
+				. 'Use B2/C1 British English and focus on natural, everyday usage. '
+				. 'Do not number the collocations. '
+				. 'Do not add a label, a translation, or any other section.',
 		);
 	}
 
@@ -220,6 +232,10 @@ class TBT_Notes_AI_Quick_Note {
 			array(
 				'key'   => 'thesaurus',
 				'label' => __( 'Thesaurus', 'tbt-notes' ),
+			),
+			array(
+				'key'   => 'collocations',
+				'label' => __( 'Collocations', 'tbt-notes' ),
 			),
 		);
 	}

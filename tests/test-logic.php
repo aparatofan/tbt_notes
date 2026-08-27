@@ -969,11 +969,12 @@ function test_ai_presets() {
 	foreach ( $choices as $c ) {
 		$keys[] = $c['key'];
 	}
-	$expected = array( 'define', 'translate', 'example', 'questions', 'compare', 'thesaurus' );
-	ok( $keys === $expected, 'all six preset choices are exposed in order' );
+	$expected = array( 'define', 'translate', 'example', 'questions', 'compare', 'thesaurus', 'collocations' );
+	ok( $keys === $expected, 'all seven preset choices are exposed in order' );
 
 	ok( call_ai_static( 'normalize_preset', array( 'Define' ) ) === 'define', 'preset keys are case-insensitive' );
 	ok( call_ai_static( 'normalize_preset', array( '  thesaurus ' ) ) === 'thesaurus', 'preset keys are trimmed' );
+	ok( call_ai_static( 'normalize_preset', array( 'Collocations' ) ) === 'collocations', 'the collocations preset is recognised' );
 	ok( call_ai_static( 'normalize_preset', array( 'flashcard' ) ) === '', 'the retired flashcard preset is rejected' );
 	ok( call_ai_static( 'normalize_preset', array( 'nonsense' ) ) === '', 'unknown presets are dropped' );
 	ok( call_ai_static( 'normalize_preset', array( '' ) ) === '', 'empty preset is dropped' );
@@ -1008,6 +1009,13 @@ function test_ai_build_prompt() {
 	) ) );
 	ok( contains( $compare, 'Compare the two words or expressions' ), 'compare preset prepends its instruction' );
 	ok( contains( $compare, 'rule vs principle' ), 'compare prompt still includes the teacher text' );
+
+	$colloc = call_ai_static( 'build_user_prompt', array( array(
+		'prompt' => 'task',
+		'preset' => 'collocations',
+	) ) );
+	ok( contains( $colloc, 'Give practical collocations' ), 'collocations preset prepends its instruction' );
+	ok( contains( $colloc, 'task' ), 'collocations prompt still includes the teacher text' );
 
 	$ctx = call_ai_static( 'build_user_prompt', array( array(
 		'prompt'        => 'explain',

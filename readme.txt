@@ -49,6 +49,11 @@ No. The editor autosaves as the teacher types.
 
 == Changelog ==
 
+= 1.3.11 =
+* A seventh Ask AI shortcut, Collocations. Type a word and get five natural
+  B2/C1 collocations, each with a short meaning and an example sentence, ready
+  to drop into the note. Text only — same formatting as the other shortcuts.
+
 = 1.3.6 =
 * Class-card gradients now vary in direction as well as hue: the same eight
   two-hue pairs across four diagonals, so a wall of cards has 32 looks instead
