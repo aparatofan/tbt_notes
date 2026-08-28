@@ -3295,3 +3295,230 @@ body.tbt-notes-open {
 .tbt-notes-print-head {
 	display: none;
 }
+
+/* ====================================== Page mode: class settings screen == */
+
+/* The class settings / new-class panel, rebuilt on the canonical TBT
+   components. Everything below is scoped to `.tbt-notes-app--page`: overlay mode
+   renders the same DOM but keeps its own `--tbtn-*` styling, which is a
+   deliberate legacy boundary.
+
+   The markup already carries `.tbt-panel`, `.tbt-button`, `.tbt-input`,
+   `.tbt-notice` and `.tbt-tag--success` in page mode, so the shared sheet
+   supplies the surfaces, the pill buttons and the field chrome. What is left
+   here is layout, the interface font and the parts of the picker that still
+   live in this plugin's own CSS. */
+
+/* Canvas: one centred panel on the page ground, not a full-bleed form. */
+.tbt-notes-app--page .tbt-notes-settings--page {
+	flex: 1 1 auto;
+	width: 100%;
+	padding: 32px 24px 48px;
+	background: var(--tbt-canvas);
+}
+
+/* .tbt-panel already supplies the white surface, the 22px radius, the 32/40px
+   padding, the blue top border and the shadow. Only the measure is local. */
+.tbt-notes-app--page .tbt-notes-settings__panel {
+	max-width: 720px;
+	margin: 0 auto;
+}
+
+/* Interface font for the whole screen. This is scoped deliberately: the app's
+   base face is Roboto Slab because note bodies are content, and that must not
+   change. Labels, hints, buttons and chips are interface. */
+.tbt-notes-app--page .tbt-notes-settings {
+	font-family: var(--tbt-font-ui);
+	color: var(--tbt-ink);
+}
+
+/* Panel heading: content face, uppercase, blue — Style Book §3. Anchored on the
+   app's ID for the same reason the canonical inputs are: the theme styles
+   heading elements with ID-scoped selectors that would otherwise win. */
+#tbt-notes-app.tbt-notes-app--page .tbt-notes-settings__heading {
+	margin: 0 0 6px;
+	font-family: var(--tbt-font-content);
+	font-size: 22px;
+	font-weight: 700;
+	line-height: 1.3;
+	text-transform: uppercase;
+	color: var(--tbt-blue);
+}
+
+.tbt-notes-app--page .tbt-notes-settings__support {
+	margin: 0 0 32px;
+	font-size: 15px;
+	color: var(--tbt-muted);
+}
+
+.tbt-notes-app--page .tbt-notes-settings .tbt-notes-field {
+	margin-bottom: 24px;
+}
+
+/* Sentence-case field labels. The app-wide label role is a quiet uppercase
+   section marker, which is the wrong voice for a form the teacher is filling
+   in, so it is overridden on this screen only. */
+#tbt-notes-app.tbt-notes-app--page .tbt-notes-settings .tbt-notes-field__label {
+	margin-bottom: 8px;
+	font-family: var(--tbt-font-ui);
+	font-size: 14px;
+	font-weight: 600;
+	letter-spacing: normal;
+	text-transform: none;
+	color: var(--tbt-ink);
+}
+
+/* Inputs need nothing here: page mode emits the canonical `.tbt-input` alone
+   (see modeCls in renderClassSettings / buildStudentPicker), so the shared
+   resting surface and focus ring apply and no `.tbt-notes-input` rule is in
+   play. */
+
+.tbt-notes-app--page .tbt-notes-settings .tbt-notes-hint {
+	margin-top: 6px;
+	font-size: 13px;
+	color: var(--tbt-muted);
+}
+
+/* ------------------------------------------------- Page mode: student picker */
+
+.tbt-notes-app--page .tbt-notes-settings .tbt-notes-chips {
+	gap: 8px;
+	margin-bottom: 12px;
+}
+
+.tbt-notes-app--page .tbt-notes-settings .tbt-notes-chip {
+	gap: 4px;
+	padding: 5px 6px 5px 14px;
+	border-color: var(--tbt-blue);
+	border-radius: var(--tbt-radius-pill);
+	background: var(--tbt-selected-bg);
+	color: var(--tbt-blue);
+	font-size: 14px;
+	font-weight: 600;
+}
+
+.tbt-notes-app--page .tbt-notes-settings .tbt-notes-chip__name {
+	font-weight: 600;
+}
+
+/* Removing a student is destructive, so the ✕ stays quiet until it is aimed at,
+   then takes the error pair together rather than red-on-grey. */
+.tbt-notes-app--page .tbt-notes-settings .tbt-notes-chip__remove {
+	color: var(--tbt-muted);
+	transition: color .18s ease, background-color .18s ease;
+}
+
+.tbt-notes-app--page .tbt-notes-settings .tbt-notes-chip__remove:hover,
+.tbt-notes-app--page .tbt-notes-settings .tbt-notes-chip__remove:focus-visible {
+	color: var(--tbt-error);
+	background: var(--tbt-error-bg);
+}
+
+/* An empty roster is a state, not a hint: a dashed placeholder shows the shape
+   of what is missing. */
+.tbt-notes-app--page .tbt-notes-settings .tbt-notes-roster-empty {
+	margin: 0 0 12px;
+	padding: 16px;
+	border: 1px dashed var(--tbt-border);
+	border-radius: var(--tbt-radius-control);
+	background: var(--tbt-canvas);
+	font-size: 14px;
+	color: var(--tbt-muted);
+}
+
+/* The search results popover on canonical tokens, so it matches the field it
+   drops out of. */
+.tbt-notes-app--page .tbt-notes-settings .tbt-notes-userresults {
+	border-color: var(--tbt-border);
+	border-radius: var(--tbt-radius-control);
+	background: var(--tbt-surface);
+	box-shadow: var(--tbt-shadow);
+}
+
+.tbt-notes-app--page .tbt-notes-settings .tbt-notes-userresult {
+	border-radius: 8px;
+	color: var(--tbt-ink);
+}
+
+.tbt-notes-app--page .tbt-notes-settings .tbt-notes-userresult:hover:not( [disabled] ),
+.tbt-notes-app--page .tbt-notes-settings .tbt-notes-userresult:focus {
+	background: var(--tbt-selected-bg);
+}
+
+.tbt-notes-app--page .tbt-notes-settings .tbt-notes-userresult[disabled],
+.tbt-notes-app--page .tbt-notes-settings .tbt-notes-userresult__sub {
+	color: var(--tbt-muted);
+}
+
+/* ------------------------------------------------------ Page mode: actions */
+
+.tbt-notes-app--page .tbt-notes-settings__actions {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	margin-top: 32px;
+	padding-top: 24px;
+	border-top: 1px solid var(--tbt-border);
+}
+
+/* `.tbt-tag--success` supplies the pill and the success pair; the tag only
+   needs to sit with the buttons. The [hidden] guard is explicit because the
+   display value here would otherwise beat the UA rule. */
+.tbt-notes-app--page .tbt-notes-settings__saved {
+	display: inline-flex;
+	margin-left: auto;
+}
+
+.tbt-notes-app--page .tbt-notes-settings__saved[hidden] {
+	display: none;
+}
+
+.tbt-notes-app--page .tbt-notes-settings__msg {
+	margin-top: 20px;
+}
+
+.tbt-notes-app--page .tbt-notes-settings__msg:empty {
+	display: none;
+}
+
+.tbt-notes-app--page .tbt-notes-settings__summary {
+	margin: 0;
+	font-size: 15px;
+	color: var(--tbt-muted);
+}
+
+/* Deleting a class is rare and destructive: it sits below the panel, quiet
+   until hover, and never as a full-width red block. */
+.tbt-notes-app--page .tbt-notes-settings__danger {
+	max-width: 720px;
+	margin: 16px auto 0;
+	text-align: right;
+}
+
+@media ( prefers-reduced-motion: reduce ) {
+	.tbt-notes-app--page .tbt-notes-settings .tbt-button,
+	.tbt-notes-app--page .tbt-notes-settings .tbt-button:hover,
+	.tbt-notes-app--page .tbt-notes-settings .tbt-button:active,
+	.tbt-notes-app--page .tbt-notes-settings .tbt-notes-chip__remove {
+		transform: none;
+		transition: none;
+	}
+}
+
+@media ( max-width: 760px ) {
+	.tbt-notes-app--page .tbt-notes-settings--page {
+		padding: 24px 16px 32px;
+	}
+
+	.tbt-notes-app--page .tbt-notes-settings__panel {
+		padding: 24px 20px;
+	}
+
+	.tbt-notes-app--page .tbt-notes-settings__actions {
+		flex-wrap: wrap;
+	}
+
+	.tbt-notes-app--page .tbt-notes-settings__saved {
+		margin-left: 0;
+	}
+}

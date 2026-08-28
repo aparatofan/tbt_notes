@@ -71,6 +71,10 @@
 		classes: [],
 		view: 'root',
 		currentClass: null,
+		// True while the class settings panel is being used to CREATE a class
+		// rather than edit one: same DOM, different heading, support line and
+		// primary action (see renderClassSettings).
+		classIsNew: false,
 		lessons: [],
 		loadingLessons: false,
 		currentLesson: null,
@@ -912,6 +916,8 @@
 				renderClassView( true );
 			} else if ( state.view === 'classSettings' ) {
 				renderClassSettings();
+			} else if ( state.view === 'classCreated' ) {
+				renderClassCreated();
 			} else {
 				renderTeacherRoot();
 			}
@@ -1092,6 +1098,7 @@
 
 	function openClass( cls ) {
 		state.currentClass = cls;
+		state.classIsNew = false;
 		state.lessons = [];
 		state.currentLesson = null;
 		state.highlightFilter = 'full';
@@ -1639,6 +1646,7 @@
 		} } );
 		if ( isTeacher ) {
 			buttons.push( { symbol: '⚙', icon: 'settings', label: t( 'manageClass', 'Class settings' ), onClick: function () {
+				state.classIsNew = false;
 				state.view = 'classSettings';
 				render();
 			} } );
@@ -2891,51 +2899,351 @@
 
 	/* ---------------------------------------------------------- Class settings */
 
+	/**
+	 * One panel, two jobs.
+	 *
+	 * The teacher reaches this screen either from "+ New class" (creating) or
+	 * from a class's settings icon (editing). The fields are identical, so the
+	 * two share one DOM and swap heading, support line and buttons on
+	 * `state.classIsNew` rather than growing a second screen.
+	 *
+	 * Autosave is unchanged: the class row already exists, the title still
+	 * debounce-saves and students still save on add/remove. The primary button is
+	 * a confirmation step — it flushes the pending title save and then either
+	 * shows the "Class created" panel or a brief ✓ Saved tag.
+	 */
 	function renderClassSettings() {
 		var cls = state.currentClass;
-		content.appendChild( buildTopbar( {
-			title: cls ? ( cls.title || t( 'untitledClass', 'Untitled class' ) ) : '',
+		var isNew = !! state.classIsNew;
+
+		// Nothing to settle without a class — fall back to the grid rather than
+		// rendering a panel bound to nothing.
+		if ( ! cls ) {
+			state.classIsNew = false;
+			state.view = 'root';
+			renderTeacherRoot();
+			return;
+		}
+
+		/* -------------------------------------------------------- Chrome */
+
+		var topbar = buildTopbar( {
+			title: cls.title || ( isNew
+				? t( 'newClass', 'New class' )
+				: t( 'untitledClass', 'Untitled class' ) ),
 			onBack: function () {
-				state.view = 'class';
-				render();
+				leaveScreen();
 			},
-		} ) );
+		} );
+		content.appendChild( topbar );
+		var topTitle = topbar.querySelector( '.tbt-notes-topbar__title' );
 
-		var body = el( 'div', 'tbt-notes-body' );
+		// Page Mode paints a canvas behind one centred panel; overlay mode keeps
+		// the body wrapper it has always used, so it looks exactly as it did.
+		var wrap = el( 'div', modeCls(
+			'tbt-notes-settings tbt-notes-settings--page',
+			'tbt-notes-body tbt-notes-settings'
+		) );
+		var panel = el( 'div', modeCls(
+			'tbt-notes-settings__panel tbt-panel',
+			'tbt-notes-settings__panel'
+		) );
 
-		// Title.
+		panel.appendChild( el( 'h2', modeCls(
+			'tbt-notes-settings__heading',
+			'tbt-notes-settings__heading tbt-notes-field__label'
+		), isNew ? t( 'newClass', 'New class' ) : t( 'classSettingsTitle', 'Class settings' ) ) );
+		panel.appendChild( el( 'p', modeCls(
+			'tbt-notes-settings__support',
+			'tbt-notes-settings__support tbt-notes-hint'
+		), isNew
+			? t( 'newClassSupport', 'Name the class and add the students who should see its notes. You can change both later.' )
+			: t( 'editClassSupport', 'Change the class name or who it is shared with.' ) ) );
+
+		/* --------------------------------------------------------- Fields */
+
 		var titleField = el( 'div', 'tbt-notes-field' );
-		titleField.appendChild( el( 'label', 'tbt-notes-field__label', t( 'classTitle', 'Class title' ) ) );
-		var titleInput = el( 'input', 'tbt-notes-input' );
+		var titleLabel = el( 'label', 'tbt-notes-field__label', t( 'classTitle', 'Class name' ) );
+		titleLabel.htmlFor = 'tbt-notes-class-title';
+		titleField.appendChild( titleLabel );
+		var titleInput = el( 'input', modeCls( 'tbt-input', 'tbt-notes-input' ) );
 		titleInput.type = 'text';
+		titleInput.id = 'tbt-notes-class-title';
 		titleInput.value = cls.title || '';
 		titleInput.placeholder = t( 'classTitlePh', '' );
-		var titleTimer = null;
-		titleInput.addEventListener( 'input', function () {
-			clearTimeout( titleTimer );
-			titleTimer = setTimeout( function () {
-				saveClassField( cls, { title: titleInput.value } );
-			}, 500 );
-		} );
+		titleInput.setAttribute( 'autocomplete', 'off' );
 		titleField.appendChild( titleInput );
-		body.appendChild( titleField );
+		titleField.appendChild( el( 'p', 'tbt-notes-hint', t( 'classTitleHint', '' ) ) );
+		panel.appendChild( titleField );
 
-		// Students (multi).
 		var studentField = el( 'div', 'tbt-notes-field' );
 		studentField.appendChild( el( 'label', 'tbt-notes-field__label', t( 'students', 'Students' ) ) );
 		buildStudentPicker( studentField, cls );
-		body.appendChild( studentField );
+		panel.appendChild( studentField );
 
-		// Delete.
-		var del = el( 'button', 'tbt-notes-btn tbt-notes-btn--danger tbt-notes-btn--block', t( 'deleteClass', 'Delete class' ) );
-		del.type = 'button';
-		del.style.marginTop = '8px';
-		del.addEventListener( 'click', function () {
-			deleteClassFlow( cls );
+		/* -------------------------------------------------------- Actions */
+
+		var actions = el( 'div', 'tbt-notes-settings__actions' );
+
+		var primary = el( 'button', modeCls(
+			'tbt-button tbt-button--primary',
+			'tbt-notes-btn'
+		), isNew ? t( 'createClass', 'Create class' ) : t( 'saveChanges', 'Save changes' ) );
+		primary.type = 'button';
+		actions.appendChild( primary );
+
+		var secondary = el( 'button', modeCls(
+			'tbt-button tbt-button--secondary',
+			'tbt-notes-btn tbt-notes-btn--ghost'
+		), isNew ? t( 'cancel', 'Cancel' ) : t( 'backToClass', 'Back to class' ) );
+		secondary.type = 'button';
+		secondary.addEventListener( 'click', function () {
+			leaveScreen();
 		} );
-		body.appendChild( del );
+		actions.appendChild( secondary );
 
-		content.appendChild( body );
+		// Edit mode only in practice — creating navigates away instead.
+		var saved = el( 'span', modeCls(
+			'tbt-notes-settings__saved tbt-tag tbt-tag--success',
+			'tbt-notes-settings__saved tbt-notes-hint'
+		), '✓ ' + t( 'savedTag', 'Saved' ) );
+		saved.hidden = true;
+		saved.setAttribute( 'role', 'status' );
+		actions.appendChild( saved );
+
+		panel.appendChild( actions );
+
+		// A failed save is reported here, inside the panel: never navigate away
+		// from work that did not persist.
+		var msg = el( 'div', 'tbt-notes-settings__msg' );
+		panel.appendChild( msg );
+
+		wrap.appendChild( panel );
+
+		// Deleting is destructive and rare, so it sits outside the panel and below
+		// the actions the teacher actually came for.
+		if ( ! isNew ) {
+			var danger = el( 'div', 'tbt-notes-settings__danger' );
+			var del = el( 'button', modeCls(
+				'tbt-button tbt-button--danger',
+				'tbt-notes-btn tbt-notes-btn--danger tbt-notes-btn--block'
+			), t( 'deleteClass', 'Delete class' ) );
+			del.type = 'button';
+			if ( ! isPageMode ) {
+				del.style.marginTop = '8px';
+			}
+			del.addEventListener( 'click', function () {
+				deleteClassFlow( cls );
+			} );
+			danger.appendChild( del );
+			wrap.appendChild( danger );
+		}
+
+		content.appendChild( wrap );
+
+		/* -------------------------------------------------------- Wiring */
+
+		var titleTimer = null;
+		var savedTimer = null;
+
+		function setPrimaryEnabled( on ) {
+			primary.disabled = ! on;
+			primary.setAttribute( 'aria-disabled', on ? 'false' : 'true' );
+		}
+
+		// Creating needs a name; editing an existing class never blocks saving.
+		setPrimaryEnabled( ! isNew || !! titleInput.value.trim() );
+
+		titleInput.addEventListener( 'input', function () {
+			var value = titleInput.value;
+			// Keep the header in step with what is being typed so it never reads
+			// "Untitled class" over a name the teacher has already entered.
+			if ( topTitle ) {
+				topTitle.textContent = value.trim() || ( isNew
+					? t( 'newClass', 'New class' )
+					: t( 'untitledClass', 'Untitled class' ) );
+			}
+			if ( isNew ) {
+				setPrimaryEnabled( !! value.trim() );
+			}
+			clearTimeout( titleTimer );
+			titleTimer = setTimeout( function () {
+				saveClassField( cls, { title: value } );
+			}, 500 );
+		} );
+
+		/**
+		 * Save the typed name now rather than waiting out the debounce, so the
+		 * confirmation step always acts on what is on screen.
+		 *
+		 * @return {Promise}
+		 */
+		function flushTitle() {
+			clearTimeout( titleTimer );
+			return saveClassField( cls, { title: titleInput.value.trim() } );
+		}
+
+		primary.addEventListener( 'click', function () {
+			if ( primary.disabled ) {
+				return;
+			}
+			var label = primary.textContent;
+			setPrimaryEnabled( false );
+			primary.textContent = t( 'saving', 'Saving…' );
+			clear( msg );
+			flushTitle().then( function () {
+				if ( isNew ) {
+					state.classIsNew = false;
+					state.view = 'classCreated';
+					render();
+					return;
+				}
+				primary.textContent = label;
+				setPrimaryEnabled( true );
+				saved.hidden = false;
+				clearTimeout( savedTimer );
+				savedTimer = setTimeout( function () {
+					saved.hidden = true;
+				}, 2200 );
+			} ).catch( function ( err ) {
+				primary.textContent = label;
+				setPrimaryEnabled( true );
+				clear( msg );
+				msg.appendChild( errorBlock( err.message ) );
+			} );
+		} );
+
+		/**
+		 * Cancel / "Back to class" / the topbar arrow all leave the same way, so
+		 * the new-class flag is cleared in exactly one place.
+		 */
+		function leaveScreen() {
+			state.classIsNew = false;
+			if ( ! isNew ) {
+				state.view = 'class';
+				render();
+				return;
+			}
+			// Creation happens up front, so backing out of an untouched new class
+			// would otherwise leave an empty row in the grid.
+			if ( ! titleInput.value.trim() && ! classStudentCount( cls ) && ! classNoteCount( cls ) ) {
+				clearTimeout( titleTimer );
+				discardEmptyClass( cls );
+				return;
+			}
+			showClassesRoot();
+		}
+	}
+
+	/**
+	 * The panel shown straight after "Create class": what was made, who can see
+	 * it, and the two things the teacher is likely to do next.
+	 */
+	function renderClassCreated() {
+		var cls = state.currentClass;
+		if ( ! cls ) {
+			state.view = 'root';
+			renderTeacherRoot();
+			return;
+		}
+		var name = cls.title || t( 'untitledClass', 'Untitled class' );
+
+		content.appendChild( buildTopbar( {
+			title: name,
+			onBack: showClassesRoot,
+		} ) );
+
+		var wrap = el( 'div', modeCls(
+			'tbt-notes-settings tbt-notes-settings--page',
+			'tbt-notes-body tbt-notes-settings'
+		) );
+		var panel = el( 'div', modeCls(
+			'tbt-notes-settings__panel tbt-panel',
+			'tbt-notes-settings__panel'
+		) );
+
+		panel.appendChild( el( 'h2', modeCls(
+			'tbt-notes-settings__heading',
+			'tbt-notes-settings__heading tbt-notes-field__label'
+		), t( 'classCreated', 'Class created' ) ) );
+
+		var notice = el( 'div', modeCls( 'tbt-notice', 'tbt-notes-inlinemsg' ) );
+		notice.appendChild( el( 'strong', null, name ) );
+		notice.appendChild( document.createTextNode(
+			' — ' + t( 'classCreatedBody', 'Notes you write in this class will be visible to its students.' )
+		) );
+		panel.appendChild( notice );
+
+		var students = classStudentCount( cls );
+		panel.appendChild( el( 'p', 'tbt-notes-settings__summary', name + ' · ' + ( students === 1
+			? t( 'oneStudent', '1 student' )
+			: ( students + ' ' + t( 'nStudents', 'students' ) ) ) ) );
+
+		var actions = el( 'div', 'tbt-notes-settings__actions' );
+
+		var open = el( 'button', modeCls(
+			'tbt-button tbt-button--primary',
+			'tbt-notes-btn'
+		), t( 'openClass', 'Open class' ) );
+		open.type = 'button';
+		open.addEventListener( 'click', function () {
+			// Same path as the class card, so the lessons load exactly once and in
+			// exactly one place.
+			openClass( cls );
+		} );
+		actions.appendChild( open );
+
+		var back = el( 'button', modeCls(
+			'tbt-button tbt-button--secondary',
+			'tbt-notes-btn tbt-notes-btn--ghost'
+		), t( 'backToClasses', 'Back to classes' ) );
+		back.type = 'button';
+		back.addEventListener( 'click', showClassesRoot );
+		actions.appendChild( back );
+
+		panel.appendChild( actions );
+		wrap.appendChild( panel );
+		content.appendChild( wrap );
+	}
+
+	function classStudentCount( cls ) {
+		if ( cls.students ) {
+			return cls.students.length;
+		}
+		return cls.student_count != null ? cls.student_count : 0;
+	}
+
+	function classNoteCount( cls ) {
+		return cls.note_count != null ? cls.note_count : 0;
+	}
+
+	/**
+	 * Back to the class grid, forgetting whatever class was open.
+	 */
+	function showClassesRoot() {
+		state.classIsNew = false;
+		state.currentClass = null;
+		state.lessons = [];
+		state.currentLesson = null;
+		state.view = 'root';
+		render();
+	}
+
+	/**
+	 * Drop a class the teacher created and immediately abandoned, then return to
+	 * the grid. Only ever called once the caller has established that the class
+	 * has no name, no students and no notes.
+	 *
+	 * Navigation does not wait on the request and does not depend on it: an
+	 * orphan empty row is a cosmetic problem, and refusing to leave the screen
+	 * over a failed cleanup would be a worse one.
+	 */
+	function discardEmptyClass( cls ) {
+		state.classes = state.classes.filter( function ( c ) {
+			return c.id !== cls.id;
+		} );
+		api( 'DELETE', 'classes/' + cls.id ).catch( function () {} );
+		showClassesRoot();
 	}
 
 	/**
@@ -2945,13 +3253,13 @@
 	function buildStudentPicker( container, cls ) {
 		cls.students = cls.students || [];
 		var chips = el( 'div', 'tbt-notes-chips' );
-		var input = el( 'input', 'tbt-notes-input' );
+		var input = el( 'input', modeCls( 'tbt-input', 'tbt-notes-input' ) );
 		input.type = 'text';
 		input.placeholder = t( 'searchStudents', 'Search by username, name or email…' );
 		input.setAttribute( 'autocomplete', 'off' );
 		var results = el( 'ul', 'tbt-notes-userresults' );
 		results.hidden = true;
-		var hint = el( 'p', 'tbt-notes-hint', t( 'searchHint', 'Type to find a student to add.' ) );
+		var hint = el( 'p', 'tbt-notes-hint', t( 'studentsHint', 'Students see the notes for this class in their own Notes page.' ) );
 		var msg = el( 'div' );
 
 		function syncClass() {
@@ -2967,7 +3275,10 @@
 		function renderChips() {
 			clear( chips );
 			if ( ! cls.students.length ) {
-				chips.appendChild( el( 'p', 'tbt-notes-hint', t( 'noStudents', 'No students in this class yet.' ) ) );
+				chips.appendChild( el( 'p', modeCls(
+					'tbt-notes-roster-empty',
+					'tbt-notes-roster-empty tbt-notes-hint'
+				), t( 'noStudentsYet', 'No students yet. Search below to add one.' ) ) );
 				return;
 			}
 			cls.students.forEach( function ( s ) {
@@ -3109,6 +3420,10 @@
 			state.currentClass = data.class;
 			state.lessons = [];
 			state.currentLesson = null;
+			// The row exists from here on (autosave is unchanged); the panel's
+			// "Create class" button is a confirmation step, not the thing that
+			// persists the class.
+			state.classIsNew = true;
 			state.view = 'classSettings';
 			render();
 		} ).catch( function ( err ) {
@@ -3127,6 +3442,7 @@
 			state.currentClass = null;
 			state.lessons = [];
 			state.currentLesson = null;
+			state.classIsNew = false;
 			state.view = 'root';
 			render();
 		} ).catch( function ( err ) {
