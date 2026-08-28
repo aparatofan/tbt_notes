@@ -3,7 +3,7 @@ Contributors: thebluetree
 Requires at least: 6.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 1.3.6
+Stable tag: 1.5.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -48,6 +48,16 @@ No. Each student is assigned to at most one class (v1 design).
 No. The editor autosaves as the teacher types.
 
 == Changelog ==
+
+= 1.5.0 =
+* The class settings screen is rebuilt on the shared TBT components: one centred
+  panel on the page canvas, interface text in Roboto, and canonical fields,
+  chips and buttons instead of full-bleed inputs on white.
+* Creating a class now has an explicit "Create class" step and a "Class created"
+  confirmation panel, with "Open class" and "Back to classes" as the next moves.
+  Editing an existing class saves in place and confirms with a brief Saved tag.
+* Delete class has moved out of the main action row: it is now a quiet text
+  button below the panel rather than a full-width red block.
 
 = 1.3.11 =
 * A seventh Ask AI shortcut, Collocations. Type a word and get five natural
