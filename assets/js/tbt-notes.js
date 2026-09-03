@@ -3937,6 +3937,345 @@
 		window.addEventListener( 'resize', reflow );
 	}
 
+	/**
+	 * Armed highlight colours: a second way to use the same five swatches.
+	 *
+	 * With text selected, a swatch is the retroactive fix it has always been. With
+	 * nothing selected it *arms* that colour instead, and everything typed from
+	 * then on comes out highlighted until the colour is changed or cleared. A
+	 * faint dot in the editor's left gutter tracks the caret's line and shows what
+	 * is armed; clicking it opens the same five colours plus ✕.
+	 *
+	 * Arming is nothing more than Quill's own cursor format — quill.format() on a
+	 * collapsed selection changes no document content, only what the next
+	 * insertion inherits — so the markup produced is identical to the
+	 * select-then-click path. No span-wrapping, no beforeinput interception.
+	 *
+	 * The armed colour lives in this closure, one per Quill instance, so two
+	 * editors on a page never share it, and it is never persisted: every page load
+	 * starts disarmed.
+	 *
+	 * @param {Object}   quill       The editable Quill instance.
+	 * @param {Function} getLastRange Returns the last selection seen, or null.
+	 * @return {{toggle: Function, handleEscape: Function}} Arming controls.
+	 */
+	function setupArmedHighlight( quill, getLastRange ) {
+		var container = quill.container;
+		var armedColour = null;
+		// quill.format() can itself emit selection-change; without this guard the
+		// re-apply below recurses.
+		var reentrant = false;
+		var frame = 0;
+		var dotTop = 0;
+
+		var dot = el( 'button', 'tbt-hl-dot' );
+		dot.type = 'button';
+		dot.setAttribute( 'aria-haspopup', 'true' );
+		dot.setAttribute( 'aria-expanded', 'false' );
+
+		var palette = el( 'div', 'tbt-hl-palette' );
+		palette.hidden = true;
+		var paletteButtons = [];
+
+		container.appendChild( dot );
+		container.appendChild( palette );
+
+		/* ------------------------------------------------------------- Arming */
+
+		function colourFor( key ) {
+			var found = null;
+			( cfg.highlightColors || [] ).forEach( function ( c ) {
+				if ( c.key === key ) {
+					found = c;
+				}
+			} );
+			return found;
+		}
+
+		/** The dot's accessible name — it never carries a visible label. */
+		function dotLabel() {
+			if ( ! armedColour ) {
+				return t( 'noHighlightArmed', 'No highlight colour armed' );
+			}
+			var c = colourFor( armedColour );
+			return t( 'highlightArmed', 'Highlight armed' ) + ': ' + ( c ? c.label : armedColour );
+		}
+
+		function refreshDot() {
+			if ( armedColour ) {
+				dot.setAttribute( 'data-color', armedColour );
+			} else {
+				dot.removeAttribute( 'data-color' );
+			}
+			// aria-label only: the dot never carries a visible label or tooltip.
+			dot.setAttribute( 'aria-label', dotLabel() );
+		}
+
+		/**
+		 * Arm `value` (a colour key), or disarm with null. Focuses the editor and
+		 * restores the caret first: the swatch that armed the colour may have taken
+		 * focus away from it.
+		 */
+		function setArmed( value ) {
+			armedColour = value || null;
+			quill.focus();
+			var range = quill.getSelection();
+			if ( ! range ) {
+				var previous = getLastRange();
+				if ( previous ) {
+					quill.setSelection( previous.index, 0, 'silent' );
+					range = quill.getSelection();
+				}
+			}
+			if ( range ) {
+				reentrant = true;
+				quill.format( 'highlight', armedColour ? armedColour : false, 'user' );
+				reentrant = false;
+			}
+			refreshDot();
+			reposition();
+		}
+
+		/**
+		 * A swatch (or Alt+digit, or a palette pick) with nothing selected. The ✕
+		 * — colour '' — always disarms, the armed colour's own swatch toggles off,
+		 * anything else arms.
+		 */
+		function toggle( color ) {
+			setArmed( ( ! color || color === armedColour ) ? null : color );
+		}
+
+		/**
+		 * Escape closes the palette, then disarms. Returns whether it was used, so
+		 * the caller can leave Escape alone when neither is active.
+		 */
+		function handleEscape() {
+			if ( ! palette.hidden ) {
+				closePalette( true );
+				return true;
+			}
+			if ( armedColour ) {
+				setArmed( null );
+				return true;
+			}
+			return false;
+		}
+
+		/* ---------------------------------------------------------- The dot */
+
+		/**
+		 * Track the caret's line. quill.getBounds() is measured against
+		 * .ql-container's visible box; the dot is an absolutely positioned child of
+		 * that same container, which scrolls in Overlay Mode, so the container's
+		 * scrollTop turns the visible offset into a content-relative one. In Page
+		 * Mode the container does not scroll and scrollTop is 0.
+		 */
+		function reposition( range ) {
+			if ( ! document.contains( container ) ) {
+				return;
+			}
+			var r = range || quill.getSelection() || getLastRange();
+			if ( ! r ) {
+				return;
+			}
+			var bounds = null;
+			try {
+				bounds = quill.getBounds( r.index, 0 );
+			} catch ( err ) {
+				bounds = null;
+			}
+			if ( ! bounds ) {
+				return;
+			}
+			dotTop = bounds.top + bounds.height / 2 - 7 + container.scrollTop;
+			// Keep it inside the container: an absolutely positioned child that
+			// overflows would give the (overflow:auto) container its own scrollbar.
+			// The dot is a status indicator, so it rests at the nearest edge rather
+			// than vanishing when the caret's line is scrolled out of view.
+			var maxTop = container.clientHeight - 14 + container.scrollTop;
+			if ( dotTop > maxTop ) {
+				dotTop = maxTop;
+			}
+			if ( dotTop < container.scrollTop ) {
+				dotTop = container.scrollTop;
+			}
+			dot.style.top = dotTop + 'px';
+			if ( ! palette.hidden ) {
+				positionPalette();
+			}
+		}
+
+		function scheduleReposition() {
+			if ( frame ) {
+				return;
+			}
+			frame = window.requestAnimationFrame( function () {
+				frame = 0;
+				reposition();
+			} );
+		}
+
+		// The editor is rebuilt whenever the teacher opens another lesson, so a
+		// detached instance unhooks itself rather than tracking a dead container.
+		function onViewportChange() {
+			if ( ! document.contains( container ) ) {
+				window.removeEventListener( 'scroll', onViewportChange, true );
+				window.removeEventListener( 'resize', onViewportChange );
+				return;
+			}
+			scheduleReposition();
+		}
+
+		/* ------------------------------------------------------- The palette */
+
+		function positionPalette() {
+			var top = dotTop + 22;
+			// Flip above the dot when the bottom of the editor is too close.
+			if ( top + palette.offsetHeight > container.clientHeight + container.scrollTop ) {
+				top = dotTop - palette.offsetHeight - 8;
+			}
+			palette.style.top = top + 'px';
+			var left = dot.offsetLeft;
+			var maxLeft = container.clientWidth - palette.offsetWidth - 4;
+			if ( maxLeft < 4 ) {
+				maxLeft = 4;
+			}
+			palette.style.left = ( left > maxLeft ? maxLeft : left ) + 'px';
+		}
+
+		function onDocMousedown( e ) {
+			if ( palette.contains( e.target ) || dot.contains( e.target ) ) {
+				return;
+			}
+			closePalette( false );
+		}
+
+		function openPalette() {
+			if ( ! palette.hidden ) {
+				return;
+			}
+			palette.hidden = false;
+			dot.setAttribute( 'aria-expanded', 'true' );
+			positionPalette();
+			document.addEventListener( 'mousedown', onDocMousedown, true );
+			if ( paletteButtons.length ) {
+				paletteButtons[ 0 ].focus();
+			}
+		}
+
+		function closePalette( returnFocus ) {
+			if ( palette.hidden ) {
+				return;
+			}
+			palette.hidden = true;
+			dot.setAttribute( 'aria-expanded', 'false' );
+			document.removeEventListener( 'mousedown', onDocMousedown, true );
+			if ( returnFocus ) {
+				dot.focus();
+			}
+		}
+
+		// Arrow keys walk the row; Escape closes and hands focus back to the dot.
+		function addPaletteButton( btn ) {
+			var index = paletteButtons.length;
+			btn.addEventListener( 'keydown', function ( e ) {
+				if ( 'Escape' === e.key ) {
+					e.preventDefault();
+					e.stopPropagation();
+					closePalette( true );
+					return;
+				}
+				var step = 0;
+				if ( 'ArrowRight' === e.key || 'ArrowDown' === e.key ) {
+					step = 1;
+				} else if ( 'ArrowLeft' === e.key || 'ArrowUp' === e.key ) {
+					step = -1;
+				}
+				if ( ! step ) {
+					return;
+				}
+				e.preventDefault();
+				paletteButtons[ ( index + step + paletteButtons.length ) % paletteButtons.length ].focus();
+			} );
+			paletteButtons.push( btn );
+			palette.appendChild( btn );
+		}
+
+		// The same five colours plus ✕, in toolbar order. A duplicate route to
+		// arming, never a second implementation: every pick goes through toggle().
+		( cfg.highlightColors || [] ).forEach( function ( c, i ) {
+			var sw = el( 'button', 'tbt-hl-palette__swatch' );
+			sw.type = 'button';
+			sw.setAttribute( 'data-color', c.key );
+			var hint = c.label + ' — Alt+' + ( i + 1 );
+			sw.setAttribute( 'aria-label', hint );
+			sw.title = hint;
+			sw.addEventListener( 'click', function () {
+				closePalette( false );
+				toggle( c.key );
+			} );
+			addPaletteButton( sw );
+		} );
+
+		var paletteClear = el( 'button', 'tbt-hl-palette__remove', '✕' );
+		paletteClear.type = 'button';
+		paletteClear.setAttribute( 'data-color', '' );
+		paletteClear.setAttribute( 'aria-label', t( 'removeHighlight', 'No highlight' ) + ' — Alt+0' );
+		paletteClear.title = paletteClear.getAttribute( 'aria-label' );
+		paletteClear.addEventListener( 'click', function () {
+			closePalette( false );
+			toggle( '' );
+		} );
+		addPaletteButton( paletteClear );
+
+		dot.addEventListener( 'click', function () {
+			if ( palette.hidden ) {
+				openPalette();
+			} else {
+				closePalette( true );
+			}
+		} );
+
+		dot.addEventListener( 'keydown', function ( e ) {
+			if ( 'Escape' === e.key && handleEscape() ) {
+				e.stopPropagation();
+			}
+		} );
+
+		/* ------------------------------------------------------------- Wiring */
+
+		quill.on( 'selection-change', function ( range ) {
+			reposition( range );
+			if ( ! range || range.length > 0 || null === armedColour || reentrant ) {
+				return;
+			}
+			// Quill drops a cursor format whenever the selection moves. Putting it
+			// back here is what makes an armed colour survive Enter, the arrow keys
+			// and a click elsewhere in the note.
+			if ( quill.getFormat( range ).highlight === armedColour ) {
+				return;
+			}
+			reentrant = true;
+			quill.format( 'highlight', armedColour, 'api' );
+			reentrant = false;
+		} );
+
+		quill.on( 'text-change', function () {
+			scheduleReposition();
+		} );
+
+		window.addEventListener( 'scroll', onViewportChange, true );
+		window.addEventListener( 'resize', onViewportChange );
+
+		refreshDot();
+		reposition( { index: 0, length: 0 } );
+
+		return {
+			toggle: toggle,
+			handleEscape: handleEscape,
+		};
+	}
+
 	function initEditor( editorEl, toolbar, headerInput, lesson, indicator ) {
 		if ( typeof window.Quill === 'undefined' ) {
 			editorEl.appendChild( errorBlock( t( 'genericError', 'Editor failed to load.' ) ) );
@@ -3976,13 +4315,21 @@
 			}
 		} );
 
+		// The five swatches gain a second behaviour, and the branch is on the
+		// selection only. With a real selection this is the retroactive fix it has
+		// always been and the armed colour is left alone; with nothing selected the
+		// colour is armed instead, so everything typed next comes out highlighted.
+		var armed = setupArmedHighlight( quill, function () {
+			return lastRange;
+		} );
+
 		function highlightWithFallbackRange( color ) {
 			var range = quill.getSelection() || lastRange;
-			if ( ! range ) {
-				quill.focus();
-				range = quill.getSelection();
+			if ( range && range.length > 0 ) {
+				applyHighlightFormat( quill, color, range );
+				return;
 			}
-			applyHighlightFormat( quill, color, range );
+			armed.toggle( color );
 		}
 
 		var swatches = toolbar.querySelectorAll( '.tbt-hl-btn, .tbt-hl-clear' );
@@ -3995,10 +4342,12 @@
 			} );
 		} );
 
-		// Keyboard shortcuts: Alt+1..5 apply highlight colours, Alt+0 clears.
-		// Keyed off e.code (physical key) so they work whatever character Alt
-		// produces, and bound to the editor root so they never fire in other
-		// inputs/selects or elsewhere on the site.
+		// Keyboard shortcuts: Alt+1..5 apply highlight colours over a selection and
+		// arm them when there is none; Alt+0 clears or disarms. Keyed off e.code
+		// (physical key) so they work whatever character Alt produces — Option
+		// types typographic characters on macOS, which preventDefault() swallows —
+		// and bound to the editor root so they never fire in other inputs/selects
+		// or elsewhere on the site.
 		var shortcutMap = {};
 		( cfg.highlightColors || [] ).forEach( function ( c, i ) {
 			shortcutMap[ 'Digit' + ( i + 1 ) ] = c.key;
@@ -4007,6 +4356,14 @@
 		shortcutMap.Digit0 = '';
 		shortcutMap.Numpad0 = '';
 		quill.root.addEventListener( 'keydown', function ( e ) {
+			// Escape disarms (and closes the margin palette first), but is never
+			// swallowed when neither is active — other components may want it.
+			if ( 'Escape' === e.key ) {
+				if ( armed.handleEscape() ) {
+					e.stopPropagation();
+				}
+				return;
+			}
 			if ( ! e.altKey || e.ctrlKey || e.metaKey ) {
 				return;
 			}

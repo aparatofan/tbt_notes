@@ -90,6 +90,10 @@
 	--tbtn-s4: 24px;
 	--tbtn-radius: 10px;
 
+	/* Left gutter reserved in the editor for the armed-highlight dot. The dot is
+	   centred in it, so both the padding and the dot's offset read this. */
+	--tbtn-hl-gutter: 28px;
+
 	--tbtn-admin-offset: 0px;
 	/* Very high so the full-screen panel/header sits above the site's own
 	   floating menus (still below the WP admin bar, which the panel offsets). */
@@ -2250,6 +2254,9 @@ body.tbt-notes-open {
 	min-height: 0;
 	border: 0;
 	overflow-y: auto;
+	/* Quill's own CSS already sets this; stated here because the armed-highlight
+	   dot and its palette are positioned against this box. */
+	position: relative;
 }
 
 /* Editor body matches read view: same size, weight and spacious line-height. */
@@ -2259,7 +2266,10 @@ body.tbt-notes-open {
 	font-weight: var(--tbtn-fw-body);
 	line-height: var(--tbtn-lh-body);
 	color: var(--tbtn-text);
-	padding: var(--tbtn-s3) var(--tbtn-s4) 48px;
+	/* Top / right / bottom as before; the left side also carries the gutter the
+	   armed-highlight dot sits in. Stored note content is unchanged — this only
+	   shifts the text right on screen. */
+	padding: var(--tbtn-s3) var(--tbtn-s4) 48px calc( var(--tbtn-s4) + var(--tbtn-hl-gutter) );
 }
 
 .tbt-notes-app .ql-editor p {
@@ -2400,8 +2410,12 @@ body.tbt-notes-open {
 /* Shown just above a non-empty selection in the editor; positioned in JS and
    anchored inside the (position:relative) editor wrapper. Swatch colours are
    sourced from the same --tbtn-hl-* variables the applied highlights use, so the
-   popup and the resulting highlight always match. */
-.tbt-notes-editor-quillwrap .tbt-hl-popup {
+   popup and the resulting highlight always match.
+   The armed-colour palette the margin dot opens is the same control in a
+   different place (anchored to .ql-container instead), so it shares this box and
+   these swatches rather than restating them. */
+.tbt-notes-editor-quillwrap .tbt-hl-popup,
+.tbt-notes-editor-quillwrap .tbt-hl-palette {
 	position: absolute;
 	z-index: 6;
 	display: flex;
@@ -2414,11 +2428,13 @@ body.tbt-notes-open {
 	box-shadow: 0 4px 14px rgba( 17, 52, 107, 0.18 );
 }
 
-.tbt-notes-editor-quillwrap .tbt-hl-popup[hidden] {
+.tbt-notes-editor-quillwrap .tbt-hl-popup[hidden],
+.tbt-notes-editor-quillwrap .tbt-hl-palette[hidden] {
 	display: none;
 }
 
-.tbt-notes-editor-quillwrap .tbt-hl-popup__swatch {
+.tbt-notes-editor-quillwrap .tbt-hl-popup__swatch,
+.tbt-notes-editor-quillwrap .tbt-hl-palette__swatch {
 	width: 22px;
 	height: 22px;
 	padding: 0;
@@ -2428,31 +2444,38 @@ body.tbt-notes-open {
 	transition: transform 0.08s ease;
 }
 
-.tbt-notes-editor-quillwrap .tbt-hl-popup__swatch:hover {
+.tbt-notes-editor-quillwrap .tbt-hl-popup__swatch:hover,
+.tbt-notes-editor-quillwrap .tbt-hl-palette__swatch:hover {
 	transform: scale( 1.12 );
 }
 
-.tbt-notes-editor-quillwrap .tbt-hl-popup__swatch[data-color="blue"] {
+.tbt-notes-editor-quillwrap .tbt-hl-popup__swatch[data-color="blue"],
+.tbt-notes-editor-quillwrap .tbt-hl-palette__swatch[data-color="blue"] {
 	background: var(--tbtn-hl-blue);
 }
 
-.tbt-notes-editor-quillwrap .tbt-hl-popup__swatch[data-color="red"] {
+.tbt-notes-editor-quillwrap .tbt-hl-popup__swatch[data-color="red"],
+.tbt-notes-editor-quillwrap .tbt-hl-palette__swatch[data-color="red"] {
 	background: var(--tbtn-hl-red);
 }
 
-.tbt-notes-editor-quillwrap .tbt-hl-popup__swatch[data-color="yellow"] {
+.tbt-notes-editor-quillwrap .tbt-hl-popup__swatch[data-color="yellow"],
+.tbt-notes-editor-quillwrap .tbt-hl-palette__swatch[data-color="yellow"] {
 	background: var(--tbtn-hl-yellow);
 }
 
-.tbt-notes-editor-quillwrap .tbt-hl-popup__swatch[data-color="pink"] {
+.tbt-notes-editor-quillwrap .tbt-hl-popup__swatch[data-color="pink"],
+.tbt-notes-editor-quillwrap .tbt-hl-palette__swatch[data-color="pink"] {
 	background: var(--tbtn-hl-pink);
 }
 
-.tbt-notes-editor-quillwrap .tbt-hl-popup__swatch[data-color="green"] {
+.tbt-notes-editor-quillwrap .tbt-hl-popup__swatch[data-color="green"],
+.tbt-notes-editor-quillwrap .tbt-hl-palette__swatch[data-color="green"] {
 	background: var(--tbtn-hl-green);
 }
 
-.tbt-notes-editor-quillwrap .tbt-hl-popup__remove {
+.tbt-notes-editor-quillwrap .tbt-hl-popup__remove,
+.tbt-notes-editor-quillwrap .tbt-hl-palette__remove {
 	display: flex;
 	align-items: center;
 	justify-content: center;
@@ -2470,8 +2493,82 @@ body.tbt-notes-open {
 	cursor: pointer;
 }
 
-.tbt-notes-editor-quillwrap .tbt-hl-popup__remove:hover {
+.tbt-notes-editor-quillwrap .tbt-hl-popup__remove:hover,
+.tbt-notes-editor-quillwrap .tbt-hl-palette__remove:hover {
 	color: var(--tbtn-text);
+}
+
+/* ------------------------------------------- Armed highlight colour (margin) */
+
+/* A faint dot in the editor's left gutter tracks the caret's line and shows
+   which colour is armed: hollow while nothing is, filled and bordered in the
+   armed colour otherwise. Only `top` is set in JS. No label, ever — the state is
+   carried in aria-label for assistive tech. */
+.tbt-notes-editor-quillwrap .tbt-hl-dot {
+	position: absolute;
+	top: 0;
+	left: calc( var(--tbtn-s4) + ( var(--tbtn-hl-gutter) - 14px ) / 2 );
+	width: 14px;
+	height: 14px;
+	padding: 0;
+	background: transparent;
+	border: 1.5px solid var(--tbtn-border);
+	border-radius: 50%;
+	opacity: 0.4;
+	cursor: pointer;
+	transition: opacity 150ms ease;
+	z-index: 5;
+}
+
+.tbt-notes-editor-quillwrap .tbt-hl-dot:hover,
+.tbt-notes-editor-quillwrap .tbt-hl-dot:focus,
+.tbt-notes-editor-quillwrap .tbt-hl-dot[aria-expanded="true"] {
+	opacity: 1;
+}
+
+/* Keyboard focus is a ring around the dot, so it reads at 14px. */
+.tbt-notes-editor-quillwrap .tbt-hl-dot:focus-visible,
+.tbt-notes-editor-quillwrap .tbt-hl-palette__swatch:focus-visible,
+.tbt-notes-editor-quillwrap .tbt-hl-palette__remove:focus-visible {
+	outline: none;
+	box-shadow: 0 0 0 2px var(--tbtn-panel-bg), 0 0 0 4px var(--tbtn-accent);
+}
+
+.tbt-notes-editor-quillwrap .tbt-hl-dot[data-color="blue"] {
+	background: var(--tbtn-hl-blue);
+	border-color: var(--tbtn-hl-blue);
+}
+
+.tbt-notes-editor-quillwrap .tbt-hl-dot[data-color="red"] {
+	background: var(--tbtn-hl-red);
+	border-color: var(--tbtn-hl-red);
+}
+
+.tbt-notes-editor-quillwrap .tbt-hl-dot[data-color="yellow"] {
+	background: var(--tbtn-hl-yellow);
+	border-color: var(--tbtn-hl-yellow);
+}
+
+.tbt-notes-editor-quillwrap .tbt-hl-dot[data-color="pink"] {
+	background: var(--tbtn-hl-pink);
+	border-color: var(--tbtn-hl-pink);
+}
+
+.tbt-notes-editor-quillwrap .tbt-hl-dot[data-color="green"] {
+	background: var(--tbtn-hl-green);
+	border-color: var(--tbtn-hl-green);
+}
+
+@media ( prefers-reduced-motion: reduce ) {
+	.tbt-notes-editor-quillwrap .tbt-hl-dot {
+		transition: none;
+	}
+
+	.tbt-notes-editor-quillwrap .tbt-hl-palette__swatch,
+	.tbt-notes-editor-quillwrap .tbt-hl-palette__swatch:hover {
+		transform: none;
+		transition: none;
+	}
 }
 
 /* -------------------------------------------------- Link tooltip icons (F2) */
@@ -3235,8 +3332,15 @@ body.tbt-notes-open {
 	.tbt-notes-topbar,
 	.tbt-notes-sidebar,
 	.tbt-notes-filterbar,
-	.tbt-notes-editor-quillwrap .ql-toolbar.ql-snow {
+	.tbt-notes-editor-quillwrap .ql-toolbar.ql-snow,
+	.tbt-notes-editor-quillwrap .tbt-hl-dot,
+	.tbt-notes-editor-quillwrap .tbt-hl-palette {
 		display: none !important;
+	}
+
+	/* The armed-colour gutter is screen furniture; paper keeps the old margin. */
+	.tbt-notes-app .ql-editor {
+		padding-left: var(--tbtn-s4) !important;
 	}
 
 	/* Remove every nested scroll container so nothing is clipped on paper. */
