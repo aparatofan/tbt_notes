@@ -4271,7 +4271,9 @@
 
 		// Belt and braces: selection-change ordering around Quill's own Enter
 		// handling is not guaranteed across builds, so re-arm explicitly too.
-		quill.keyboard.addBinding( { key: 'Enter' }, function () {
+		// shiftKey: null matches Quill's own Enter registration, so Shift+Enter is
+		// covered explicitly rather than by accident.
+		quill.keyboard.addBinding( { key: 'Enter', shiftKey: null }, function () {
 			if ( armedColour ) {
 				// Re-arm after Quill's own Enter handling has finished; the caret
 				// format is set on the new line, not the old one.
@@ -4287,6 +4289,13 @@
 			}
 			return true; // Let Quill's default Enter handler run.
 		} );
+
+		// Quill's own handleEnter returns undefined, which halts the binding chain,
+		// so anything appended after it never runs. Bindings are matched in array
+		// order, so ours has to sit at the front — it returns true, so handleEnter
+		// still runs straight after and the newline behaviour is unchanged.
+		var enterBindings = quill.keyboard.bindings.Enter;
+		enterBindings.unshift( enterBindings.pop() );
 
 		window.addEventListener( 'scroll', onViewportChange, true );
 		window.addEventListener( 'resize', onViewportChange );
