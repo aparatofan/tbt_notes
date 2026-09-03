@@ -3,7 +3,7 @@ Contributors: thebluetree
 Requires at least: 6.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 1.5.0
+Stable tag: 1.6.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -48,6 +48,16 @@ No. Each student is assigned to at most one class (v1 design).
 No. The editor autosaves as the teacher types.
 
 == Changelog ==
+
+= 1.6.0 =
+* The five highlight colours gain a second way to be used: with nothing
+  selected, clicking a swatch (or pressing Alt+1-5) arms that colour, and
+  everything typed from then on comes out highlighted until the colour is
+  changed or cleared. Selecting text and clicking a swatch still works exactly
+  as before.
+* A faint dot in the editor's left margin tracks the current line and shows
+  which colour is armed. Clicking it opens the same five colours plus a clear
+  control. Alt+0 and Escape disarm.
 
 = 1.5.0 =
 * The class settings screen is rebuilt on the shared TBT components: one centred
