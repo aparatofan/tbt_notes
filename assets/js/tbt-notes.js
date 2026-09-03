@@ -4244,15 +4244,20 @@
 
 		/* ------------------------------------------------------------- Wiring */
 
+		// Quill drops a cursor format whenever the selection moves. Putting it back
+		// here is what makes an armed colour survive Enter, the arrow keys and a
+		// click elsewhere in the note.
+		//
+		// There is deliberately no "is it already this colour?" short-circuit:
+		// getFormat() on a collapsed caret reports the format inherited from the
+		// preceding leaf, not the cursor's own pending format. Straight after Enter
+		// that preceding leaf is the last — highlighted — character of the previous
+		// line, so the check reads "already armed" and skips the re-apply the new
+		// line actually needs. Re-applying a format that is already set is a no-op
+		// in Quill, so there is nothing to save by guarding it.
 		quill.on( 'selection-change', function ( range ) {
 			reposition( range );
 			if ( ! range || range.length > 0 || null === armedColour || reentrant ) {
-				return;
-			}
-			// Quill drops a cursor format whenever the selection moves. Putting it
-			// back here is what makes an armed colour survive Enter, the arrow keys
-			// and a click elsewhere in the note.
-			if ( quill.getFormat( range ).highlight === armedColour ) {
 				return;
 			}
 			reentrant = true;
@@ -4262,6 +4267,25 @@
 
 		quill.on( 'text-change', function () {
 			scheduleReposition();
+		} );
+
+		// Belt and braces: selection-change ordering around Quill's own Enter
+		// handling is not guaranteed across builds, so re-arm explicitly too.
+		quill.keyboard.addBinding( { key: 'Enter' }, function () {
+			if ( armedColour ) {
+				// Re-arm after Quill's own Enter handling has finished; the caret
+				// format is set on the new line, not the old one.
+				window.setTimeout( function () {
+					var r = quill.getSelection();
+					if ( ! r || r.length > 0 || ! armedColour ) {
+						return;
+					}
+					reentrant = true;
+					quill.format( 'highlight', armedColour, 'api' );
+					reentrant = false;
+				}, 0 );
+			}
+			return true; // Let Quill's default Enter handler run.
 		} );
 
 		window.addEventListener( 'scroll', onViewportChange, true );
