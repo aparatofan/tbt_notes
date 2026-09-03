@@ -3,7 +3,7 @@ Contributors: thebluetree
 Requires at least: 6.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 1.6.1
+Stable tag: 1.6.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -49,7 +49,7 @@ No. The editor autosaves as the teacher types.
 
 == Changelog ==
 
-= 1.6.1 =
+= 1.6.2 =
 * An armed highlight colour now survives Enter: pressing Enter with a colour
   armed starts the new line in that colour instead of dropping back to plain
   text while the margin dot stayed lit. Only Escape, Alt+0, the clear control
