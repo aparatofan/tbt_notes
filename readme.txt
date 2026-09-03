@@ -3,7 +3,7 @@ Contributors: thebluetree
 Requires at least: 6.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 1.6.0
+Stable tag: 1.6.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -48,6 +48,12 @@ No. Each student is assigned to at most one class (v1 design).
 No. The editor autosaves as the teacher types.
 
 == Changelog ==
+
+= 1.6.1 =
+* An armed highlight colour now survives Enter: pressing Enter with a colour
+  armed starts the new line in that colour instead of dropping back to plain
+  text while the margin dot stayed lit. Only Escape, Alt+0, the clear control
+  in the margin palette or re-clicking the armed swatch disarm.
 
 = 1.6.0 =
 * The five highlight colours gain a second way to be used: with nothing
