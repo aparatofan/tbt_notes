@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TBT Live Progress — prototype</title>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;600;700&family=Roboto+Mono:wght@700&family=Roboto+Slab:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --tbt-blue:#0856C9; --tbt-blue-dark:#063F94;
+  --tbt-canvas:#F6F8FC; --tbt-surface:#FFFFFF;
+  --tbt-input:#F0F5FE; --tbt-selected-bg:#EDF4FF; --tbt-border:#D8E3F0;
+  --tbt-ink:#1F2937; --tbt-muted:#667085;
+  --tbt-success:#16803C; --tbt-success-bg:#ECFDF3;
+  --tbt-radius-control:12px; --tbt-radius-card:16px; --tbt-radius-panel:22px;
+  --tbt-shadow:0 6px 20px rgba(24,56,96,.07);
+  --tbt-shadow-raised:0 10px 28px rgba(8,86,201,.12);
+  --tbt-focus-ring:0 0 0 3px rgba(8,86,201,.18);
+  --tbt-font-ui:"Roboto",sans-serif;
+  --tbt-font-content:"Roboto Slab",serif;
+  --tbt-font-identity:"Roboto Mono",monospace;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--tbt-surface);color:var(--tbt-ink);font-family:var(--tbt-font-ui);font-size:16px;line-height:1.6}
+
+/* ---- lesson page mock (editorial, whitespace-led) ---- */
+.lesson{max-width:760px;margin:0 auto;padding:64px 32px 220px}
+.lesson h1{font-family:var(--tbt-font-content);font-size:28px;font-weight:700;margin:0 0 8px}
+.lesson .cat{font-family:var(--tbt-font-ui);font-size:14px;font-weight:600;color:#006600;margin:0 0 48px}
+.lesson h2{font-family:var(--tbt-font-content);font-size:22px;font-weight:700;margin:48px 0 24px}
+.lesson p{font-family:var(--tbt-font-content);margin:0 0 24px;max-width:68ch}
+.task{border:1px solid var(--tbt-border);border-radius:var(--tbt-radius-card);padding:32px;background:var(--tbt-surface);box-shadow:var(--tbt-shadow)}
+.task .kind{font-size:14px;font-weight:600;color:var(--tbt-muted);margin:0 0 12px}
+.task .body{font-family:var(--tbt-font-content);color:var(--tbt-muted)}
+
+/* ---- sim controls (prototype only, not part of the design) ---- */
+.sim{position:fixed;left:24px;bottom:24px;background:#fff;border:1px dashed #C0CBD8;border-radius:var(--tbt-radius-card);padding:16px;max-width:260px;z-index:50}
+.sim h3{margin:0 0 4px;font-size:13px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--tbt-muted)}
+.sim p{margin:0 0 12px;font-size:13px;color:var(--tbt-muted);line-height:1.45}
+.sim button{display:block;width:100%;margin-bottom:8px;background:var(--tbt-input);border:1px solid var(--tbt-border);border-radius:10px;padding:8px 12px;font:600 14px var(--tbt-font-ui);color:var(--tbt-ink);cursor:pointer;text-align:left}
+.sim button:hover{background:var(--tbt-selected-bg);border-color:var(--tbt-blue)}
+.sim button:last-child{margin-bottom:0}
+
+/* ---- teacher panel ---- */
+.panel{position:fixed;right:24px;bottom:24px;width:320px;background:var(--tbt-surface);border:1px solid var(--tbt-border);border-radius:var(--tbt-radius-panel);box-shadow:var(--tbt-shadow-raised);overflow:hidden;z-index:40}
+.panel__head{display:flex;align-items:center;gap:10px;padding:16px 20px;background:linear-gradient(135deg,var(--tbt-blue),var(--tbt-blue-dark));color:#fff;cursor:pointer;user-select:none}
+.panel__head:focus-visible{outline:none;box-shadow:inset var(--tbt-focus-ring)}
+.panel__title{font-family:var(--tbt-font-identity);font-size:14px;font-weight:700;letter-spacing:.02em;flex:1}
+.panel__count{font-size:13px;font-weight:600;opacity:.85}
+.panel__chev{width:16px;height:16px;flex:none;transition:transform .18s ease}
+.panel.is-collapsed .panel__chev{transform:rotate(180deg)}
+.panel__meta{padding:12px 20px 4px;font-size:13px;color:var(--tbt-muted);border-bottom:1px solid var(--tbt-border);padding-bottom:12px}
+.panel__body{max-height:340px;overflow:auto;transition:max-height .22s ease}
+.panel.is-collapsed .panel__body,.panel.is-collapsed .panel__meta{display:none}
+
+.student{display:flex;align-items:center;gap:12px;padding:12px 20px;border-bottom:1px solid var(--tbt-border)}
+.student:last-child{border-bottom:none}
+.dot{width:10px;height:10px;border-radius:50%;flex:none}
+.student__name{flex:1;font-size:15px;font-weight:500}
+.student__state{font-size:13px;font-weight:600}
+.s-done .dot{background:var(--tbt-success)}
+.s-done .student__state{color:var(--tbt-success)}
+.s-working .dot{background:var(--tbt-blue)}
+.s-working .student__state{color:var(--tbt-blue)}
+.s-idle .dot{background:#C8D2DE}
+.s-idle .student__state{color:var(--tbt-muted)}
+.student__task{display:block;font-size:12px;font-weight:400;color:var(--tbt-muted);margin-top:1px}
+.pulse{animation:pulse 1.8s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+.flash{animation:flash 1.6s ease-out}
+@keyframes flash{0%{background:var(--tbt-success-bg)}100%{background:transparent}}
+
+/* ---- toasts ---- */
+.toasts{position:fixed;right:24px;bottom:24px;width:320px;display:flex;flex-direction:column-reverse;gap:10px;z-index:60;pointer-events:none}
+.toast{display:flex;align-items:flex-start;gap:12px;background:var(--tbt-surface);border:1px solid var(--tbt-border);border-left:4px solid var(--tbt-success);border-radius:var(--tbt-radius-card);box-shadow:var(--tbt-shadow-raised);padding:14px 16px;pointer-events:auto;animation:toastIn .26s cubic-bezier(.2,.8,.3,1)}
+.toast.is-out{animation:toastOut .22s ease forwards}
+@keyframes toastIn{from{opacity:0;transform:translateY(12px) scale(.98)}to{opacity:1;transform:none}}
+@keyframes toastOut{to{opacity:0;transform:translateY(6px)}}
+.toast__tick{width:22px;height:22px;border-radius:50%;background:var(--tbt-success-bg);color:var(--tbt-success);display:grid;place-items:center;flex:none;font-size:13px;font-weight:700;margin-top:1px}
+.toast__text{flex:1;font-size:14px;line-height:1.4}
+.toast__text strong{font-weight:600}
+.toast__task{display:block;color:var(--tbt-muted);font-size:13px;margin-top:2px}
+.toast__x{border:none;background:none;color:var(--tbt-muted);font-size:16px;line-height:1;cursor:pointer;padding:2px 0 0;flex:none}
+.toast__x:hover{color:var(--tbt-ink)}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+
+<main class="lesson">
+  <h1>Expressing opinions</h1>
+  <p class="cat">Personal Development · B1</p>
+
+  <p>In business conversations, the way you introduce an opinion changes how people
+     receive it. A soft opening invites discussion. A firm one closes it.</p>
+
+  <h2>Task 3 — Complete the sentences</h2>
+  <div class="task">
+    <p class="kind">Drag &amp; drop</p>
+    <p class="body">[ Drag and drop exercise renders here — 8 gaps ]</p>
+  </div>
+
+  <h2>Discussion</h2>
+  <p>Think of a recent meeting where you disagreed with someone. Which of these
+     phrases would have made the conversation easier?</p>
+  <p>Scroll or resize — the panel stays docked. The student sees none of this.</p>
+</main>
+
+<!-- prototype-only controls -->
+<aside class="sim">
+  <h3>Simulate</h3>
+  <p>Stands in for events arriving from students.</p>
+  <button onclick="finish(1)">Grzegorz finishes Task 3</button>
+  <button onclick="start(3)">Piotr opens the lesson</button>
+  <button onclick="finish(3)">Piotr finishes Task 3</button>
+  <button onclick="reset()">Reset</button>
+</aside>
+
+<section class="panel" id="panel">
+  <div class="panel__head" id="head" role="button" tabindex="0" aria-expanded="true">
+    <span class="panel__title">CLASS PROGRESS</span>
+    <span class="panel__count" id="count">1 of 4 done</span>
+    <svg class="panel__chev" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path d="M4 10l4-4 4 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+  </div>
+  <div class="panel__meta" id="meta">Wednesday 09:00 · Orange Poland</div>
+  <div class="panel__body" id="roster"></div>
+</section>
+
+<div class="toasts" id="toasts" aria-live="polite"></div>
+
+<script>
+const students = [
+  { id:0, name:"Anna Kowalska",   state:"done",    task:"Task 3" },
+  { id:1, name:"Grzegorz Darlak", state:"working", task:"Task 3" },
+  { id:2, name:"Marta Zielińska", state:"working", task:"Task 2" },
+  { id:3, name:"Piotr Nowak",     state:"idle",    task:"" }
+];
+const LABEL = { done:"Done", working:"Working", idle:"Not started" };
+const roster = document.getElementById("roster");
+const countEl = document.getElementById("count");
+
+function render(flashId){
+  roster.innerHTML = students.map(s => `
+    <div class="student s-${s.state} ${flashId===s.id?'flash':''}">
+      <span class="dot ${s.state==='working'?'pulse':''}"></span>
+      <span class="student__name">${s.name}
+        ${s.task ? `<span class="student__task">${s.task}</span>` : ""}</span>
+      <span class="student__state">${LABEL[s.state]}</span>
+    </div>`).join("");
+  const done = students.filter(s=>s.state==="done").length;
+  countEl.textContent = `${done} of ${students.length} done`;
+}
+
+function toast(name, task){
+  const el = document.createElement("div");
+  el.className = "toast";
+  el.innerHTML = `<span class="toast__tick">✓</span>
+    <span class="toast__text"><strong>${name}</strong> finished
+      <span class="toast__task">${task} · Expressing opinions</span></span>
+    <button class="toast__x" aria-label="Dismiss">×</button>`;
+  el.querySelector(".toast__x").onclick = () => remove(el);
+  document.getElementById("toasts").appendChild(el);
+  setTimeout(()=>remove(el), 6000);
+}
+function remove(el){
+  if(!el.isConnected) return;
+  el.classList.add("is-out");
+  setTimeout(()=>el.remove(), 220);
+}
+
+function finish(id){
+  const s = students.find(x=>x.id===id);
+  if(!s || s.state==="done") return;
+  s.state="done"; s.task="Task 3";
+  render(id); toast(s.name, "Task 3");
+}
+function start(id){
+  const s = students.find(x=>x.id===id);
+  if(!s || s.state!=="idle") return;
+  s.state="working"; s.task="Task 1"; render(id);
+}
+function reset(){
+  students[0].state="done";    students[0].task="Task 3";
+  students[1].state="working"; students[1].task="Task 3";
+  students[2].state="working"; students[2].task="Task 2";
+  students[3].state="idle";    students[3].task="";
+  document.getElementById("toasts").innerHTML="";
+  render();
+}
+
+const panel = document.getElementById("panel"), head = document.getElementById("head");
+function toggle(){
+  panel.classList.toggle("is-collapsed");
+  head.setAttribute("aria-expanded", String(!panel.classList.contains("is-collapsed")));
+}
+head.onclick = toggle;
+head.onkeydown = e => { if(e.key==="Enter"||e.key===" "){ e.preventDefault(); toggle(); } };
+
+render();
+</script>
+</body>
+</html>
