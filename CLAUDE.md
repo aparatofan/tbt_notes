@@ -13,7 +13,7 @@ Keep this file concise. It is loaded at the start of every Claude Code session.
 
 ## Project basics
 
-- WordPress plugin; PHP 7.4+.
+- WordPress plugin; PHP 8.0+.
 - PHP + vanilla JavaScript; Quill is vendored/self-hosted. No application build step is required.
 - Bootstrap: `tbt-notes.php`.
 - Server-side code: `includes/`.

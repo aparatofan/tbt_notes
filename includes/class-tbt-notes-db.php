@@ -71,6 +71,16 @@ class TBT_Notes_DB {
 	}
 
 	/**
+	 * Live activity table name.
+	 *
+	 * @return string
+	 */
+	public static function table_activity() {
+		global $wpdb;
+		return $wpdb->prefix . 'tbt_activity';
+	}
+
+	/**
 	 * Create or update the database schema.
 	 */
 	public static function install() {
@@ -84,6 +94,7 @@ class TBT_Notes_DB {
 		$members          = self::table_class_students();
 		$pronunciations   = self::table_pronunciations();
 		$expression_cards = self::table_expression_cards();
+		$activity         = self::table_activity();
 
 		$sql_classes = "CREATE TABLE {$classes} (
   id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
@@ -161,11 +172,52 @@ class TBT_Notes_DB {
   KEY status (status)
 ) {$charset_collate};";
 
+		// Live activity: one row per completed piece of work, per student.
+		//
+		// Deliberately WITHOUT a unique key. wp_wpcc_tracking carries
+		// UNIQUE KEY customer_post (customerID, post_id), which makes it a
+		// "has this student ever done this?" table rather than a log — and the
+		// migration at wp-custom-calendar.php:100-160 documents what a stale
+		// unique index costs once rows start colliding. A live-progress feed
+		// needs every completion, including the second attempt at the same
+		// deck, so uniqueness is enforced nowhere and de-duplication is a
+		// short-window concern for the write route instead.
+		//
+		// student_name, teacher_id and class_id are SNAPSHOTS taken at insert
+		// time, never resolved at read time: a student who later changes class
+		// must still read correctly in history.
+		//
+		// score/score_max are NULL where the tool has no meaningful score, and
+		// meta is JSON for tool-specific extras that is never queried on — no
+		// index is or should be added for it.
+		$sql_activity = "CREATE TABLE {$activity} (
+  id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  user_id bigint(20) unsigned NOT NULL,
+  class_id bigint(20) unsigned NOT NULL DEFAULT 0,
+  teacher_id bigint(20) unsigned NOT NULL DEFAULT 0,
+  student_name varchar(190) NOT NULL DEFAULT '',
+  tool varchar(20) NOT NULL,
+  object_ref varchar(64) NOT NULL DEFAULT '',
+  object_title varchar(190) NOT NULL DEFAULT '',
+  post_id bigint(20) unsigned NOT NULL DEFAULT 0,
+  event varchar(20) NOT NULL,
+  score int(10) unsigned DEFAULT NULL,
+  score_max int(10) unsigned DEFAULT NULL,
+  duration_seconds int(10) unsigned DEFAULT NULL,
+  meta longtext NULL,
+  created_at datetime NOT NULL,
+  PRIMARY KEY  (id),
+  KEY teacher_created (teacher_id, created_at),
+  KEY class_created (class_id, created_at),
+  KEY user_created (user_id, created_at)
+) {$charset_collate};";
+
 		dbDelta( $sql_classes );
 		dbDelta( $sql_lessons );
 		dbDelta( $sql_members );
 		dbDelta( $sql_pronunciations );
 		dbDelta( $sql_expression_cards );
+		dbDelta( $sql_activity );
 	}
 
 	/**

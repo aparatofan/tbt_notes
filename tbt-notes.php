@@ -3,9 +3,9 @@
  * Plugin Name:       TBT Notes
  * Plugin URI:        https://thebluetree.example/
  * Description:       Per-class lesson notes for The Blue Tree. A teacher writes notes per class; each logged-in student sees only the notes for the class they are assigned to, in a slide-out side panel.
- * Version:           1.6.2
+ * Version:           1.7.0
  * Requires at least: 6.0
- * Requires PHP:      7.4
+ * Requires PHP:      8.0
  * Author:            The Blue Tree
  * License:           GPL-2.0-or-later
  * License URI:       https://www.gnu.org/licenses/gpl-2.0.html
@@ -23,13 +23,13 @@ if ( ! defined( 'ABSPATH' ) ) {
 /**
  * Plugin version. Bump on release.
  */
-define( 'TBT_NOTES_VERSION', '1.6.2' );
+define( 'TBT_NOTES_VERSION', '1.7.0' );
 
 /**
  * Database schema version. Bump when the table structure changes so that
  * activation/upgrade can run dbDelta again.
  */
-define( 'TBT_NOTES_DB_VERSION', '6' );
+define( 'TBT_NOTES_DB_VERSION', '7' );
 
 /**
  * Capability that gates all teacher/admin functionality (creating classes,
