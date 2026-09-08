@@ -1022,8 +1022,153 @@ class TBT_Notes_DB {
 	}
 
 	/* --------------------------------------------------------------------- *
+	 * Activity
+	 * --------------------------------------------------------------------- */
+
+	/**
+	 * Record one completed piece of work.
+	 *
+	 * Every caller has already resolved the student's class and teacher and
+	 * shaped the row; this only writes it. The nullable columns are passed as
+	 * null rather than 0 so "no score" stays distinguishable from "scored
+	 * zero", which is why the format array is built rather than fixed.
+	 *
+	 * @param array $data Row fields.
+	 * @return int|false Inserted ID, or false.
+	 */
+	public static function insert_activity( array $data ) {
+		global $wpdb;
+
+		$row = array(
+			'user_id'          => (int) ( $data['user_id'] ?? 0 ),
+			'class_id'         => (int) ( $data['class_id'] ?? 0 ),
+			'teacher_id'       => (int) ( $data['teacher_id'] ?? 0 ),
+			'student_name'     => (string) ( $data['student_name'] ?? '' ),
+			'tool'             => (string) ( $data['tool'] ?? '' ),
+			'object_ref'       => (string) ( $data['object_ref'] ?? '' ),
+			'object_title'     => (string) ( $data['object_title'] ?? '' ),
+			'post_id'          => (int) ( $data['post_id'] ?? 0 ),
+			'event'            => (string) ( $data['event'] ?? 'completed' ),
+			'score'            => isset( $data['score'] ) ? $data['score'] : null,
+			'score_max'        => isset( $data['score_max'] ) ? $data['score_max'] : null,
+			'duration_seconds' => isset( $data['duration_seconds'] ) ? $data['duration_seconds'] : null,
+			'meta'             => isset( $data['meta'] ) ? $data['meta'] : null,
+			'created_at'       => self::now(),
+		);
+
+		// wpdb emits a literal NULL for any null value and ignores that
+		// column's format, so the nullable numbers keep %d here and still
+		// store NULL rather than 0 when the tool has no such number.
+		$formats = array( '%d', '%d', '%d', '%s', '%s', '%s', '%s', '%d', '%s', '%d', '%d', '%d', '%s', '%s' );
+
+		$ok = $wpdb->insert( self::table_activity(), $row, $formats );
+		return $ok ? (int) $wpdb->insert_id : false;
+	}
+
+	/**
+	 * Activity for one class, newest first.
+	 *
+	 * $since_id is the caller's last seen row ID and is the exact cursor: row
+	 * IDs are monotonic, so nothing can slip past it. $since_time exists only
+	 * for a caller that has a timestamp and no ID; it is second-resolution, so
+	 * two completions in the same second as the cursor can be missed, which is
+	 * why the ID form is preferred wherever a previous response is available.
+	 *
+	 * @param int    $class_id   Class ID.
+	 * @param int    $since_id   Last seen activity ID, or 0.
+	 * @param string $since_time MySQL datetime, or '' when unused.
+	 * @param int    $limit      Maximum rows.
+	 * @return array[]
+	 */
+	public static function get_activity_for_class( $class_id, $since_id = 0, $since_time = '', $limit = 50 ) {
+		global $wpdb;
+		$class_id = (int) $class_id;
+		if ( $class_id <= 0 ) {
+			return array();
+		}
+		$since_id = max( 0, (int) $since_id );
+		$limit    = max( 1, min( 200, (int) $limit ) );
+		$table    = self::table_activity();
+
+		if ( $since_id > 0 ) {
+			$sql = $wpdb->prepare(
+				"SELECT * FROM {$table} WHERE class_id = %d AND id > %d ORDER BY id DESC LIMIT %d",
+				$class_id,
+				$since_id,
+				$limit
+			);
+		} elseif ( '' !== $since_time ) {
+			$sql = $wpdb->prepare(
+				"SELECT * FROM {$table} WHERE class_id = %d AND created_at > %s ORDER BY id DESC LIMIT %d",
+				$class_id,
+				$since_time,
+				$limit
+			);
+		} else {
+			$sql = $wpdb->prepare(
+				"SELECT * FROM {$table} WHERE class_id = %d ORDER BY id DESC LIMIT %d",
+				$class_id,
+				$limit
+			);
+		}
+
+		$rows = $wpdb->get_results( $sql, ARRAY_A );
+		return array_map( array( __CLASS__, 'shape_activity' ), $rows ? $rows : array() );
+	}
+
+	/**
+	 * The most recent activity ID for a class, or 0 when it has none.
+	 *
+	 * The polling response needs a cursor even when it returns no rows, or a
+	 * client that starts on a quiet class would re-request from zero forever.
+	 *
+	 * @param int $class_id Class ID.
+	 * @return int
+	 */
+	public static function get_latest_activity_id( $class_id ) {
+		global $wpdb;
+		$class_id = (int) $class_id;
+		if ( $class_id <= 0 ) {
+			return 0;
+		}
+		$table = self::table_activity();
+		return (int) $wpdb->get_var( $wpdb->prepare( "SELECT MAX(id) FROM {$table} WHERE class_id = %d", $class_id ) );
+	}
+
+	/* --------------------------------------------------------------------- *
 	 * Shaping
 	 * --------------------------------------------------------------------- */
+
+	/**
+	 * Normalise an activity row.
+	 *
+	 * meta is deliberately absent: it is tool-specific JSON that is never
+	 * queried on and has no consumer, so it is not carried into responses.
+	 *
+	 * @param array $row Raw row.
+	 * @return array
+	 */
+	protected static function shape_activity( array $row ) {
+		$nullable = static function ( $value ) {
+			return null === $value ? null : (int) $value;
+		};
+
+		return array(
+			'id'               => (int) $row['id'],
+			'user_id'          => (int) $row['user_id'],
+			'class_id'         => (int) $row['class_id'],
+			'student_name'     => (string) $row['student_name'],
+			'tool'             => (string) $row['tool'],
+			'object_ref'       => (string) $row['object_ref'],
+			'object_title'     => (string) $row['object_title'],
+			'post_id'          => (int) $row['post_id'],
+			'event'            => (string) $row['event'],
+			'score'            => $nullable( $row['score'] ?? null ),
+			'score_max'        => $nullable( $row['score_max'] ?? null ),
+			'duration_seconds' => $nullable( $row['duration_seconds'] ?? null ),
+			'created_at'       => (string) $row['created_at'],
+		);
+	}
 
 	/**
 	 * Normalise a class row (without students; load those separately).

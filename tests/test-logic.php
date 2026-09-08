@@ -399,6 +399,7 @@ require_once dirname( __DIR__ ) . '/includes/class-tbt-notes-expression-cards.ph
 require_once dirname( __DIR__ ) . '/includes/class-tbt-notes-ai-quick-note.php';
 require_once dirname( __DIR__ ) . '/includes/class-tbt-notes-rest.php';
 require_once dirname( __DIR__ ) . '/includes/class-tbt-notes-roster.php';
+require_once dirname( __DIR__ ) . '/includes/class-tbt-notes-activity-rest.php';
 
 /* ------------------------------------------------------------- Tiny test kit */
 
@@ -692,6 +693,106 @@ function test_roster() {
 	ok( TBT_Notes_Roster::students_for_current_user() === array(), 'logged out sees nobody' );
 }
 test_roster();
+
+echo "Activity write — payload sanitising (the one untrusted write):\n";
+function test_activity_payload() {
+	$clean = TBT_Notes_Activity_REST::sanitize_payload(
+		array(
+			'tool'             => '  SWIPE!! ',
+			'object_ref'       => 'aB3xY9zQ7mK2',
+			'object_title'     => '  Unit 4 <b>verbs</b>  ',
+			'post_id'          => '61',
+			'duration_seconds' => '184',
+		)
+	);
+	ok( $clean['tool'] === 'swipe', 'tool is lowercased and stripped to a slug' );
+	ok( $clean['object_ref'] === 'aB3xY9zQ7mK2', 'object_ref keeps its case' );
+	ok( $clean['object_title'] === 'Unit 4 verbs', 'object_title is text-sanitised' );
+	ok( $clean['post_id'] === 61, 'post_id becomes an int' );
+	ok( $clean['duration_seconds'] === 184, 'duration is an int' );
+
+	// Nothing about identity is ever read from the payload.
+	$spoof = TBT_Notes_Activity_REST::sanitize_payload(
+		array(
+			'tool'         => 'swipe',
+			'object_ref'   => 'abc123456789',
+			'user_id'      => 999,
+			'class_id'     => 999,
+			'teacher_id'   => 999,
+			'student_name' => 'Somebody Else',
+			'event'        => 'hacked',
+			'meta'         => '{"x":1}',
+		)
+	);
+	ok( ! array_key_exists( 'user_id', $spoof ), 'user_id is not accepted from the payload' );
+	ok( ! array_key_exists( 'class_id', $spoof ), 'class_id is not accepted from the payload' );
+	ok( ! array_key_exists( 'teacher_id', $spoof ), 'teacher_id is not accepted from the payload' );
+	ok( ! array_key_exists( 'student_name', $spoof ), 'student_name is not accepted from the payload' );
+	ok( ! array_key_exists( 'event', $spoof ), 'event is not accepted from the payload' );
+	ok( ! array_key_exists( 'meta', $spoof ), 'meta has no producer yet and is not accepted' );
+
+	// Required fields report themselves as absent rather than throwing.
+	$empty = TBT_Notes_Activity_REST::sanitize_payload( array() );
+	ok( $empty['tool'] === '', 'a missing tool comes back empty' );
+	ok( $empty['object_ref'] === '', 'a missing object_ref comes back empty' );
+	ok( $empty['post_id'] === 0, 'a missing post_id defaults to 0' );
+
+	// "no score" and "scored zero" are different claims.
+	ok( $empty['score'] === null, 'a missing score is null' );
+	ok( TBT_Notes_Activity_REST::sanitize_payload( array( 'score' => 0 ) )['score'] === 0, 'a score of zero survives as zero' );
+	ok( TBT_Notes_Activity_REST::sanitize_payload( array( 'score' => '' ) )['score'] === null, 'an empty score is null, not zero' );
+	ok( TBT_Notes_Activity_REST::sanitize_payload( array( 'score' => 'abc' ) )['score'] === null, 'a non-numeric score is null' );
+	ok( TBT_Notes_Activity_REST::sanitize_payload( array( 'score' => -5 ) )['score'] === 0, 'a negative score clamps to zero' );
+	ok( TBT_Notes_Activity_REST::sanitize_payload( array( 'score' => '99999999999' ) )['score'] === 4294967295, 'an absurd score clamps to the column maximum' );
+	ok( TBT_Notes_Activity_REST::sanitize_payload( array( 'score' => array( 1 ) ) )['score'] === null, 'an array score is null' );
+
+	// Column widths.
+	$long = TBT_Notes_Activity_REST::sanitize_payload(
+		array(
+			'tool'         => str_repeat( 'a', 40 ),
+			'object_ref'   => str_repeat( 'b', 200 ),
+			'object_title' => str_repeat( 'c', 400 ),
+		)
+	);
+	ok( strlen( $long['tool'] ) === 20, 'tool is clipped to the column width' );
+	ok( strlen( $long['object_ref'] ) === 64, 'object_ref is clipped to the column width' );
+	ok( strlen( $long['object_title'] ) === 190, 'object_title is clipped to the column width' );
+}
+test_activity_payload();
+
+echo "Activity poll — the since cursor:\n";
+function test_activity_since() {
+	$none = TBT_Notes_Activity_REST::parse_since( '' );
+	ok( $none['id'] === 0 && $none['time'] === '', 'an empty cursor asks for the recent window' );
+	ok( TBT_Notes_Activity_REST::parse_since( null )['id'] === 0, 'a null cursor is no cursor' );
+	ok( TBT_Notes_Activity_REST::parse_since( array( 1 ) )['id'] === 0, 'an array cursor is no cursor' );
+	ok( TBT_Notes_Activity_REST::parse_since( 'nonsense' )['id'] === 0, 'an unparseable cursor is no cursor' );
+
+	$byid = TBT_Notes_Activity_REST::parse_since( '42' );
+	ok( $byid['id'] === 42 && $byid['time'] === '', 'an integer cursor is a row ID' );
+	ok( TBT_Notes_Activity_REST::parse_since( '  42  ' )['id'] === 42, 'a padded integer cursor still reads as an ID' );
+
+	$bytime = TBT_Notes_Activity_REST::parse_since( '2026-09-08 12:00:00' );
+	ok( $bytime['time'] === '2026-09-08 12:00:00', 'a datetime cursor is kept in UTC' );
+	ok( $bytime['id'] === 0, 'a datetime cursor sets no ID' );
+}
+test_activity_since();
+
+echo "Activity — transient keys:\n";
+function test_activity_keys() {
+	ok( TBT_Notes_Activity_REST::presence_key( 45, 7 ) === 'tbtn_pres_45_7', 'presence is keyed per class and per student' );
+	ok(
+		TBT_Notes_Activity_REST::presence_key( 45, 7 ) !== TBT_Notes_Activity_REST::presence_key( 45, 8 ),
+		'two students in one class cannot share a presence key'
+	);
+
+	$a = TBT_Notes_Activity_REST::duplicate_key( 7, 'swipe', 'aB3xY9zQ7mK2' );
+	ok( $a === TBT_Notes_Activity_REST::duplicate_key( 7, 'swipe', 'aB3xY9zQ7mK2' ), 'the duplicate guard is stable for one completion' );
+	ok( $a !== TBT_Notes_Activity_REST::duplicate_key( 8, 'swipe', 'aB3xY9zQ7mK2' ), 'a different student is a different completion' );
+	ok( $a !== TBT_Notes_Activity_REST::duplicate_key( 7, 'swipe', 'zzzzzzzzzzzz' ), 'a different deck is a different completion' );
+	ok( strpos( $a, 'tbtn_act_' ) === 0, 'the guard key is namespaced' );
+}
+test_activity_keys();
 
 echo "Pronunciation — pink extraction:\n";
 function test_pink_extraction() {
