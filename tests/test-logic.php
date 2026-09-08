@@ -280,6 +280,114 @@ class TBT_Notes_DB {
 		}
 		return $out;
 	}
+
+	/* ---- Roster fixtures: classes and their membership ---- */
+
+	public static $classes = array();   // id => shaped class row
+	public static $members = array();   // class_id => int[] user IDs
+
+	public static function set_class( $id, $teacher_id, array $student_ids = array() ) {
+		self::$classes[ (int) $id ] = array(
+			'id'         => (int) $id,
+			'title'      => 'Class ' . (int) $id,
+			'teacher_id' => (int) $teacher_id,
+			'created_at' => '2026-01-01 00:00:00',
+			'updated_at' => '2026-01-01 00:00:00',
+		);
+		self::$members[ (int) $id ] = array_map( 'intval', $student_ids );
+	}
+
+	public static function reset_roster() {
+		self::$classes = array();
+		self::$members = array();
+	}
+
+	public static function get_class( $class_id ) {
+		return isset( self::$classes[ (int) $class_id ] ) ? self::$classes[ (int) $class_id ] : null;
+	}
+
+	public static function get_all_classes() {
+		return array_values( self::$classes );
+	}
+
+	public static function get_classes_for_teacher( $teacher_id ) {
+		$out = array();
+		foreach ( self::$classes as $class ) {
+			if ( (int) $class['teacher_id'] === (int) $teacher_id ) {
+				$out[] = $class;
+			}
+		}
+		return $out;
+	}
+
+	public static function get_student_ids_for_class( $class_id ) {
+		return isset( self::$members[ (int) $class_id ] ) ? self::$members[ (int) $class_id ] : array();
+	}
+
+	public static function get_student_ids_for_classes( array $class_ids ) {
+		$out = array();
+		foreach ( $class_ids as $cid ) {
+			foreach ( self::get_student_ids_for_class( $cid ) as $uid ) {
+				$out[ $uid ] = $uid;
+			}
+		}
+		return array_values( $out );
+	}
+
+	public static function get_class_for_student( $user_id ) {
+		foreach ( self::$members as $class_id => $ids ) {
+			if ( in_array( (int) $user_id, $ids, true ) ) {
+				return self::get_class( $class_id );
+			}
+		}
+		return null;
+	}
+}
+
+/**
+ * Stand-in for the WordPress user store, so the roster can be shaped without a
+ * database. Only the fields the resolver asks for.
+ */
+$GLOBALS['__users']       = array();  // user_id => display_name
+$GLOBALS['__current_user'] = 0;
+
+function get_current_user_id() {
+	return (int) $GLOBALS['__current_user'];
+}
+
+function get_users( $args ) {
+	$include = isset( $args['include'] ) ? array_map( 'intval', (array) $args['include'] ) : array();
+	$out     = array();
+	foreach ( $include as $id ) {
+		// A membership row whose user no longer exists returns nothing, which
+		// is what lets us assert that the roster drops it.
+		if ( ! isset( $GLOBALS['__users'][ $id ] ) ) {
+			continue;
+		}
+		$user               = new stdClass();
+		$user->ID           = $id;
+		$user->display_name = $GLOBALS['__users'][ $id ];
+		$out[]              = $user;
+	}
+	usort(
+		$out,
+		function ( $a, $b ) {
+			return strcmp( $a->display_name, $b->display_name );
+		}
+	);
+	return $out;
+}
+
+/**
+ * Stand-in for TBT Students' public read API. Its real contract is to answer
+ * '' both for a student with no level and for a user it has never heard of.
+ */
+$GLOBALS['__levels'] = array();
+
+class TBT_Students {
+	public static function get_level( $user_id ) {
+		return isset( $GLOBALS['__levels'][ (int) $user_id ] ) ? $GLOBALS['__levels'][ (int) $user_id ] : '';
+	}
 }
 
 /* ----------------------------------------------------------------- Load code */
@@ -290,6 +398,7 @@ require_once dirname( __DIR__ ) . '/includes/class-tbt-notes-pronunciation.php';
 require_once dirname( __DIR__ ) . '/includes/class-tbt-notes-expression-cards.php';
 require_once dirname( __DIR__ ) . '/includes/class-tbt-notes-ai-quick-note.php';
 require_once dirname( __DIR__ ) . '/includes/class-tbt-notes-rest.php';
+require_once dirname( __DIR__ ) . '/includes/class-tbt-notes-roster.php';
 
 /* ------------------------------------------------------------- Tiny test kit */
 
@@ -503,6 +612,86 @@ function test_visibility() {
 	ok( TBT_Notes_REST::user_can_manage_class( $someones_class, $plain_id ) === false, 'plain user cannot manage any class' );
 }
 test_visibility();
+
+echo "Roster resolver (who may the current user see):\n";
+function test_roster() {
+	$teacher = 10;
+	$admin   = 40;
+	$student = 20;
+
+	$GLOBALS['__user_can'] = array(
+		$teacher => array( 'manage_tbt_notes' ),
+		$admin   => array( 'manage_options' ),
+		$student => array( 'read' ),
+	);
+
+	TBT_Notes_DB::reset_roster();
+	TBT_Notes_DB::set_class( 1, $teacher, array( 20, 21 ) );  // this teacher's group
+	TBT_Notes_DB::set_class( 2, 999, array( 22 ) );           // another teacher's
+	TBT_Notes_DB::set_class( 3, $teacher, array() );          // empty
+	TBT_Notes_DB::set_class( 4, $teacher, array( 23 ) );      // member with no WP user
+
+	$GLOBALS['__users'] = array(
+		20 => 'Beata',
+		21 => 'Anna',
+		22 => 'Celina',
+	);
+	// 20 has a level; 21 does not, which is the normal case for a class with
+	// no TBT Students rows at all.
+	$GLOBALS['__levels'] = array( 20 => 'B1.5' );
+
+	/* ---- Which classes ---- */
+
+	ok( count( TBT_Notes_Roster::classes_for_user( $teacher ) ) === 3, 'a teacher sees only the classes they own' );
+	ok( count( TBT_Notes_Roster::classes_for_user( $admin ) ) === 4, 'an administrator sees every class' );
+	ok( TBT_Notes_Roster::classes_for_user( $student ) === array(), 'a student gets no class list from the roster' );
+	ok( TBT_Notes_Roster::classes_for_user( 0 ) === array(), 'logged out gets no class list' );
+
+	/* ---- Which students, in one class ---- */
+
+	$GLOBALS['__current_user'] = $teacher;
+
+	$roster = TBT_Notes_Roster::students_in_class( 1 );
+	ok( count( $roster ) === 2, 'the teacher sees both students in their class' );
+	ok( $roster[0]['display_name'] === 'Anna' && $roster[1]['display_name'] === 'Beata', 'the roster is alphabetical by display name' );
+	ok( $roster[0]['user_id'] === 21, 'each row carries the user_id' );
+	ok( $roster[0]['level'] === null, 'a student with no level reads null, not an empty string' );
+	ok( $roster[1]['level'] === 'B1.5', 'a student with a level reads that level' );
+
+	ok( TBT_Notes_Roster::students_in_class( 3 ) === array(), 'an owned but empty class returns no students' );
+	ok( TBT_Notes_Roster::students_in_class( 4 ) === array(), 'a membership row whose WP user is gone is dropped, not blank' );
+
+	/* ---- Failing closed ---- */
+
+	ok( TBT_Notes_Roster::students_in_class( 2 ) === array(), "another teacher's class returns nothing" );
+	ok( TBT_Notes_Roster::students_in_class( 9999 ) === array(), 'an unknown class returns nothing' );
+	ok( TBT_Notes_Roster::students_in_class( 0 ) === array(), 'class 0 returns nothing' );
+
+	ok( TBT_Notes_Roster::current_user_may_see_class( 1 ) === true, 'the teacher may see their own class' );
+	ok( TBT_Notes_Roster::current_user_may_see_class( 2 ) === false, "the teacher may not see another teacher's class" );
+	ok( TBT_Notes_Roster::current_user_may_see_class( 9999 ) === false, 'an unknown class is not visible' );
+
+	ok( TBT_Notes_Roster::current_user_may_see( 20 ) === true, 'the teacher may see their own student' );
+	ok( TBT_Notes_Roster::current_user_may_see( 22 ) === false, "the teacher may not see another teacher's student" );
+	ok( TBT_Notes_Roster::current_user_may_see( 777 ) === false, 'a student in no class is visible to nobody' );
+	ok( TBT_Notes_Roster::current_user_may_see( 0 ) === false, 'student 0 is visible to nobody' );
+
+	/* ---- Across every visible class ---- */
+
+	ok( count( TBT_Notes_Roster::students_for_current_user() ) === 2, 'the teacher sees the students of every class they own' );
+
+	$GLOBALS['__current_user'] = $admin;
+	ok( count( TBT_Notes_Roster::students_for_current_user() ) === 3, 'an administrator sees every student' );
+	ok( TBT_Notes_Roster::students_in_class( 2 ) !== array(), "an administrator may read another teacher's class" );
+
+	$GLOBALS['__current_user'] = $student;
+	ok( TBT_Notes_Roster::students_for_current_user() === array(), 'a student cannot enumerate classmates through the roster' );
+	ok( TBT_Notes_Roster::students_in_class( 1 ) === array(), 'a student cannot read their own class roster' );
+
+	$GLOBALS['__current_user'] = 0;
+	ok( TBT_Notes_Roster::students_for_current_user() === array(), 'logged out sees nobody' );
+}
+test_roster();
 
 echo "Pronunciation — pink extraction:\n";
 function test_pink_extraction() {

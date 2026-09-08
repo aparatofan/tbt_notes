@@ -433,6 +433,30 @@ class TBT_Notes_DB {
 	}
 
 	/**
+	 * IDs of the students in any of several classes, de-duplicated.
+	 *
+	 * One query rather than one per class: the roster resolver asks this for
+	 * every class an administrator can see, and thirty-six round trips to
+	 * answer one question is not a reasonable cost.
+	 *
+	 * @param int[] $class_ids Class IDs.
+	 * @return int[]
+	 */
+	public static function get_student_ids_for_classes( array $class_ids ) {
+		global $wpdb;
+		$class_ids = array_values( array_unique( array_filter( array_map( 'intval', $class_ids ) ) ) );
+		if ( empty( $class_ids ) ) {
+			return array();
+		}
+		$table        = self::table_class_students();
+		$placeholders = implode( ',', array_fill( 0, count( $class_ids ), '%d' ) );
+		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- placeholders are generated, values are prepared.
+		$sql = "SELECT DISTINCT user_id FROM {$table} WHERE class_id IN ({$placeholders})";
+		$ids = $wpdb->get_col( $wpdb->prepare( $sql, $class_ids ) );
+		return array_map( 'intval', $ids ? $ids : array() );
+	}
+
+	/**
 	 * Students in a class, shaped for display (id, name, username).
 	 *
 	 * @param int $class_id Class ID.
