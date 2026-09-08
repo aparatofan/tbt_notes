@@ -36,6 +36,13 @@ class TBT_Notes_Plugin {
 	protected $activity_rest;
 
 	/**
+	 * Live progress panel controller.
+	 *
+	 * @var TBT_Notes_Progress_Panel
+	 */
+	protected $progress_panel;
+
+	/**
 	 * Front-end controller.
 	 *
 	 * @var TBT_Notes_Frontend
@@ -65,10 +72,11 @@ class TBT_Notes_Plugin {
 	 * Constructor wires up collaborators.
 	 */
 	protected function __construct() {
-		$this->rest          = new TBT_Notes_REST();
-		$this->activity_rest = new TBT_Notes_Activity_REST();
-		$this->frontend      = new TBT_Notes_Frontend();
-		$this->admin         = new TBT_Notes_Admin();
+		$this->rest            = new TBT_Notes_REST();
+		$this->activity_rest   = new TBT_Notes_Activity_REST();
+		$this->progress_panel  = new TBT_Notes_Progress_Panel();
+		$this->frontend        = new TBT_Notes_Frontend();
+		$this->admin           = new TBT_Notes_Admin();
 	}
 
 	/**
@@ -77,6 +85,7 @@ class TBT_Notes_Plugin {
 	public function run() {
 		$this->rest->register();
 		$this->activity_rest->register();
+		$this->progress_panel->register();
 		$this->frontend->register();
 
 		if ( is_admin() ) {

@@ -1,0 +1,374 @@
+/**
+ * TBT Notes — live progress panel.
+ *
+ * Follows docs/tbt-live-progress-prototype.html for layout and behaviour.
+ *
+ * Every colour, radius, shadow and font here comes from the shared TBT
+ * vocabulary (tbt-tokens). This sheet defines no colour of its own; the only
+ * local variable is a stacking context, which is not something the design
+ * system has an opinion about.
+ *
+ * The z-index sits just below Notes' own overlay (--tbtn-z, 2147483000) so
+ * that opening the Notes workspace covers the panel rather than fighting it,
+ * while still clearing Divi's own fixed furniture.
+ */
+
+/* One dock, two stacked things: the toasts rise from the top edge of the
+   panel, never across it. They share a corner, and a run of completions is
+   precisely when the roster underneath matters most — a toast stack that
+   covered it would hide the answer to the question it just raised. */
+.tbtp-dock {
+	--tbtp-z: 2147482000;
+	--tbtp-width: 320px;
+	--tbtp-edge: 24px;
+
+	position: fixed;
+	right: var(--tbtp-edge);
+	bottom: var(--tbtp-edge);
+	width: var(--tbtp-width);
+	max-width: calc(100vw - (var(--tbtp-edge) * 2));
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	/* Toasts plus a full roster can be taller than a laptop viewport. The dock
+	   is bounded and the roster gives the space up, because a toast is
+	   transient and has to be readable while it is there, whereas the roster
+	   scrolls and stays reachable either way. */
+	max-height: calc(100vh - (var(--tbtp-edge) * 2));
+	z-index: var(--tbtp-z);
+	pointer-events: none;
+}
+
+/* ------------------------------------------------------------------ Panel */
+
+.tbtp {
+	width: 100%;
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+	pointer-events: auto;
+	background: var(--tbt-surface);
+	border: 1px solid var(--tbt-border);
+	border-radius: var(--tbt-radius-panel);
+	box-shadow: var(--tbt-shadow-raised);
+	overflow: hidden;
+	font-family: var(--tbt-font-ui);
+	font-size: 16px;
+	line-height: 1.6;
+	color: var(--tbt-ink);
+	text-align: left;
+}
+
+.tbtp[hidden] {
+	display: none !important;
+}
+
+/* A button, not a div with a role: the browser then supplies the keyboard
+   behaviour, the focus ring and the announcement for free. */
+.tbtp__head {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	width: 100%;
+	margin: 0;
+	padding: 16px 20px;
+	border: 0;
+	background: linear-gradient(135deg, var(--tbt-blue), var(--tbt-blue-dark));
+	color: #fff;
+	cursor: pointer;
+	text-align: left;
+	font: inherit;
+}
+
+.tbtp__head:focus-visible {
+	outline: none;
+	box-shadow: inset var(--tbt-focus-ring);
+}
+
+.tbtp__title {
+	flex: 1;
+	font-family: var(--tbt-font-identity);
+	font-size: 14px;
+	font-weight: 700;
+	letter-spacing: 0.02em;
+}
+
+.tbtp__count {
+	font-size: 13px;
+	font-weight: 600;
+	opacity: 0.85;
+}
+
+.tbtp__chev {
+	width: 16px;
+	height: 16px;
+	flex: none;
+	transition: transform 0.18s ease;
+}
+
+.tbtp.is-collapsed .tbtp__chev {
+	transform: rotate(180deg);
+}
+
+.tbtp__body {
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+}
+
+.tbtp.is-collapsed .tbtp__body {
+	display: none;
+}
+
+/* ------------------------------------------------------- Class selector */
+
+.tbtp__meta {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 12px 20px;
+	border-bottom: 1px solid var(--tbt-border);
+	flex: none;
+}
+
+.tbtp__pick-label {
+	font-size: 13px;
+	font-weight: 600;
+	color: var(--tbt-muted);
+	flex: none;
+}
+
+.tbtp__pick {
+	flex: 1;
+	min-width: 0;
+	padding: 7px 10px;
+	border: 1px solid var(--tbt-border);
+	border-radius: var(--tbt-radius-control);
+	background: var(--tbt-input);
+	color: var(--tbt-ink);
+	font: 500 14px var(--tbt-font-ui);
+}
+
+.tbtp__pick:focus-visible {
+	outline: none;
+	border-color: var(--tbt-blue);
+	box-shadow: var(--tbt-focus-ring);
+}
+
+/* --------------------------------------------------------------- Roster */
+
+.tbtp__roster {
+	flex: 1 1 auto;
+	min-height: 0;
+	max-height: 340px;
+	overflow: auto;
+}
+
+.tbtp__hint,
+.tbtp__empty {
+	margin: 0;
+	padding: 16px 20px;
+	font-size: 14px;
+	color: var(--tbt-muted);
+}
+
+.tbtp-student {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	padding: 12px 20px;
+	border-bottom: 1px solid var(--tbt-border);
+}
+
+.tbtp-student:last-child {
+	border-bottom: none;
+}
+
+.tbtp-student__dot {
+	width: 10px;
+	height: 10px;
+	border-radius: 50%;
+	flex: none;
+	background: var(--tbt-border);
+}
+
+.tbtp-student__name {
+	flex: 1;
+	min-width: 0;
+	font-size: 15px;
+	font-weight: 500;
+}
+
+.tbtp-student__task,
+.tbtp-student__level {
+	display: block;
+	font-size: 12px;
+	font-weight: 400;
+	color: var(--tbt-muted);
+	margin-top: 1px;
+	overflow-wrap: anywhere;
+}
+
+.tbtp-student__state {
+	font-size: 13px;
+	font-weight: 600;
+	flex: none;
+	color: var(--tbt-muted);
+}
+
+.tbtp-student.is-done .tbtp-student__dot {
+	background: var(--tbt-success);
+}
+
+.tbtp-student.is-done .tbtp-student__state {
+	color: var(--tbt-success);
+}
+
+/* The pulse is the whole difference between "here" and "was here": it is the
+   only thing on the panel that says a reading is live rather than remembered. */
+.tbtp-student.is-working .tbtp-student__dot {
+	background: var(--tbt-blue);
+	animation: tbtp-pulse 1.8s ease-in-out infinite;
+}
+
+.tbtp-student.is-working .tbtp-student__state {
+	color: var(--tbt-blue);
+}
+
+.tbtp-student.is-flash {
+	animation: tbtp-flash 1.6s ease-out;
+}
+
+@keyframes tbtp-pulse {
+	0%, 100% { opacity: 1; }
+	50% { opacity: 0.35; }
+}
+
+@keyframes tbtp-flash {
+	0% { background: var(--tbt-success-bg); }
+	100% { background: transparent; }
+}
+
+/* --------------------------------------------------------------- Toasts */
+
+/* Normal column order, so the newest toast lands nearest the panel and older
+   ones drift up and out. Empty means gone: an empty flex child would still
+   claim the dock's gap and float the panel off the corner. */
+.tbtp-toasts {
+	flex: 0 0 auto;
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	font-family: var(--tbt-font-ui);
+	text-align: left;
+}
+
+.tbtp-toasts:empty {
+	display: none;
+}
+
+.tbtp-toast {
+	display: flex;
+	align-items: flex-start;
+	gap: 12px;
+	background: var(--tbt-surface);
+	border: 1px solid var(--tbt-border);
+	border-left: 4px solid var(--tbt-success);
+	border-radius: var(--tbt-radius-card);
+	box-shadow: var(--tbt-shadow-raised);
+	padding: 14px 16px;
+	pointer-events: auto;
+	color: var(--tbt-ink);
+	animation: tbtp-toast-in 0.26s cubic-bezier(0.2, 0.8, 0.3, 1);
+}
+
+.tbtp-toast.is-out {
+	animation: tbtp-toast-out 0.22s ease forwards;
+}
+
+/* The overflow line is a summary, not an event: no tick, no accent edge. */
+.tbtp-toast--more {
+	border-left-color: var(--tbt-border);
+	font-size: 13px;
+	color: var(--tbt-muted);
+	justify-content: center;
+}
+
+@keyframes tbtp-toast-in {
+	from { opacity: 0; transform: translateY(12px) scale(0.98); }
+	to { opacity: 1; transform: none; }
+}
+
+@keyframes tbtp-toast-out {
+	to { opacity: 0; transform: translateY(6px); }
+}
+
+.tbtp-toast__tick {
+	width: 22px;
+	height: 22px;
+	border-radius: 50%;
+	background: var(--tbt-success-bg);
+	color: var(--tbt-success);
+	display: grid;
+	place-items: center;
+	flex: none;
+	font-size: 13px;
+	font-weight: 700;
+	margin-top: 1px;
+}
+
+.tbtp-toast__text {
+	flex: 1;
+	min-width: 0;
+	font-size: 14px;
+	line-height: 1.4;
+	overflow-wrap: anywhere;
+}
+
+.tbtp-toast__text strong {
+	font-weight: 600;
+}
+
+.tbtp-toast__task {
+	display: block;
+	color: var(--tbt-muted);
+	font-size: 13px;
+	margin-top: 2px;
+}
+
+.tbtp-toast__x {
+	border: none;
+	background: none;
+	color: var(--tbt-muted);
+	font-size: 16px;
+	line-height: 1;
+	cursor: pointer;
+	padding: 2px 0 0;
+	flex: none;
+}
+
+.tbtp-toast__x:hover {
+	color: var(--tbt-ink);
+}
+
+.tbtp-toast__x:focus-visible {
+	outline: none;
+	box-shadow: var(--tbt-focus-ring);
+	border-radius: 4px;
+}
+
+/* The panel is a lesson-time instrument on a desktop screen. Narrow enough
+   and it would cover the page it reports on, so it gives the width back. */
+@media (max-width: 600px) {
+	.tbtp-dock {
+		--tbtp-edge: 12px;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.tbtp-dock,
+	.tbtp-dock * {
+		animation: none !important;
+		transition: none !important;
+	}
+}
