@@ -240,15 +240,23 @@ class TBT_Notes_Activity_REST {
 		// starting on a quiet class would re-ask from zero forever.
 		$last_id = $rows ? (int) $rows[0]['id'] : TBT_Notes_DB::get_latest_activity_id( $class_id );
 
-		return rest_ensure_response(
-			array(
-				'class_id'    => $class_id,
-				'activity'    => $rows,
-				'presence'    => self::presence_for_class( $class_id ),
-				'last_id'     => $last_id,
-				'server_time' => gmdate( 'Y-m-d H:i:s' ),
-			)
+		$out = array(
+			'class_id'    => $class_id,
+			'activity'    => $rows,
+			'presence'    => self::presence_for_class( $class_id ),
+			'last_id'     => $last_id,
+			'server_time' => gmdate( 'Y-m-d H:i:s' ),
 		);
+
+		// The roster is asked for explicitly rather than sent every time. A
+		// panel needs it to show who has not started, but names do not change
+		// between two polls ten seconds apart, and shipping them on every one
+		// would be a get_users() per poll for the life of the lesson.
+		if ( $request->get_param( 'roster' ) ) {
+			$out['students'] = TBT_Notes_Roster::students_in_class( $class_id );
+		}
+
+		return rest_ensure_response( $out );
 	}
 
 	/**
