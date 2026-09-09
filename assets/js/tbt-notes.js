@@ -93,6 +93,12 @@
 	var unloading = false;
 	// Page Mode only: the sticky class-header controller (see initPageStickyHeader).
 	var pageSticky = null;
+	// The last class announced to the progress panel, as an id and title packed
+	// into one key. Compared on every render so the event fires when the open
+	// class changes — or when the open class is renamed — and not on every
+	// repaint. It starts as null rather than the no-class key so the very first
+	// render still fires once and says explicitly that nothing is open.
+	var announcedClassKey = null;
 
 	/* --------------------------------------------------------------- Helpers */
 
@@ -887,6 +893,44 @@
 		if ( pageSticky ) {
 			pageSticky.update();
 		}
+		announceClass();
+	}
+
+	/**
+	 * Tell the progress panel which class is open.
+	 *
+	 * The panel is a separate script with its own bundle, so the two talk
+	 * through a DOM event rather than a shared object. The event carries the
+	 * class id and title only; the panel re-checks the id server-side on every
+	 * request regardless, so this is a hint about what to watch, never a grant
+	 * of access.
+	 *
+	 * The class is assigned in several places and every one of them calls
+	 * render(), so announcing from here covers all of them without the callers
+	 * having to know the panel exists.
+	 *
+	 * The title is part of the compared key because renaming a class mutates
+	 * the open class in place without changing its id (see saveClassField);
+	 * comparing ids alone would leave the panel labelled with the old name for
+	 * the rest of the lesson. Telling the two cases apart is the panel's job: a
+	 * new name for an id it is already watching relabels, and does not reset
+	 * the roster.
+	 */
+	function announceClass() {
+		var cls = state.currentClass;
+		var id = cls && cls.id ? ( parseInt( cls.id, 10 ) || 0 ) : 0;
+		var title = cls && cls.title ? String( cls.title ) : '';
+		var key = id + '\u0000' + title;
+		if ( key === announcedClassKey ) {
+			return;
+		}
+		announcedClassKey = key;
+		document.dispatchEvent( new CustomEvent( 'tbt-notes:class-change', {
+			detail: {
+				id: id,
+				title: title
+			}
+		} ) );
 	}
 
 	function renderView() {

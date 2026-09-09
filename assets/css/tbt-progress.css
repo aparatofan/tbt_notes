@@ -29,6 +29,10 @@
 	max-width: calc(100vw - (var(--tbtp-edge) * 2));
 	display: flex;
 	flex-direction: column;
+	/* The collapsed panel is a 64px bubble in a 320px dock, so children are
+	   aligned to the corner rather than stretched to the dock's width. What
+	   wants the full width — the expanded panel, the toasts — asks for it. */
+	align-items: flex-end;
 	gap: 10px;
 	/* Toasts plus a full roster can be taller than a laptop viewport. The dock
 	   is bounded and the roster gives the space up, because a toast is
@@ -66,6 +70,7 @@
 /* A button, not a div with a role: the browser then supplies the keyboard
    behaviour, the focus ring and the announcement for free. */
 .tbtp__head {
+	position: relative;
 	display: flex;
 	align-items: center;
 	gap: 10px;
@@ -85,12 +90,30 @@
 	box-shadow: inset var(--tbt-focus-ring);
 }
 
-.tbtp__title {
+.tbtp__label {
 	flex: 1;
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.tbtp__eyebrow {
 	font-family: var(--tbt-font-identity);
-	font-size: 14px;
+	font-size: 11px;
 	font-weight: 700;
-	letter-spacing: 0.02em;
+	letter-spacing: 0.04em;
+	opacity: 0.8;
+}
+
+/* A class name is the teacher's own text and can be any length. It gets one
+   line and an ellipsis: wrapping would push the count and chevron around. */
+.tbtp__class {
+	font-size: 15px;
+	font-weight: 600;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
 }
 
 .tbtp__count {
@@ -106,8 +129,27 @@
 	transition: transform 0.18s ease;
 }
 
-.tbtp.is-collapsed .tbtp__chev {
-	transform: rotate(180deg);
+/* The ring and its number belong to the collapsed bubble and are not drawn at
+   all while the panel is open, where the header carries the same count as text. */
+.tbtp__ring,
+.tbtp__bubble-count {
+	display: none;
+}
+
+.tbtp__ring-track {
+	stroke: #fff;
+	opacity: 0.3;
+}
+
+/* Green because the number it reports is completions, and green is the system's
+   success colour. It is not a state indicator on a control, so it does not
+   collide with "selected is blue, never green". Rotated so the arc grows from
+   twelve o'clock rather than three. */
+.tbtp__ring-fill {
+	stroke: var(--tbt-success);
+	transform: rotate(-90deg);
+	transform-origin: 50% 50%;
+	transition: stroke-dasharray 0.3s ease;
 }
 
 .tbtp__body {
@@ -116,43 +158,46 @@
 	min-height: 0;
 }
 
-.tbtp.is-collapsed .tbtp__body {
+/* ------------------------------------------------------------ At rest */
+
+/* A 64px circle in the corner: the ring, the count, and nothing else. The
+   whole head stays the button, so the keyboard behaviour and the focus ring
+   are the same control in both states. */
+.tbtp.is-collapsed {
+	width: 64px;
+	border-radius: 50%;
+	overflow: visible;
+}
+
+.tbtp.is-collapsed .tbtp__body,
+.tbtp.is-collapsed .tbtp__label,
+.tbtp.is-collapsed .tbtp__count,
+.tbtp.is-collapsed .tbtp__chev {
 	display: none;
 }
 
-/* ------------------------------------------------------- Class selector */
-
-.tbtp__meta {
-	display: flex;
-	align-items: center;
-	gap: 10px;
-	padding: 12px 20px;
-	border-bottom: 1px solid var(--tbt-border);
-	flex: none;
+.tbtp.is-collapsed .tbtp__head {
+	width: 64px;
+	height: 64px;
+	padding: 0;
+	border-radius: 50%;
+	justify-content: center;
 }
 
-.tbtp__pick-label {
-	font-size: 13px;
-	font-weight: 600;
-	color: var(--tbt-muted);
-	flex: none;
+.tbtp.is-collapsed .tbtp__ring {
+	display: block;
+	position: absolute;
+	inset: 0;
+	width: 64px;
+	height: 64px;
 }
 
-.tbtp__pick {
-	flex: 1;
-	min-width: 0;
-	padding: 7px 10px;
-	border: 1px solid var(--tbt-border);
-	border-radius: var(--tbt-radius-control);
-	background: var(--tbt-input);
-	color: var(--tbt-ink);
-	font: 500 14px var(--tbt-font-ui);
-}
-
-.tbtp__pick:focus-visible {
-	outline: none;
-	border-color: var(--tbt-blue);
-	box-shadow: var(--tbt-focus-ring);
+.tbtp.is-collapsed .tbtp__bubble-count {
+	display: block;
+	position: relative;
+	font-size: 15px;
+	font-weight: 700;
+	color: #fff;
 }
 
 /* --------------------------------------------------------------- Roster */
@@ -164,7 +209,6 @@
 	overflow: auto;
 }
 
-.tbtp__hint,
 .tbtp__empty {
 	margin: 0;
 	padding: 16px 20px;
@@ -256,6 +300,7 @@
    claim the dock's gap and float the panel off the corner. */
 .tbtp-toasts {
 	flex: 0 0 auto;
+	width: 100%;
 	display: flex;
 	flex-direction: column;
 	gap: 10px;

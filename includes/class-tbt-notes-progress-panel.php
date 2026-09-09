@@ -16,6 +16,12 @@
  * and nowhere else on the site. Keeping the assets apart from the Notes bundle
  * means the two surfaces cannot start depending on each other's load order.
  *
+ * Which class it watches is not asked for: Notes announces the open class on a
+ * `tbt-notes:class-change` DOM event and the panel follows it, showing nothing
+ * at all while no class is open. That event is a hint about what to watch and
+ * never a grant of access — the ownership gate below and the REST route's own
+ * checks are what decide who may see a roster.
+ *
  * @package TBT_Notes
  */
 
@@ -156,36 +162,26 @@ class TBT_Notes_Progress_Panel {
 	/**
 	 * Data the panel needs before it can ask a question.
 	 *
-	 * The class list is the teacher's own, straight from the resolver. It is
-	 * not the security boundary — every request re-checks the chosen class
-	 * server-side — but it is what stops the picker from offering a class the
-	 * request would then refuse.
+	 * No class list travels with it. The panel watches whichever class Notes
+	 * says is open, and the id it is given is re-checked server-side on every
+	 * request, so nothing here decides what a teacher may look at.
 	 *
 	 * @return array
 	 */
 	protected function localized_data() {
-		$classes = array();
-		foreach ( $this->teacher_classes() as $class ) {
-			$classes[] = array(
-				'id'    => (int) $class['id'],
-				'title' => (string) $class['title'],
-			);
-		}
-
 		return array(
 			'restBase'     => esc_url_raw( rest_url( TBT_NOTES_REST_NAMESPACE . '/activity' ) ),
 			'nonce'        => wp_create_nonce( 'wp_rest' ),
-			'classes'      => $classes,
 			'pollSeconds'  => self::POLL_SECONDS,
 			'i18n'         => array(
 				'title'       => __( 'CLASS PROGRESS', 'tbt-notes' ),
-				'choose'      => __( 'Choose a class', 'tbt-notes' ),
-				'chooseHint'  => __( 'Pick a class to watch.', 'tbt-notes' ),
 				'done'        => __( 'Done', 'tbt-notes' ),
 				'working'     => __( 'Working', 'tbt-notes' ),
 				'idle'        => __( 'Not started', 'tbt-notes' ),
 				/* translators: 1: students finished, 2: students in the class. */
 				'count'       => __( '%1$d of %2$d done', 'tbt-notes' ),
+				/* translators: 1: students finished, 2: students in the class. */
+				'ringLabel'   => __( '%1$d of %2$d students done. Show class progress.', 'tbt-notes' ),
 				'finished'    => __( 'finished', 'tbt-notes' ),
 				'dismiss'     => __( 'Dismiss', 'tbt-notes' ),
 				/* translators: %d: further completions not shown as their own toast. */
@@ -213,18 +209,22 @@ class TBT_Notes_Progress_Panel {
 		<div class="tbtp-dock">
 		<div class="tbtp-toasts" data-tbtp-toasts aria-live="polite" aria-atomic="false"></div>
 		<section class="tbtp" id="tbtp-panel" hidden>
-			<button type="button" class="tbtp__head" id="tbtp-head" aria-expanded="true" aria-controls="tbtp-body">
-				<span class="tbtp__title"><?php echo esc_html__( 'CLASS PROGRESS', 'tbt-notes' ); ?></span>
+			<button type="button" class="tbtp__head" id="tbtp-head" aria-expanded="false" aria-controls="tbtp-body">
+				<svg class="tbtp__ring" viewBox="0 0 64 64" aria-hidden="true" focusable="false">
+					<circle class="tbtp__ring-track" cx="32" cy="32" r="25" fill="none" stroke-width="5"/>
+					<circle class="tbtp__ring-fill" cx="32" cy="32" r="25" fill="none" stroke-width="5" stroke-linecap="round" data-tbtp-ring />
+				</svg>
+				<span class="tbtp__bubble-count" data-tbtp-bubble aria-hidden="true"></span>
+				<span class="tbtp__label">
+					<span class="tbtp__eyebrow"><?php echo esc_html__( 'CLASS PROGRESS', 'tbt-notes' ); ?></span>
+					<span class="tbtp__class" data-tbtp-classname></span>
+				</span>
 				<span class="tbtp__count" data-tbtp-count></span>
 				<svg class="tbtp__chev" viewBox="0 0 16 16" fill="none" aria-hidden="true" focusable="false">
 					<path d="M4 10l4-4 4 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
 				</svg>
 			</button>
 			<div class="tbtp__body" id="tbtp-body">
-				<div class="tbtp__meta">
-					<label class="tbtp__pick-label" for="tbtp-class"><?php echo esc_html__( 'Class', 'tbt-notes' ); ?></label>
-					<select class="tbtp__pick" id="tbtp-class" data-tbtp-class></select>
-				</div>
 				<div class="tbtp__roster" data-tbtp-roster></div>
 			</div>
 		</section>

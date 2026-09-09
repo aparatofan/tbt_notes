@@ -14,6 +14,15 @@
  *
  * Nothing from the server is ever written as markup. Student names and deck
  * titles are other people's text, and they reach the page as text nodes.
+ *
+ * The panel does not ask which class to watch. Notes announces the open class
+ * on a `tbt-notes:class-change` event and the panel follows it, hiding itself
+ * and stopping the poll while nothing is open — there is no dropdown and no
+ * remembered class. The announcement is a hint about what to watch, never a
+ * grant of access: every request re-checks the class server-side.
+ *
+ * At rest the panel is a bubble: a ring around the completed fraction with the
+ * count in the middle. Clicking it opens the full roster.
  */
 ( function () {
 	'use strict';
@@ -30,12 +39,16 @@
 		return;
 	}
 
-	var picker = panel.querySelector( '[data-tbtp-class]' );
 	var rosterEl = panel.querySelector( '[data-tbtp-roster]' );
 	var countEl = panel.querySelector( '[data-tbtp-count]' );
 	var toastsEl = document.querySelector( '[data-tbtp-toasts]' );
+	var bubbleEl = panel.querySelector( '[data-tbtp-bubble]' );
+	var ringEl = panel.querySelector( '[data-tbtp-ring]' );
+	var classNameEl = panel.querySelector( '[data-tbtp-classname]' );
 
-	var STORE_CLASS = 'tbtNotesProgressClass';
+	// Matches r="25" on the ring circles in the panel's markup.
+	var RING_CIRCUMFERENCE = 2 * Math.PI * 25;
+
 	var STORE_OPEN = 'tbtNotesProgressOpen';
 	var TOAST_LIFE = 6000;
 	var TOAST_MAX = 3;
@@ -253,15 +266,18 @@
 	function render() {
 		rosterEl.textContent = '';
 
+		// With no class open the panel is hidden anyway, so there is nothing to
+		// say and no hint to offer — the roster simply empties.
 		if ( ! classId ) {
-			rosterEl.appendChild( el( 'p', 'tbtp__hint', i18n.chooseHint || '' ) );
 			countEl.textContent = '';
+			setBubble( 0, 0 );
 			return;
 		}
 
 		if ( ! students.length ) {
 			rosterEl.appendChild( el( 'p', 'tbtp__empty', i18n.empty || '' ) );
 			countEl.textContent = '';
+			setBubble( 0, 0 );
 			return;
 		}
 
@@ -282,6 +298,21 @@
 		}
 
 		countEl.textContent = fmt( i18n.count, [ finished, rows.length ] );
+		setBubble( finished, rows.length );
+	}
+
+	/* The collapsed face of the panel: the ring is the completed fraction and
+	   the middle is the same count the header carries when open. `stroke-dasharray`
+	   is the whole trick — a dash as long as the finished arc followed by a gap
+	   as long as the circle leaves exactly that arc painted. */
+	function setBubble( finished, total ) {
+		var fraction = total > 0 ? finished / total : 0;
+		bubbleEl.textContent = total > 0 ? finished + '/' + total : '';
+		ringEl.setAttribute(
+			'stroke-dasharray',
+			( fraction * RING_CIRCUMFERENCE ).toFixed( 2 ) + ' ' + RING_CIRCUMFERENCE.toFixed( 2 )
+		);
+		head.setAttribute( 'aria-label', fmt( i18n.ringLabel, [ finished, total ] ) );
 	}
 
 	function studentRow( student, state ) {
@@ -420,7 +451,7 @@
 
 	/* --------------------------------------------------------------- Wiring */
 
-	function choose( id ) {
+	function choose( id, title ) {
 		classId = parseInt( id, 10 ) || 0;
 		students = [];
 		done = {};
@@ -429,45 +460,20 @@
 		seeded = false;
 		interval = BASE_INTERVAL;
 		stop();
-		remember( STORE_CLASS, classId );
+
+		// A class change is a change of subject: toasts about the previous
+		// class would be answering a question nobody is asking any more.
+		if ( toastsEl ) {
+			toastsEl.textContent = '';
+		}
+
+		classNameEl.textContent = title || '';
+		panel.hidden = ! classId;
 		render();
+
 		if ( classId ) {
 			seed();
 		}
-	}
-
-	function buildPicker() {
-		var list = cfg.classes || [];
-		var placeholder = el( 'option', '', i18n.choose || '' );
-		placeholder.value = '';
-		picker.appendChild( placeholder );
-
-		for ( var i = 0; i < list.length; i++ ) {
-			var option = el( 'option', '', list[ i ].title );
-			option.value = String( list[ i ].id );
-			picker.appendChild( option );
-		}
-
-		// A remembered class is still only a suggestion: it is honoured just
-		// because it is in this teacher's own list, and every request re-checks
-		// it server-side regardless.
-		var saved = parseInt( recall( STORE_CLASS ), 10 ) || 0;
-		var allowed = false;
-		for ( var j = 0; j < list.length; j++ ) {
-			if ( parseInt( list[ j ].id, 10 ) === saved ) {
-				allowed = true;
-				break;
-			}
-		}
-		if ( allowed ) {
-			picker.value = String( saved );
-		}
-
-		picker.addEventListener( 'change', function () {
-			choose( picker.value );
-		} );
-
-		return allowed ? saved : 0;
 	}
 
 	function setCollapsed( collapsed ) {
@@ -480,13 +486,22 @@
 		setCollapsed( ! panel.classList.contains( 'is-collapsed' ) );
 	} );
 
-	var initial = buildPicker();
-	setCollapsed( '0' === recall( STORE_OPEN ) );
-	panel.hidden = false;
+	document.addEventListener( 'tbt-notes:class-change', function ( e ) {
+		var detail = e.detail || {};
+		var id = parseInt( detail.id, 10 ) || 0;
+		// Same class, new name: relabel and leave the roster alone. Renaming a
+		// class mid-lesson is not a change of subject, and running it through
+		// choose() would wipe the completions already on screen.
+		if ( id && id === classId ) {
+			classNameEl.textContent = detail.title || '';
+			return;
+		}
+		choose( id, detail.title );
+	} );
 
-	if ( initial ) {
-		choose( initial );
-	} else {
-		render();
-	}
+	// Collapsed unless the teacher last left it open. The panel itself stays
+	// hidden until Notes says a class is open, so nothing appears on a page
+	// where there is nothing to watch.
+	setCollapsed( '1' !== recall( STORE_OPEN ) );
+	render();
 } )();
