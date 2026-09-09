@@ -69,6 +69,12 @@
 	var interval = BASE_INTERVAL;
 	var inFlight = false;
 
+	/* The counts the bubble was last drawn with. Kept because the head's
+	   accessible name depends on both them and whether the panel is collapsed,
+	   and the two change independently. */
+	var bubbleFinished = 0;
+	var bubbleTotal = 0;
+
 	/* --------------------------------------------------------------- Utils */
 
 	function el( tag, cls, text ) {
@@ -306,13 +312,29 @@
 	   is the whole trick — a dash as long as the finished arc followed by a gap
 	   as long as the circle leaves exactly that arc painted. */
 	function setBubble( finished, total ) {
+		bubbleFinished = finished;
+		bubbleTotal = total;
+
 		var fraction = total > 0 ? finished / total : 0;
 		bubbleEl.textContent = total > 0 ? finished + '/' + total : '';
 		ringEl.setAttribute(
 			'stroke-dasharray',
 			( fraction * RING_CIRCUMFERENCE ).toFixed( 2 ) + ' ' + RING_CIRCUMFERENCE.toFixed( 2 )
 		);
-		head.setAttribute( 'aria-label', fmt( i18n.ringLabel, [ finished, total ] ) );
+		syncHeadLabel();
+	}
+
+	/* Collapsed, the ring is all there is to read, so the button is named from
+	   the counts. Expanded, its own text — the eyebrow, the class name and the
+	   count — is a better name than anything written here, so the attribute is
+	   removed rather than left to override it. setCollapsed decides which of
+	   the two applies; this only rebuilds the name that follows from it. */
+	function syncHeadLabel() {
+		if ( panel.classList.contains( 'is-collapsed' ) ) {
+			head.setAttribute( 'aria-label', fmt( i18n.ringLabel, [ bubbleFinished, bubbleTotal ] ) );
+			return;
+		}
+		head.removeAttribute( 'aria-label' );
 	}
 
 	function studentRow( student, state ) {
@@ -479,6 +501,7 @@
 	function setCollapsed( collapsed ) {
 		panel.classList.toggle( 'is-collapsed', collapsed );
 		head.setAttribute( 'aria-expanded', String( ! collapsed ) );
+		syncHeadLabel();
 		remember( STORE_OPEN, collapsed ? '0' : '1' );
 	}
 
