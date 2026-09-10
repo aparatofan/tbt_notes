@@ -22,6 +22,16 @@ if ( ! defined( 'ABSPATH' ) ) {
 class TBT_Notes_Sanitizer {
 
 	/**
+	 * Maximum accepted lesson body, in bytes, before sanitisation.
+	 *
+	 * The largest genuine note in production is under 12 KB. This ceiling exists
+	 * only to stop a pasted base64 image reaching wp_kses, whose regex passes
+	 * return NULL once pcre.backtrack_limit is exceeded — silently collapsing the
+	 * body to an empty string and reporting success.
+	 */
+	const MAX_BODY_BYTES = 524288; // 512 KB.
+
+	/**
 	 * CSS classes allowed to remain on body elements. These back the five
 	 * semantic highlight categories required by the spec; nothing else is
 	 * permitted.
@@ -108,6 +118,34 @@ class TBT_Notes_Sanitizer {
 		// REST params are not slashed by WordPress, so we must not unslash here
 		// (doing so would strip backslashes the teacher actually typed).
 		return sanitize_text_field( (string) $text );
+	}
+
+	/**
+	 * Why a raw body must be rejected outright, or '' if it is acceptable.
+	 *
+	 * Checked before sanitisation, on the raw request value. Returns one of:
+	 * 'embedded_image' — carries a data: URI image (clipboard paste, not an upload)
+	 * 'too_large'      — exceeds MAX_BODY_BYTES
+	 * ''               — acceptable
+	 *
+	 * @param string $raw Raw body as received from the request.
+	 * @return string
+	 */
+	public static function body_rejection_reason( $raw ) {
+		$raw = (string) $raw;
+
+		// Order matters: the embedded-image message is the actionable one, and a
+		// pasted screenshot is also always oversized.
+		if ( false !== stripos( $raw, 'data:image' ) ) {
+			return 'embedded_image';
+		}
+
+		// A byte limit, deliberately: it protects a byte-oriented regex engine.
+		if ( strlen( $raw ) > self::MAX_BODY_BYTES ) {
+			return 'too_large';
+		}
+
+		return '';
 	}
 
 	/**

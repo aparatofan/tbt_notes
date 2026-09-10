@@ -3,7 +3,7 @@ Contributors: thebluetree
 Requires at least: 6.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 1.9.3
+Stable tag: 1.9.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -48,6 +48,18 @@ No. Each student is assigned to at most one class (v1 design).
 No. The editor autosaves as the teacher types.
 
 == Changelog ==
+
+= 1.9.4 =
+* A note can no longer be emptied by a save that goes wrong. The server now
+  refuses to write a body that sanitisation collapsed to nothing, and refuses to
+  replace a saved note with an empty one unless the teacher genuinely cleared the
+  editor. Both cases leave the stored note untouched.
+* Pasting a screenshot straight into a note is rejected with a message asking for
+  the toolbar image button instead, rather than silently discarding the note. A
+  note that is far larger than any real one is rejected the same way.
+* The save indicator gains a "Not saved" state. A rejection the browser cannot
+  fix by retrying now stops and shows the reason, instead of retrying forever
+  behind a "Saving…" label.
 
 = 1.6.2 =
 * An armed highlight colour now survives Enter: pressing Enter with a colour

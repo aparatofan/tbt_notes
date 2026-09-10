@@ -2332,6 +2332,11 @@ body.tbt-notes-open {
 	color: var(--tbtn-danger);
 }
 
+.tbt-notes-saveind.is-blocked {
+	color: var(--tbtn-danger);
+	font-weight: 600;
+}
+
 /* ------------------------------------------------------------- Highlights */
 
 .tbt-notes-app .tbt-hl-blue,

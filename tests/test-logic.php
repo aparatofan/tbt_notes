@@ -559,6 +559,32 @@ function test_body() {
 }
 test_body();
 
+echo "Body rejection (the note-loss guards):\n";
+function test_body_rejection() {
+	$r = 'TBT_Notes_Sanitizer';
+
+	ok( $r::body_rejection_reason( '<p>A normal lesson note.</p>' ) === '', 'plain HTML body is accepted' );
+	ok( $r::body_rejection_reason( '' ) === '', 'empty body is accepted' );
+
+	// A clipboard paste arrives as an inline data: URI, never as an upload.
+	$pasted = '<p>x</p><img src="data:image/png;base64,iVBORw0KGgo=">';
+	ok( $r::body_rejection_reason( $pasted ) === 'embedded_image', 'a data: image body is rejected' );
+	ok(
+		$r::body_rejection_reason( '<img src="Data:Image/PNG;base64,AAAA">' ) === 'embedded_image',
+		'the data:image check is case-insensitive'
+	);
+
+	// The ceiling is a byte limit and it is inclusive.
+	$at_limit = str_repeat( 'a', TBT_Notes_Sanitizer::MAX_BODY_BYTES );
+	ok( $r::body_rejection_reason( $at_limit ) === '', 'a body of exactly MAX_BODY_BYTES is accepted' );
+	ok( $r::body_rejection_reason( $at_limit . 'a' ) === 'too_large', 'one byte over MAX_BODY_BYTES is rejected' );
+
+	// Order precedence: a pasted screenshot is both, and the actionable message wins.
+	$both = '<img src="data:image/png;base64,' . str_repeat( 'A', TBT_Notes_Sanitizer::MAX_BODY_BYTES ) . '">';
+	ok( $r::body_rejection_reason( $both ) === 'embedded_image', 'embedded_image outranks too_large' );
+}
+test_body_rejection();
+
 echo "Visibility rule (the security model):\n";
 function test_visibility() {
 	$teacher_id = 10;
