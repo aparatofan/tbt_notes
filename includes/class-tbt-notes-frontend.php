@@ -584,6 +584,7 @@ class TBT_Notes_Frontend {
 			'saving'            => __( 'Saving…', 'tbt-notes' ),
 			'saved'             => __( 'All changes saved', 'tbt-notes' ),
 			'saveError'         => __( 'Save failed — retrying…', 'tbt-notes' ),
+			'saveBlocked'       => __( 'Not saved', 'tbt-notes' ),
 			'genericError'      => __( 'Something went wrong. Please try again.', 'tbt-notes' ),
 			'selectClass'       => __( 'Select a class', 'tbt-notes' ),
 			'manageClass'       => __( 'Class settings', 'tbt-notes' ),

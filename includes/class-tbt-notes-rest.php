@@ -426,6 +426,34 @@ class TBT_Notes_REST {
 		return $this->guard_lesson_ownership( $lesson );
 	}
 
+	/**
+	 * Convert a body rejection reason into a WP_Error, or null if acceptable.
+	 *
+	 * @param string $raw Raw body from the request.
+	 * @return WP_Error|null
+	 */
+	private function guard_body_payload( $raw ) {
+		$reason = TBT_Notes_Sanitizer::body_rejection_reason( $raw );
+
+		if ( 'embedded_image' === $reason ) {
+			return new WP_Error(
+				'tbt_notes_embedded_image',
+				__( 'This note contains a pasted image. Nothing was saved. Remove the pasted image, then add it again with the image button in the toolbar.', 'tbt-notes' ),
+				array( 'status' => 422 )
+			);
+		}
+
+		if ( 'too_large' === $reason ) {
+			return new WP_Error(
+				'tbt_notes_body_too_large',
+				__( 'This note is too large to save. Nothing was saved.', 'tbt-notes' ),
+				array( 'status' => 413 )
+			);
+		}
+
+		return null;
+	}
+
 	/* --------------------------------------------------------------------- *
 	 * Handlers — reads
 	 * --------------------------------------------------------------------- */
@@ -884,8 +912,15 @@ class TBT_Notes_REST {
 			return $denied;
 		}
 
+		// A new lesson may legitimately start empty, so only the payload guard
+		// applies here — the collapse and empty-overwrite checks are update-only.
+		$raw           = (string) $request->get_param( 'body' );
+		$payload_error = $this->guard_body_payload( $raw );
+		if ( $payload_error ) {
+			return $payload_error;
+		}
 		$header = TBT_Notes_Sanitizer::text( (string) $request->get_param( 'header' ) );
-		$body   = TBT_Notes_Sanitizer::body( (string) $request->get_param( 'body' ) );
+		$body   = TBT_Notes_Sanitizer::body( $raw );
 
 		// No header supplied (the "New lesson" flow) → auto-number it: the highest
 		// leading integer among this class's existing headers, plus one, followed by
@@ -986,7 +1021,44 @@ class TBT_Notes_REST {
 			$fields['header'] = TBT_Notes_Sanitizer::text( (string) $request->get_param( 'header' ) );
 		}
 		if ( null !== $request->get_param( 'body' ) ) {
-			$fields['body'] = TBT_Notes_Sanitizer::body( (string) $request->get_param( 'body' ) );
+			$raw = (string) $request->get_param( 'body' );
+
+			// 1. Payload guards: oversized or carrying an embedded data: image.
+			$payload_error = $this->guard_body_payload( $raw );
+			if ( $payload_error ) {
+				return $payload_error;
+			}
+
+			$incoming          = TBT_Notes_Sanitizer::body( $raw );
+			$raw_has_text      = ( '' !== trim( wp_strip_all_tags( $raw ) ) );
+			$incoming_is_empty = ( '' === trim( $incoming ) );
+			$stored_is_empty   = ( '' === trim( (string) $lesson['body'] ) );
+
+			// 2. Sanitiser collapse: the teacher sent real text, and sanitisation returned
+			//    nothing. Never legitimate — refuse rather than reporting success over an
+			//    emptied note. Markup that legitimately sanitises away (an external image
+			//    with no text, Quill's empty <p><br></p>) carries no text and falls through
+			//    to check 3, which stops cleanly instead of retrying.
+			if ( $incoming_is_empty && $raw_has_text ) {
+				return new WP_Error(
+					'tbt_notes_sanitize_collapse',
+					__( 'This note could not be processed safely, so nothing was saved. Your note is unchanged on the server.', 'tbt-notes' ),
+					array( 'status' => 500 )
+				);
+			}
+
+			// 3. Destructive overwrite: an empty body would replace a non-empty note.
+			//    Legitimate only when the teacher actually cleared the editor, which
+			//    the client signals with allow_empty.
+			if ( $incoming_is_empty && ! $stored_is_empty && ! $request->get_param( 'allow_empty' ) ) {
+				return new WP_Error(
+					'tbt_notes_refused_empty',
+					__( 'Refused to replace this lesson with an empty one. Nothing was saved. Reload the page to see the saved version.', 'tbt-notes' ),
+					array( 'status' => 409 )
+				);
+			}
+
+			$fields['body'] = $incoming;
 		}
 
 		$ok = TBT_Notes_DB::update_lesson( $lesson_id, $fields );

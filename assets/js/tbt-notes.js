@@ -4475,7 +4475,16 @@
 			}
 			var html = quill.getSemanticHTML();
 			lesson.body = html;
-			saver.queue( { body: html } );
+
+			// A user-driven change that leaves the editor empty is a real clear, not a
+			// failed load — tell the server so its empty-overwrite guard stands aside.
+			// getText() does not include embeds, so an image-only note must not count
+			// as empty.
+			var payload = { body: html };
+			if ( '' === quill.getText().trim() && ! quill.root.querySelector( 'img' ) ) {
+				payload.allow_empty = true;
+			}
+			saver.queue( payload );
 
 			// Typing "/ai" opens the AI Quick Note panel (and removes the trigger).
 			if ( ai ) {
@@ -4663,7 +4672,13 @@
 			// deleteText('user') fires text-change (body + autosave); belt-and-braces.
 			var html = quill.getSemanticHTML();
 			lesson.body = html;
-			saver.queue( { body: html } );
+			// Deleting the last image can empty the note outright — same signal as the
+			// text-change path, or the server refuses the write.
+			var payload = { body: html };
+			if ( '' === quill.getText().trim() && ! quill.root.querySelector( 'img' ) ) {
+				payload.allow_empty = true;
+			}
+			saver.queue( payload );
 		} );
 
 		replaceBtn.addEventListener( 'click', function () {
@@ -5455,6 +5470,7 @@
 		var inFlight = false;
 		var timer = null;
 		var retry = 0;
+		var blockedMessage = '';
 
 		function setStatus( s ) {
 			indicator.className = 'tbt-notes-saveind';
@@ -5467,6 +5483,9 @@
 			} else if ( s === 'error' ) {
 				indicator.classList.add( 'is-error' );
 				indicator.textContent = t( 'saveError', 'Save failed — retrying…' );
+			} else if ( s === 'blocked' ) {
+				indicator.classList.add( 'is-blocked' );
+				indicator.textContent = blockedMessage || t( 'saveBlocked', 'Not saved' );
 			}
 		}
 
@@ -5495,13 +5514,27 @@
 				} else {
 					setStatus( 'saved' );
 				}
-			} ).catch( function () {
+			} ).catch( function ( err ) {
+				inFlight = false;
+
+				var status = err && err.status;
+
+				// 4xx is a permanent rejection: the same payload will never be accepted.
+				// Do not requeue and do not retry — surface the reason instead, and leave
+				// the editor content alone so the teacher can fix it.
+				if ( status >= 400 && status < 500 ) {
+					blockedMessage = ( err && err.message ) || '';
+					clearTimeout( timer );
+					setStatus( 'blocked' );
+					return;
+				}
+
+				// 5xx / network: transient. Requeue and back off as before.
 				for ( var k in fields ) {
 					if ( Object.prototype.hasOwnProperty.call( fields, k ) && ! ( k in dirty ) ) {
 						dirty[ k ] = fields[ k ];
 					}
 				}
-				inFlight = false;
 				retry++;
 				setStatus( 'error' );
 				var backoff = Math.min( 1000 * Math.pow( 2, retry ), 15000 );
@@ -5511,6 +5544,7 @@
 		}
 
 		function schedule( delay ) {
+			blockedMessage = '';
 			clearTimeout( timer );
 			setStatus( 'saving' );
 			timer = setTimeout( run, delay == null ? 700 : delay );
