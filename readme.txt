@@ -3,7 +3,7 @@ Contributors: thebluetree
 Requires at least: 6.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 1.9.5
+Stable tag: 1.10.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -48,6 +48,14 @@ No. Each student is assigned to at most one class (v1 design).
 No. The editor autosaves as the teacher types.
 
 == Changelog ==
+
+= 1.10.0 =
+* The class list (page mode) gets the same one-row header as the other TBT
+  tools: Your classes, a search box and Create new class. Search now finds a
+  class by any of its students as well as by its name, ignores Polish accents,
+  and shows which student matched. Escape or the × clears it, / jumps to it,
+  and the search stays in place when you open a class and come back. Overlay
+  mode is unchanged.
 
 = 1.9.5 =
 * A highlight on bold, italic, underlined, struck-through or linked text now
