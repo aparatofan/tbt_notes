@@ -3,7 +3,7 @@ Contributors: thebluetree
 Requires at least: 6.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 1.10.0
+Stable tag: 1.10.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -48,6 +48,12 @@ No. Each student is assigned to at most one class (v1 design).
 No. The editor autosaves as the teacher types.
 
 == Changelog ==
+
+= 1.10.1 =
+* The class list header (page mode) takes the shared Admin Bar layout: a
+  thin line joins the title, search and button, the search and button have
+  fixed widths matching the other TBT tools, the button has no shadow, and
+  "Your classes" no longer renders in capitals.
 
 = 1.10.0 =
 * The class list (page mode) gets the same one-row header as the other TBT
