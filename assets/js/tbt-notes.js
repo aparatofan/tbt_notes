@@ -85,6 +85,9 @@
 		extrasOpenItem: '',
 		extrasOpenLesson: 0,
 		sidebarFolded: false,
+		// Page Mode class-list search term, kept for the session so a re-render
+		// (delete a class, open one and come back) returns to the same filtered list.
+		classFilter: '',
 		highlightFilter: 'full',
 		error: '',
 	};
@@ -191,6 +194,32 @@
 
 	function t( key, fallback ) {
 		return i18n[ key ] != null ? i18n[ key ] : ( fallback || '' );
+	}
+
+	/**
+	 * Case- and diacritic-insensitive text for search: "lukasz" finds "Łukasz".
+	 * ł is not a combining mark in Unicode, so it is mapped by hand first.
+	 * Same rule as TBT Swipe's library filter.
+	 *
+	 * @param {string} value Raw text.
+	 * @return {string} Folded text.
+	 */
+	function fold( value ) {
+		return String( value || '' ).replace( /[łŁ]/g, 'l' ).normalize( 'NFD' ).replace( /[\u0300-\u036f]/g, '' ).toLowerCase();
+	}
+
+	/**
+	 * Positional placeholders (%1$d, %2$s …) for translated strings.
+	 *
+	 * @param {string} template Translated string.
+	 * @param {Array}  values   Replacements, in order.
+	 * @return {string}
+	 */
+	function fmt( template, values ) {
+		return String( template || '' ).replace( /%(\d+)\$[ds]/g, function ( m, n ) {
+			var v = values[ parseInt( n, 10 ) - 1 ];
+			return v == null ? '' : String( v );
+		} );
 	}
 
 	function fmtDate( s ) {
@@ -984,11 +1013,16 @@
 	/* ------------------------------------------------------------- Teacher root */
 
 	function renderTeacherRoot() {
-		// In page mode the "CLASSES" banner (logo / title) is provided by the
-		// surrounding page (e.g. Divi), so we omit the branded in-app header here.
-		if ( ! isPageMode ) {
-			content.appendChild( buildTopbar( { title: t( 'headerClasses', 'CLASSES' ) } ) );
+		// Page Mode's class list is the shared TBT library toolbar; overlay mode
+		// keeps the header it has always had. The two are deliberately separate.
+		if ( isPageMode ) {
+			renderTeacherRootPage();
+			return;
 		}
+
+		// The "CLASSES" banner (logo / title) lives in the branded top bar here;
+		// in page mode the surrounding page (e.g. Divi) provides it instead.
+		content.appendChild( buildTopbar( { title: t( 'headerClasses', 'CLASSES' ) } ) );
 		var body = el( 'div', 'tbt-notes-body tbt-notes-body--classes' );
 
 		// A small "New class" action sits near the page header (the big "CLASSES"
@@ -1042,6 +1076,208 @@
 		} );
 		renderGrid( '' );
 
+		content.appendChild( body );
+	}
+
+	/**
+	 * The 18px search glyph for the library toolbar. Drawn here rather than via
+	 * icon() because that helper fixes every icon at 20px with stroke-width 2 and
+	 * takes paths only; this one is 18px, stroke-width 2.2, and keeps its circle
+	 * as a circle.
+	 *
+	 * @return {SVGElement}
+	 */
+	function searchIcon() {
+		var svg = document.createElementNS( SVG_NS, 'svg' );
+		svg.setAttribute( 'class', 'tbt-notes-libbar__icon' );
+		svg.setAttribute( 'width', '18' );
+		svg.setAttribute( 'height', '18' );
+		svg.setAttribute( 'viewBox', '0 0 24 24' );
+		svg.setAttribute( 'fill', 'none' );
+		svg.setAttribute( 'aria-hidden', 'true' );
+		svg.setAttribute( 'focusable', 'false' );
+
+		var circle = document.createElementNS( SVG_NS, 'circle' );
+		circle.setAttribute( 'cx', '11' );
+		circle.setAttribute( 'cy', '11' );
+		circle.setAttribute( 'r', '7' );
+		circle.setAttribute( 'stroke', 'currentColor' );
+		circle.setAttribute( 'stroke-width', '2.2' );
+		svg.appendChild( circle );
+
+		var path = document.createElementNS( SVG_NS, 'path' );
+		path.setAttribute( 'd', 'm20 20-3.6-3.6' );
+		path.setAttribute( 'stroke', 'currentColor' );
+		path.setAttribute( 'stroke-width', '2.2' );
+		path.setAttribute( 'stroke-linecap', 'round' );
+		svg.appendChild( path );
+
+		return svg;
+	}
+
+	/**
+	 * Page Mode class list: the shared TBT library toolbar — "Your classes", a
+	 * search box and the Create new class pill on one row — above the card grid.
+	 *
+	 * The search matches a class by its own title or by the name of any student
+	 * in it, ignoring case and accents, and a card found only by a student says
+	 * which one. The term lives in state, so deleting a class or opening one and
+	 * coming back returns to the same filtered list; a reload clears it.
+	 */
+	function renderTeacherRootPage() {
+		var body = el( 'div', 'tbt-notes-body tbt-notes-body--classes' );
+		var hasClasses = !! state.classes.length;
+
+		var bar = el( 'div', 'tbt-notes-libbar' + ( hasClasses ? '' : ' is-empty' ) );
+
+		// Title, and — with nothing to search — a rule that carries the eye across
+		// to the one action worth taking.
+		var titleWrap = el( 'div', 'tbt-notes-libbar__title' );
+		titleWrap.appendChild( el( 'h2', 'tbt-notes-libbar__heading', t( 'yourClasses', 'Your classes' ) ) );
+		var rule = el( 'span', 'tbt-notes-libbar__rule' );
+		rule.setAttribute( 'aria-hidden', 'true' );
+		rule.hidden = hasClasses;
+		titleWrap.appendChild( rule );
+		bar.appendChild( titleWrap );
+
+		var filter = el( 'div', 'tbt-notes-libbar__filter' );
+		filter.setAttribute( 'role', 'search' );
+		filter.hidden = ! hasClasses;
+
+		var searchWrap = el( 'div', 'tbt-notes-libbar__search' );
+
+		var input = el( 'input', 'tbt-notes-libbar__input' );
+		input.type = 'text';
+		input.id = 'tbt-notes-classfilter';
+		input.placeholder = t( 'searchByClass', 'Search by class or student' );
+		input.setAttribute( 'autocomplete', 'off' );
+		input.setAttribute( 'spellcheck', 'false' );
+		input.value = state.classFilter;
+
+		var label = el( 'label', 'tbt-notes-sr-only', t( 'searchYourClasses', 'Search your classes' ) );
+		label.setAttribute( 'for', input.id );
+
+		var clearBtn = el( 'button', 'tbt-notes-libbar__clear', '\u00d7' );
+		clearBtn.type = 'button';
+		clearBtn.setAttribute( 'aria-label', t( 'clearSearch', 'Clear search' ) );
+		clearBtn.hidden = true;
+
+		searchWrap.appendChild( label );
+		searchWrap.appendChild( searchIcon() );
+		searchWrap.appendChild( input );
+		searchWrap.appendChild( clearBtn );
+		filter.appendChild( searchWrap );
+		bar.appendChild( filter );
+
+		var cta = el(
+			'button',
+			'tbt-button tbt-button--primary tbt-button--large tbt-notes-libbar__cta',
+			t( 'createNewClass', 'Create new class' )
+		);
+		cta.type = 'button';
+		cta.addEventListener( 'click', createClassFlow );
+		bar.appendChild( cta );
+
+		body.appendChild( bar );
+
+		// "2 of 9 classes · Clear filters", only while a search is running.
+		var summary = el( 'p', 'tbt-notes-libbar__summary' );
+		summary.hidden = true;
+		summary.setAttribute( 'aria-live', 'polite' );
+		var summaryText = el( 'span' );
+		var summaryClear = el( 'button', 'tbt-notes-libbar__link', t( 'clearFilters', 'Clear filters' ) );
+		summaryClear.type = 'button';
+		summary.appendChild( summaryText );
+		summary.appendChild( summaryClear );
+		body.appendChild( summary );
+
+		var grid = el( 'div', 'tbt-notes-classes-grid' );
+		body.appendChild( grid );
+
+		if ( ! hasClasses ) {
+			body.appendChild( emptyBlock( t( 'noClassesTeacher', 'No classes yet.' ) ) );
+			content.appendChild( body );
+			return;
+		}
+
+		function clearFilter() {
+			input.value = '';
+			state.classFilter = '';
+			renderGrid();
+			input.focus();
+		}
+
+		function renderGrid() {
+			var q     = fold( state.classFilter.trim() );
+			var total = state.classes.length;
+			var shown = 0;
+
+			clear( grid );
+
+			state.classes.forEach( function ( cls ) {
+				var titleHit = fold( cls.title ).indexOf( q ) !== -1;
+				var who      = ( cls.students || [] ).filter( function ( student ) {
+					return fold( student.name ).indexOf( q ) !== -1;
+				} ).map( function ( student ) {
+					return student.name;
+				} );
+
+				if ( q && ! titleHit && ! who.length ) {
+					return;
+				}
+				shown++;
+
+				var card = classCard( cls );
+				// Found by a student rather than by its name: say who, or the match
+				// looks arbitrary.
+				if ( q && ! titleHit && who.length ) {
+					var cardBody = card.querySelector( '.tbt-notes-classcard__body' );
+					if ( cardBody ) {
+						cardBody.appendChild( el( 'div', 'tbt-notes-classcard__match', who.join( ', ' ) ) );
+					}
+				}
+				grid.appendChild( card );
+			} );
+
+			if ( ! shown ) {
+				var none = emptyBlock( t( 'noClassMatch', 'No classes match your search.' ) );
+				var link = el( 'button', 'tbt-notes-libbar__link', t( 'clearFilters', 'Clear filters' ) );
+				link.type = 'button';
+				link.addEventListener( 'click', clearFilter );
+				none.appendChild( link );
+				grid.appendChild( none );
+			}
+
+			summary.hidden = ! q;
+			if ( q ) {
+				summaryText.textContent = fmt( t( 'classesOf', '%1$d of %2$d %3$s' ), [
+					shown,
+					total,
+					total === 1 ? t( 'classOne', 'class' ) : t( 'classMany', 'classes' ),
+				] );
+			}
+			clearBtn.hidden = ! input.value;
+		}
+
+		input.addEventListener( 'input', function () {
+			state.classFilter = input.value;
+			renderGrid();
+		} );
+
+		// Escape clears a running search. An empty field passes it through: page
+		// mode registers no Escape handler of its own, and a modal above us must
+		// keep seeing it.
+		input.addEventListener( 'keydown', function ( e ) {
+			if ( 'Escape' === e.key && input.value ) {
+				e.preventDefault();
+				clearFilter();
+			}
+		} );
+
+		clearBtn.addEventListener( 'click', clearFilter );
+		summaryClear.addEventListener( 'click', clearFilter );
+
+		renderGrid();
 		content.appendChild( body );
 	}
 
@@ -5578,6 +5814,44 @@
 
 	/* ----------------------------------------------------------------- Events */
 
+	var classFilterShortcutBound = false;
+
+	/**
+	 * Page Mode: "/" jumps to the class-list search, as it does in the other TBT
+	 * tools. It stands aside for anything already taking typed input — a field,
+	 * Quill's contentEditable editor — and for an open modal, and does nothing
+	 * unless the class list is actually on screen.
+	 */
+	function bindClassFilterShortcut() {
+		if ( classFilterShortcutBound || ! isPageMode ) {
+			return;
+		}
+		classFilterShortcutBound = true;
+
+		document.addEventListener( 'keydown', function ( e ) {
+			if ( '/' !== e.key || e.ctrlKey || e.metaKey || e.altKey ) {
+				return;
+			}
+			if ( 'root' !== state.view ) {
+				return;
+			}
+			var active = document.activeElement;
+			if ( active && ( active.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test( active.tagName ) ) ) {
+				return;
+			}
+			if ( document.querySelector( '[aria-modal="true"]' ) ) {
+				return;
+			}
+			var input = document.getElementById( 'tbt-notes-classfilter' );
+			// offsetParent is null for a field that is hidden or not laid out.
+			if ( ! input || null === input.offsetParent ) {
+				return;
+			}
+			e.preventDefault();
+			input.focus();
+		} );
+	}
+
 	if ( isPageMode ) {
 		// The workspace is rendered inline and is always "open": mark it open and
 		// bootstrap immediately. No launcher, overlay, scroll-lock, Escape handler
@@ -5586,6 +5860,7 @@
 		panel.setAttribute( 'aria-hidden', 'false' );
 		// Bound before the first render so render() can hand it the new DOM.
 		pageSticky = initPageStickyHeader();
+		bindClassFilterShortcut();
 		bootstrap();
 	} else {
 		// The launcher is a plain link to the Page Mode workspace; let the browser
