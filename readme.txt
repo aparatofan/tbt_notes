@@ -3,7 +3,7 @@ Contributors: thebluetree
 Requires at least: 6.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 1.9.4
+Stable tag: 1.9.5
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -48,6 +48,12 @@ No. Each student is assigned to at most one class (v1 design).
 No. The editor autosaves as the teacher types.
 
 == Changelog ==
+
+= 1.9.5 =
+* A highlight on bold, italic, underlined, struck-through or linked text now
+  survives saving. The colour was being stripped from those words on every save,
+  so it vanished from the note after a reload, from the filtered views, and from
+  expression and pronunciation cards. Highlights already lost need re-applying.
 
 = 1.9.4 =
 * A note can no longer be emptied by a save that goes wrong. The server now

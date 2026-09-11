@@ -450,6 +450,17 @@ function test_allowlist() {
 
 	$img_classes = TBT_Notes_Sanitizer::allowed_image_classes();
 	ok( $img_classes === array( 'tbt-notes-image' ), 'one approved image class (tbt-notes-image)' );
+
+	// A Quill class attributor puts the highlight on whichever inline element
+	// already wraps the text, so every inline tag must be able to carry class or
+	// the highlight is stripped from formatted words on save.
+	foreach ( array( 'strong', 'b', 'em', 'i', 'u', 's', 'a' ) as $tag ) {
+		ok( isset( $allowed[ $tag ]['class'] ), '<' . $tag . '> allows class (highlights on formatted text)' );
+	}
+
+	// Allowing class must not have loosened anything else.
+	ok( ! isset( $allowed['strong']['style'] ), 'strong still does not allow inline style' );
+	ok( ! isset( $allowed['a']['style'] ), 'a still does not allow inline style' );
 }
 test_allowlist();
 
@@ -490,6 +501,23 @@ function test_classes() {
 	// An injected fake highlight value is not in the allowlist.
 	$out4 = call_normalize( '<span class="tbt-hl-evil">h</span>' );
 	ok( ! contains( $out4, 'tbt-hl-evil' ), 'drops fake highlight colour' );
+
+	// Highlights on formatted text land on the formatting element, not a span.
+	// normalize() applies the same class allowlist there.
+	$out_strong = call_normalize( '<strong class="tbt-hl-blue">decision</strong>' );
+	ok( contains( $out_strong, 'class="tbt-hl-blue"' ), 'keeps a highlight class on <strong>' );
+
+	$out_em = call_normalize( '<em class="tbt-hl-pink sneaky">x</em>' );
+	ok( contains( $out_em, 'tbt-hl-pink' ), 'keeps a highlight class on <em>' );
+	ok( ! contains( $out_em, 'sneaky' ), 'drops a non-approved class on <em>' );
+
+	$out_u = call_normalize( '<u class="totally-random">x</u>' );
+	ok( ! contains( $out_u, 'class=' ), 'removes the class attribute on <u> when nothing approved remains' );
+
+	$out_a = call_normalize( '<a href="https://e.com" class="tbt-hl-green">x</a>' );
+	ok( contains( $out_a, 'class="tbt-hl-green"' ), 'keeps a highlight class on <a>' );
+	ok( contains( $out_a, 'target="_blank"' ), 'a highlighted link still gets target=_blank' );
+	ok( contains( $out_a, 'rel="noopener noreferrer"' ), 'a highlighted link still gets rel=noopener noreferrer' );
 }
 test_classes();
 
@@ -556,6 +584,11 @@ function test_body() {
 
 	ok( TBT_Notes_Sanitizer::body( '' ) === '', 'empty body stays empty' );
 	ok( TBT_Notes_Sanitizer::body( '   ' ) === '', 'whitespace-only body becomes empty' );
+
+	// A highlight on bold text survives the whole pipeline, nbsp pass included.
+	$out_hl = TBT_Notes_Sanitizer::body( '<p><strong class="tbt-hl-yellow">a&nbsp;b</strong></p>' );
+	ok( contains( $out_hl, 'class="tbt-hl-yellow"' ), 'body() keeps a highlight class on <strong>' );
+	ok( contains( $out_hl, 'a b' ), 'body() still normalises &nbsp; inside a highlighted <strong>' );
 }
 test_body();
 
@@ -851,6 +884,10 @@ function test_pink_extraction() {
 	}
 
 	ok( array() === TBT_Notes_Pronunciation::extract_pink_highlights( '' ), 'empty html yields no items' );
+
+	// A highlight over italic text is carried by the <em>, not a <span>.
+	$italic = TBT_Notes_Pronunciation::extract_pink_highlights( '<p><em class="tbt-hl-pink">thorough</em></p>' );
+	ok( in_array( 'thorough', $italic, true ), 'extracts pink text highlighted on <em>' );
 }
 test_pink_extraction();
 
@@ -908,6 +945,10 @@ function test_blue_extraction() {
 	}
 
 	ok( array() === TBT_Notes_Expression_Cards::extract_blue_highlights( '' ), 'empty html yields no items' );
+
+	// A highlight over bold text is carried by the <strong>, not a <span>.
+	$bold = TBT_Notes_Expression_Cards::extract_blue_highlights( '<p><strong class="tbt-hl-blue">make a decision</strong></p>' );
+	ok( in_array( 'make a decision', $bold, true ), 'extracts blue text highlighted on <strong>' );
 }
 test_blue_extraction();
 
