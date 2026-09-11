@@ -625,8 +625,8 @@ body.tbt-notes-open {
 
 /* --------------------------------------------- Page mode: class list screen == */
 
-/* ------------------------------------ Page mode: library toolbar (1.10.0) == */
-/* Shared TBT pattern; geometry as Matching Game 0.8.0, colours from tbt-tokens. */
+/* --------------------------------------- Page mode: Admin Bar v2 (1.10.1) == */
+/* TBT pattern, as the other four tools; colours from tbt-tokens. */
 
 /* #tbt-notes-app is not inside .tbt-tool, so Hub's [hidden] guard does not
    reach it; Divi's display rules would otherwise beat the attribute. */
@@ -635,24 +635,36 @@ body.tbt-notes-open {
 	display: none !important;
 }
 
+/* One row joined by a thin line: title ─ search ─ button, 10px either side of
+   each item. Fixed widths (300 / 250) so the bar reads the same on every tool;
+   the line takes what is left. */
 .tbt-notes-app--page .tbt-notes-libbar {
 	display: flex;
 	flex-wrap: wrap;
-	gap: 16px;
+	gap: 10px;
 	align-items: center;
-	justify-content: space-between;
 	margin-bottom: 24px;
 }
 
+/* At least 234px, so the search always starts 244px in. */
 .tbt-notes-app--page .tbt-notes-libbar__title {
 	display: flex;
-	gap: 16px;
+	gap: 10px;
 	align-items: center;
 	flex: 0 0 auto;
+	min-width: 234px;
 }
 
+.tbt-notes-app--page .tbt-notes-libbar__line {
+	flex: 1 1 0;
+	min-width: 0;
+	height: 1px;
+	background: var(--tbt-border);
+}
+
+/* No classes: the title's line runs to the button on its own. */
 .tbt-notes-app--page .tbt-notes-libbar.is-empty .tbt-notes-libbar__title {
-	flex: 1 1 260px;
+	flex: 1 1 auto;
 }
 
 .tbt-notes-app--page .tbt-notes-libbar__heading {
@@ -667,23 +679,25 @@ body.tbt-notes-open {
 	white-space: nowrap;
 }
 
-.tbt-notes-app--page .tbt-notes-libbar__rule {
-	flex: 1;
-	height: 2px;
-	background: var(--tbt-border);
+/* Divi uppercases headings site-wide; the Admin Bar title is sentence case.
+   Anchored on the app's ID for the same reason the settings heading is: the
+   theme's ID-scoped heading selectors would otherwise win. */
+#tbt-notes-app.tbt-notes-app--page .tbt-notes-libbar__heading {
+	text-transform: none;
 }
 
+/* No dropdown here: the filter group keeps its size and the end line grows. */
 .tbt-notes-app--page .tbt-notes-libbar__filter {
 	display: flex;
-	gap: 12px;
+	gap: 10px;
 	align-items: center;
-	flex: 1 1 480px;
+	flex: 0 0 auto;
 	min-width: 0;
 }
 
 .tbt-notes-app--page .tbt-notes-libbar__search {
 	position: relative;
-	flex: 1 1 320px;
+	flex: 0 0 300px;
 	min-width: 0;
 }
 
@@ -758,10 +772,27 @@ body.tbt-notes-open {
 	outline: none;
 }
 
-/* Hub's large primary pill; 16px to match the other tools' toolbar CTA. */
-.tbt-notes-app--page .tbt-notes-libbar__cta {
-	flex: 0 0 auto;
+/* The Admin Bar button: fixed 250 × 53 so the bar is identical on every tool;
+   16/600 to match the other tools; no shadow at rest, hover or press (the
+   board's rule). Overrides .tbt-button--large's height and padding. The focus
+   ring stays: :focus-visible comes last. */
+#tbt-notes-app.tbt-notes-app--page .tbt-notes-libbar__cta {
+	flex: 0 0 250px;
+	width: 250px;
+	min-height: 53px;
+	padding: 0 16px;
 	font-size: 16px;
+	font-weight: 600;
+}
+
+#tbt-notes-app.tbt-notes-app--page .tbt-notes-libbar__cta,
+#tbt-notes-app.tbt-notes-app--page .tbt-notes-libbar__cta:hover,
+#tbt-notes-app.tbt-notes-app--page .tbt-notes-libbar__cta:active {
+	box-shadow: none;
+}
+
+#tbt-notes-app.tbt-notes-app--page .tbt-notes-libbar__cta:focus-visible {
+	box-shadow: var(--tbt-focus-ring);
 }
 
 .tbt-notes-app--page .tbt-notes-libbar__summary {
@@ -811,10 +842,25 @@ body.tbt-notes-open {
 	border: 0;
 }
 
-@media (max-width: 900px) {
+/* Too narrow for the joined row: title and button share line one, the search
+   takes line two, and the line steps aside. */
+@media (max-width: 1100px) {
+	.tbt-notes-app--page .tbt-notes-libbar__line {
+		display: none;
+	}
+
+	.tbt-notes-app--page .tbt-notes-libbar__title {
+		flex: 1 1 auto;
+		min-width: 0;
+	}
+
 	.tbt-notes-app--page .tbt-notes-libbar__filter {
 		order: 3;
 		flex-basis: 100%;
+	}
+
+	.tbt-notes-app--page .tbt-notes-libbar__search {
+		flex: 1 1 auto;
 	}
 }
 

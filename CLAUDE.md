@@ -75,6 +75,7 @@ Many behaviors depend on real WordPress, Divi, print dialogs, permissions, or th
 
 ## Git and deployment
 
+- Never merge a PR, never push to `main`, and never run the deploy workflow. Releasing to the live site is Mariusz's decision. Stop at an open PR and report.
 - Do not commit directly to `main`; use a focused feature branch unless explicitly instructed otherwise.
 - Inspect the final diff before finishing.
 - This repository's FTPS deployment workflow is **manual** (`workflow_dispatch`); merging to `main` does not itself deploy Notes.

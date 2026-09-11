@@ -1130,14 +1130,13 @@
 
 		var bar = el( 'div', 'tbt-notes-libbar' + ( hasClasses ? '' : ' is-empty' ) );
 
-		// Title, and — with nothing to search — a rule that carries the eye across
-		// to the one action worth taking.
+		// Title, then a line carrying the eye to whatever comes next — the search,
+		// or, with no classes to search, the one action worth taking.
 		var titleWrap = el( 'div', 'tbt-notes-libbar__title' );
 		titleWrap.appendChild( el( 'h2', 'tbt-notes-libbar__heading', t( 'yourClasses', 'Your classes' ) ) );
-		var rule = el( 'span', 'tbt-notes-libbar__rule' );
-		rule.setAttribute( 'aria-hidden', 'true' );
-		rule.hidden = hasClasses;
-		titleWrap.appendChild( rule );
+		var line = el( 'span', 'tbt-notes-libbar__line' );
+		line.setAttribute( 'aria-hidden', 'true' );
+		titleWrap.appendChild( line );
 		bar.appendChild( titleWrap );
 
 		var filter = el( 'div', 'tbt-notes-libbar__filter' );
@@ -1168,6 +1167,14 @@
 		searchWrap.appendChild( clearBtn );
 		filter.appendChild( searchWrap );
 		bar.appendChild( filter );
+
+		// The run of line from the search to the button; without a search there is
+		// nothing for it to start from, so the title's line covers the gap alone.
+		if ( hasClasses ) {
+			var endLine = el( 'span', 'tbt-notes-libbar__line tbt-notes-libbar__line--end' );
+			endLine.setAttribute( 'aria-hidden', 'true' );
+			bar.appendChild( endLine );
+		}
 
 		var cta = el(
 			'button',
