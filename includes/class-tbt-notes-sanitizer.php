@@ -66,23 +66,42 @@ class TBT_Notes_Sanitizer {
 	 * exactly what the editor toolbar can produce. No `style` attribute, so
 	 * highlights must be class-based and cannot smuggle arbitrary CSS.
 	 *
+	 * The highlight is a Quill class attributor, so it lands on whichever inline
+	 * element already carries the text — <span> for plain text,
+	 * <strong>/<em>/<u>/<s>/<a> for formatted text. Those tags allow `class` for
+	 * that reason only; normalize() then drops every class that is not one of
+	 * allowed_classes().
+	 *
 	 * @return array
 	 */
 	public static function allowed_html() {
 		return array(
 			'p'          => array(),
 			'br'         => array(),
-			'strong'     => array(),
-			'b'          => array(),
-			'em'         => array(),
-			'i'          => array(),
-			'u'          => array(),
-			's'          => array(),
+			'strong'     => array(
+				'class' => true,
+			),
+			'b'          => array(
+				'class' => true,
+			),
+			'em'         => array(
+				'class' => true,
+			),
+			'i'          => array(
+				'class' => true,
+			),
+			'u'          => array(
+				'class' => true,
+			),
+			's'          => array(
+				'class' => true,
+			),
 			'a'          => array(
 				'href'   => true,
 				'target' => true,
 				'rel'    => true,
 				'title'  => true,
+				'class'  => true,
 			),
 			'ul'         => array(),
 			'ol'         => array(),
@@ -305,6 +324,9 @@ class TBT_Notes_Sanitizer {
 
 	/**
 	 * Regex-based normalisation used only when DOMDocument is unavailable.
+	 *
+	 * Unlike normalize(), this pass does not restrict classes: it only forces safe
+	 * link attributes.
 	 *
 	 * @param string $html kses-filtered HTML.
 	 * @return string
