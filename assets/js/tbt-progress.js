@@ -257,7 +257,12 @@
 
 			var record = {
 				title: row.object_title || '',
-				name: row.student_name || ''
+				name: row.student_name || '',
+				// Null for Swipe and Matching Game, which have no score to
+				// give. Kept apart from a zero: 0 of 10 is a real result and
+				// must still show.
+				score: null === row.score || undefined === row.score ? null : parseInt( row.score, 10 ),
+				scoreMax: null === row.score_max || undefined === row.score_max ? null : parseInt( row.score_max, 10 )
 			};
 			done[ uid ] = record;
 
@@ -335,10 +340,18 @@
 
 		// `finished` counts students, not work, and is now the ring's numerator
 		// alone: the line and the bubble read the server's task count instead.
+		//
+		// Counted from `done` rather than from stateOf(). The two ask different
+		// questions: the pill says what she is doing right now, the ring says
+		// whether she has finished anything today. Deriving one from the other
+		// is what made a class with two completed tasks read "0 of 1 done" —
+		// she was working again, so her earlier completion stopped being
+		// counted. Sorting still ranks by stateOf(), which is correct: a
+		// student who is working sorts as working.
 		var finished = 0;
 		for ( var i = 0; i < rows.length; i++ ) {
 			var state = stateOf( rows[ i ] );
-			if ( 'done' === state ) {
+			if ( Object.prototype.hasOwnProperty.call( done, rows[ i ].user_id ) ) {
 				finished++;
 			}
 			rosterEl.appendChild( studentRow( rows[ i ], state ) );
@@ -399,9 +412,25 @@
 		// second task erased the record of the first from the panel. Otherwise
 		// it is her level when there is one. A level is never invented: an
 		// absent one leaves the line out entirely rather than showing a dash.
+		//
+		// The tick is load-bearing, not decoration. Without it a working
+		// student with a finished task behind her reads as working *on* that
+		// task, which is the opposite of what the row is saying. It is applied
+		// in the done state too, where the pill already says Done: one rule
+		// that always holds beats two that depend on state.
+		//
+		// The score follows when the tool sent one. Drag & Drop reports a real
+		// score with every completion, so "done" on a ten-gap exercise can mean
+		// 2/10 as easily as 10/10. Null and 0 must not be conflated — a student
+		// who filled every gap and got none right scores 0 of 10, and that row
+		// has to read 0/10 rather than hide its score like a Swipe deck.
 		var record = done[ student.user_id ];
 		if ( record && record.title ) {
-			name.appendChild( el( 'span', 'tbtp-student__task', record.title ) );
+			var label = '✓ ' + record.title;
+			if ( null !== record.score && null !== record.scoreMax ) {
+				label += ' · ' + record.score + '/' + record.scoreMax;
+			}
+			name.appendChild( el( 'span', 'tbtp-student__task', label ) );
 		} else if ( student.level ) {
 			name.appendChild( el( 'span', 'tbtp-student__level', student.level ) );
 		}
