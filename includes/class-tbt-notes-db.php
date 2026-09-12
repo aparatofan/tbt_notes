@@ -1117,6 +1117,41 @@ class TBT_Notes_DB {
 	}
 
 	/**
+	 * How many completions a class has recorded today.
+	 *
+	 * Today means the site's local day, not UTC — a lesson at nine in the
+	 * evening in Warsaw is still that day's work. The activity table stores UTC,
+	 * so the local midnight is converted before it is compared.
+	 *
+	 * Counted here rather than tallied from a poll's rows: the poll is capped,
+	 * so a client adding up what it has seen would undercount a busy class.
+	 *
+	 * @param int $class_id Class ID.
+	 * @return int
+	 */
+	public static function count_activity_today( $class_id ) {
+		global $wpdb;
+
+		$class_id = (int) $class_id;
+		if ( $class_id <= 0 ) {
+			return 0;
+		}
+
+		$midnight = new DateTime( 'today midnight', wp_timezone() );
+		$midnight->setTimezone( new DateTimeZone( 'UTC' ) );
+
+		$table = self::table_activity();
+
+		return (int) $wpdb->get_var(
+			$wpdb->prepare(
+				"SELECT COUNT(*) FROM {$table} WHERE class_id = %d AND created_at >= %s",
+				$class_id,
+				$midnight->format( 'Y-m-d H:i:s' )
+			)
+		);
+	}
+
+	/**
 	 * The most recent activity ID for a class, or 0 when it has none.
 	 *
 	 * The polling response needs a cursor even when it returns no rows, or a

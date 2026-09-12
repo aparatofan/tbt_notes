@@ -21,8 +21,10 @@
  * remembered class. The announcement is a hint about what to watch, never a
  * grant of access: every request re-checks the class server-side.
  *
- * At rest the panel is a bubble: a ring around the completed fraction with the
- * count in the middle. Clicking it opens the full roster.
+ * At rest the panel is a bubble: the number of tasks the class has finished
+ * today, inside a ring showing how much of the class has finished something.
+ * The two measure different things on purpose — see setBubble(). Clicking it
+ * opens the full roster.
  */
 ( function () {
 	'use strict';
@@ -55,6 +57,11 @@
 	var BASE_INTERVAL = ( parseInt( cfg.pollSeconds, 10 ) || 10 ) * 1000;
 	var MAX_INTERVAL = 120000;
 
+	/* The site's UTC offset in milliseconds, or null when the page carried none.
+	   Localized values arrive as strings, so a site on UTC ("0") has to stay
+	   distinguishable from a missing one. */
+	var SITE_OFFSET = isNaN( parseInt( cfg.tzOffset, 10 ) ) ? null : parseInt( cfg.tzOffset, 10 ) * 1000;
+
 	/* State for the class currently on screen. `done` maps a student ID to the
 	   title of the last thing they finished today; `presence` is the set of
 	   students with a live heartbeat. */
@@ -65,15 +72,19 @@
 	var lastId = 0;
 	var seeded = false;
 
+	/* Tasks finished by this class today, counted by the server. Not derived
+	   from `done`, which holds one record per student and would read 1 for a
+	   student who finished four things. */
+	var completedToday = 0;
+
 	var timer = null;
 	var interval = BASE_INTERVAL;
 	var inFlight = false;
 
-	/* The counts the bubble was last drawn with. Kept because the head's
-	   accessible name depends on both them and whether the panel is collapsed,
+	/* The number the bubble was last drawn with. Kept because the head's
+	   accessible name depends on both it and whether the panel is collapsed,
 	   and the two change independently. */
-	var bubbleFinished = 0;
-	var bubbleTotal = 0;
+	var bubbleTasks = 0;
 
 	/* --------------------------------------------------------------- Utils */
 
@@ -114,11 +125,25 @@
 	}
 
 	/* Local midnight, expressed in UTC, which is how the activity table stores
-	   time. "Today" is the teacher's day, not the server's: a lesson at nine in
-	   the morning in Warsaw must not read as yesterday's work. */
+	   time. "Today" is the site's day, not the server's and not the laptop's: a
+	   lesson at nine in the morning in Warsaw must not read as yesterday's work,
+	   and the count beside this roster is taken from site-local midnight
+	   server-side, so a seed asking from the browser's own midnight would
+	   contradict it for a teacher working from another timezone. Without an
+	   offset to work from, the browser's midnight is the best guess left. */
 	function startOfTodayUtc() {
 		var d = new Date();
-		d.setHours( 0, 0, 0, 0 );
+
+		if ( null === SITE_OFFSET ) {
+			d.setHours( 0, 0, 0, 0 );
+		} else {
+			// Shifted into site time, midnight is taken with the UTC getters and
+			// shifted back, so the browser's own zone never enters the arithmetic.
+			d = new Date( d.getTime() + SITE_OFFSET );
+			d.setUTCHours( 0, 0, 0, 0 );
+			d = new Date( d.getTime() - SITE_OFFSET );
+		}
+
 		return d.toISOString().slice( 0, 19 ).replace( 'T', ' ' );
 	}
 
@@ -182,6 +207,7 @@
 				applyActivity( data.activity || [], false );
 				applyPresence( data.presence || [] );
 				lastId = parseInt( data.last_id, 10 ) || 0;
+				completedToday = parseInt( data.completed_today, 10 ) || 0;
 				seeded = true;
 				render();
 			}
@@ -204,6 +230,7 @@
 				}
 				applyActivity( data.activity || [], true );
 				applyPresence( data.presence || [] );
+				completedToday = parseInt( data.completed_today, 10 ) || 0;
 				var next = parseInt( data.last_id, 10 ) || 0;
 				if ( next > lastId ) {
 					lastId = next;
@@ -255,12 +282,24 @@
 		}
 	}
 
+	/* Presence is asked first, and the order is the whole point.
+
+	   `done` holds everyone who finished anything since midnight, so testing it
+	   first meant a student's first completion of the day froze her as done and
+	   every later heartbeat was discarded — she could play three more games and
+	   the panel would still be showing the first one.
+
+	   A heartbeat means the last sixty seconds. The server clears a student's
+	   presence the moment it records a completion, and the tools stop beating at
+	   the same time, so "finished and sitting still" has no heartbeat and still
+	   reads as done. A heartbeat after that means she has started something
+	   new, which is what the teacher needs to see. */
 	function stateOf( student ) {
-		if ( Object.prototype.hasOwnProperty.call( done, student.user_id ) ) {
-			return 'done';
-		}
 		if ( presence[ student.user_id ] ) {
 			return 'working';
+		}
+		if ( Object.prototype.hasOwnProperty.call( done, student.user_id ) ) {
+			return 'done';
 		}
 		return 'idle';
 	}
@@ -276,14 +315,14 @@
 		// say and no hint to offer — the roster simply empties.
 		if ( ! classId ) {
 			countEl.textContent = '';
-			setBubble( 0, 0 );
+			setBubble( 0, 0, 0 );
 			return;
 		}
 
 		if ( ! students.length ) {
 			rosterEl.appendChild( el( 'p', 'tbtp__empty', i18n.empty || '' ) );
 			countEl.textContent = '';
-			setBubble( 0, 0 );
+			setBubble( 0, 0, 0 );
 			return;
 		}
 
@@ -294,6 +333,8 @@
 			return ORDER[ stateOf( a ) ] - ORDER[ stateOf( b ) ];
 		} );
 
+		// `finished` counts students, not work, and is now the ring's numerator
+		// alone: the line and the bubble read the server's task count instead.
 		var finished = 0;
 		for ( var i = 0; i < rows.length; i++ ) {
 			var state = stateOf( rows[ i ] );
@@ -303,20 +344,29 @@
 			rosterEl.appendChild( studentRow( rows[ i ], state ) );
 		}
 
-		countEl.textContent = fmt( i18n.count, [ finished, rows.length ] );
-		setBubble( finished, rows.length );
+		countEl.textContent = fmt(
+			1 === completedToday ? i18n.countOne : i18n.count,
+			[ completedToday, finished, rows.length ]
+		);
+		setBubble( completedToday, finished, rows.length );
 	}
 
-	/* The collapsed face of the panel: the ring is the completed fraction and
-	   the middle is the same count the header carries when open. `stroke-dasharray`
-	   is the whole trick — a dash as long as the finished arc followed by a gap
-	   as long as the circle leaves exactly that arc painted. */
-	function setBubble( finished, total ) {
-		bubbleFinished = finished;
-		bubbleTotal = total;
+	/* The collapsed face of the panel. The number is work finished today; the
+	   ring is how much of the class has finished something.
+
+	   They are different measures on purpose. A task count has no denominator —
+	   nothing knows how many tasks were set — so it cannot drive a ring, and the
+	   class fraction is the only honest one available. In a 1:1 lesson that ring
+	   is empty or full and reads as a status dot, which is the right signal
+	   there.
+
+	   `stroke-dasharray` is the whole trick — a dash as long as the finished arc
+	   followed by a gap as long as the circle leaves exactly that arc painted. */
+	function setBubble( tasks, finished, total ) {
+		bubbleTasks = tasks;
 
 		var fraction = total > 0 ? finished / total : 0;
-		bubbleEl.textContent = total > 0 ? finished + '/' + total : '';
+		bubbleEl.textContent = tasks > 0 ? String( tasks ) : '';
 		ringEl.setAttribute(
 			'stroke-dasharray',
 			( fraction * RING_CIRCUMFERENCE ).toFixed( 2 ) + ' ' + RING_CIRCUMFERENCE.toFixed( 2 )
@@ -325,13 +375,13 @@
 	}
 
 	/* Collapsed, the ring is all there is to read, so the button is named from
-	   the counts. Expanded, its own text — the eyebrow, the class name and the
+	   the count. Expanded, its own text — the eyebrow, the class name and the
 	   count — is a better name than anything written here, so the attribute is
 	   removed rather than left to override it. setCollapsed decides which of
 	   the two applies; this only rebuilds the name that follows from it. */
 	function syncHeadLabel() {
 		if ( panel.classList.contains( 'is-collapsed' ) ) {
-			head.setAttribute( 'aria-label', fmt( i18n.ringLabel, [ bubbleFinished, bubbleTotal ] ) );
+			head.setAttribute( 'aria-label', fmt( i18n.ringLabel, [ bubbleTasks ] ) );
 			return;
 		}
 		head.removeAttribute( 'aria-label' );
@@ -344,11 +394,14 @@
 
 		var name = el( 'span', 'tbtp-student__name', student.display_name || '' );
 
-		// The sub-line is what they finished if they finished something, and
-		// otherwise their level when there is one. A level is never invented:
-		// an absent one leaves the line out entirely rather than showing a dash.
-		if ( 'done' === state && done[ student.user_id ] && done[ student.user_id ].title ) {
-			name.appendChild( el( 'span', 'tbtp-student__task', done[ student.user_id ].title ) );
+		// The sub-line is what she last finished, whether or not she has since
+		// started something else — tying it to the `done` state meant starting a
+		// second task erased the record of the first from the panel. Otherwise
+		// it is her level when there is one. A level is never invented: an
+		// absent one leaves the line out entirely rather than showing a dash.
+		var record = done[ student.user_id ];
+		if ( record && record.title ) {
+			name.appendChild( el( 'span', 'tbtp-student__task', record.title ) );
 		} else if ( student.level ) {
 			name.appendChild( el( 'span', 'tbtp-student__level', student.level ) );
 		}
@@ -478,6 +531,7 @@
 		students = [];
 		done = {};
 		presence = {};
+		completedToday = 0;
 		lastId = 0;
 		seeded = false;
 		interval = BASE_INTERVAL;
