@@ -241,11 +241,18 @@ class TBT_Notes_Activity_REST {
 		$last_id = $rows ? (int) $rows[0]['id'] : TBT_Notes_DB::get_latest_activity_id( $class_id );
 
 		$out = array(
-			'class_id'    => $class_id,
-			'activity'    => $rows,
-			'presence'    => self::presence_for_class( $class_id ),
-			'last_id'     => $last_id,
-			'server_time' => gmdate( 'Y-m-d H:i:s' ),
+			'class_id'        => $class_id,
+			'activity'        => $rows,
+			'presence'        => self::presence_for_class( $class_id ),
+			'last_id'         => $last_id,
+			'server_time'     => gmdate( 'Y-m-d H:i:s' ),
+			// Counted server-side rather than tallied from `activity`: the poll is
+			// capped at POLL_LIMIT rows, so a client adding up what it has seen
+			// would undercount a busy class and a panel opened mid-lesson would
+			// start from whatever one response happened to carry. It travels on
+			// every GET, not only the seeded one — a later poll returns no rows at
+			// all on a quiet minute and the count still has to be right.
+			'completed_today' => TBT_Notes_DB::count_activity_today( $class_id ),
 		);
 
 		// The roster is asked for explicitly rather than sent every time. A

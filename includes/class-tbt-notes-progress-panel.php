@@ -173,15 +173,27 @@ class TBT_Notes_Progress_Panel {
 			'restBase'     => esc_url_raw( rest_url( TBT_NOTES_REST_NAMESPACE . '/activity' ) ),
 			'nonce'        => wp_create_nonce( 'wp_rest' ),
 			'pollSeconds'  => self::POLL_SECONDS,
+			// The site's current UTC offset, in seconds. The panel's idea of
+			// "today" has to be the same instant the server counts from in
+			// TBT_Notes_DB::count_activity_today(); a browser computing its own
+			// midnight disagrees with it the moment a teacher works from another
+			// timezone, and the count would then contradict the roster beside it.
+			'tzOffset'     => wp_timezone()->getOffset( new DateTime( 'now', new DateTimeZone( 'UTC' ) ) ),
 			'i18n'         => array(
 				'title'       => __( 'CLASS PROGRESS', 'tbt-notes' ),
 				'done'        => __( 'Done', 'tbt-notes' ),
 				'working'     => __( 'Working', 'tbt-notes' ),
 				'idle'        => __( 'Not started', 'tbt-notes' ),
-				/* translators: 1: students finished, 2: students in the class. */
-				'count'       => __( '%1$d of %2$d done', 'tbt-notes' ),
-				/* translators: 1: students finished, 2: students in the class. */
-				'ringLabel'   => __( '%1$d of %2$d students done. Show class progress.', 'tbt-notes' ),
+				// %1$d is the number of tasks finished today across the class; %2$d
+				// and %3$d are how much of the class has finished at least one. The
+				// singular form is carried separately because a bare "1 tasks" is
+				// exactly the sort of thing a paying teacher notices.
+				/* translators: 1: tasks finished today across the class, 2: students who have finished something, 3: students in the class. */
+				'count'       => __( '%1$d tasks today · %2$d of %3$d done', 'tbt-notes' ),
+				/* translators: 1: tasks finished today across the class, 2: students who have finished something, 3: students in the class. */
+				'countOne'    => __( '%1$d task today · %2$d of %3$d done', 'tbt-notes' ),
+				/* translators: %1$d: tasks finished today across the class. */
+				'ringLabel'   => __( '%1$d tasks finished today. Show class progress.', 'tbt-notes' ),
 				'finished'    => __( 'finished', 'tbt-notes' ),
 				'dismiss'     => __( 'Dismiss', 'tbt-notes' ),
 				/* translators: %d: further completions not shown as their own toast. */
