@@ -179,7 +179,7 @@
 }
 
 /* A class name is the teacher's own text and can be any length. It gets one
-   line and an ellipsis: wrapping would push the counter and chevron around. */
+   line and an ellipsis: wrapping would push the chevron around. */
 .tbtp__class {
 	min-width: 0;
 	font-size: 21px;
@@ -189,20 +189,6 @@
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
-}
-
-/* The day's tally, on the same 41px baseline as the class name beside it. It
-   reads the class's whole day, which the list below no longer does: the list
-   is a feed and starts when the teacher opens the class. The two are meant to
-   differ, and the counter is the half that reaches back to midnight. */
-.tbtp__count {
-	flex: none;
-	align-self: stretch;
-	padding-top: calc(var(--tbtn-cp-baseline) - 11.8px);
-	font-size: 14px;
-	font-weight: 700;
-	line-height: 1;
-	white-space: nowrap;
 }
 
 /* 14 × 7, so the whole arrow is the glyph and the SVG box needs no padding:
@@ -237,53 +223,183 @@
 
 /* Hidden, not removed. */
 .tbtp.is-collapsed .tbtp__label,
-.tbtp.is-collapsed .tbtp__count,
 .tbtp.is-collapsed .tbtp__chev,
 .tbtp.is-collapsed .tbtp__body {
 	display: none;
 }
 
-/* Resting: the pale selected-row blue, blue letters, a hairline border and the
-   flat shadow. The gradient, the 67px height, the top-only radius and the
-   header's two paddings are expanded-state appearance and are all replaced. */
+/* Resting: blue letters on a pale disc inside a hairline ring. The button
+   itself carries neither any more — the disc is r 23 and the ring r 26, and
+   painting them on a 56px box would put both on its edge — so what is left
+   here is the 56px hit area, the colour the mark inherits and the 1px lift.
+   The gradient, the 67px height, the top-only radius and the header's two
+   paddings are expanded-state appearance and are all replaced. */
 .tbtp.is-collapsed .tbtp__head {
 	justify-content: center;
 	gap: 0;
 	width: var(--tbtn-cp-mini);
 	height: var(--tbtn-cp-mini);
 	padding: 0;
-	border: 1px solid var(--tbt-border);
+	border: 0;
 	border-radius: 50%;
-	background: var(--tbt-selected-bg);
+	background: transparent;
 	color: var(--tbt-blue);
-	box-shadow: var(--tbt-shadow);
+	box-shadow: none;
 	animation: tbtp-mini-in 0.12s ease-out;
-	/* Only the circle transitions. The expanded header's fill never changes,
-	   and giving it a box-shadow transition would fade its focus ring in. */
+	/* The two things the button still owns. Its box-shadow is the focus ring
+	   and nothing else now, and a focus ring that fades in is a focus ring
+	   arriving late, so it is deliberately not in this list. */
 	transition:
-		background-color 0.12s ease,
 		color 0.12s ease,
-		border-color 0.12s ease,
-		box-shadow 0.12s ease,
 		transform 0.12s ease;
 }
 
+/* The disc: 46px centred in the 56px button, which leaves the ring and its arc
+   the 5px of clearance they need to read as a ring rather than as an edge on
+   the fill. The shadow is the disc's too — cast from the button's own edge it
+   would hang 5px clear of the thing it is lifting. */
+.tbtp.is-collapsed .tbtp__head::before,
+.tbtp.is-collapsed .tbtp__head::after {
+	content: '';
+	position: absolute;
+	top: 50%;
+	left: 50%;
+	width: 46px;
+	height: 46px;
+	margin: -23px 0 0 -23px;
+	border-radius: 50%;
+}
+
+.tbtp.is-collapsed .tbtp__head::before {
+	background: var(--tbt-selected-bg);
+	box-shadow: var(--tbt-shadow);
+	transition: box-shadow 0.12s ease;
+}
+
+/* A gradient cannot be interpolated, so the hover fill arrives as a layer of
+   its own and fades in over the pale disc instead of replacing it. Same
+   0.12s, so the change reads exactly as it did when it was one flat colour. */
+.tbtp.is-collapsed .tbtp__head::after {
+	background: linear-gradient(135deg, var(--tbt-blue), var(--tbt-blue-dark));
+	opacity: 0;
+	transition: opacity 0.12s ease;
+}
+
 /* Hover fills the circle. Focus keeps that fill rather than inventing a third
-   look for the keyboard, and the ring is added to the shadow already there. */
+   look for the keyboard. */
 .tbtp.is-collapsed .tbtp__head:hover,
 .tbtp.is-collapsed .tbtp__head:focus-visible {
-	background: var(--tbt-blue);
 	color: #fff;
-	border-color: transparent;
-	box-shadow: var(--tbt-shadow-raised);
 	transform: translateY(-1px);
 }
 
+.tbtp.is-collapsed .tbtp__head:hover::before,
+.tbtp.is-collapsed .tbtp__head:focus-visible::before {
+	box-shadow: var(--tbt-shadow-raised);
+}
+
+.tbtp.is-collapsed .tbtp__head:hover::after,
+.tbtp.is-collapsed .tbtp__head:focus-visible::after {
+	opacity: 1;
+}
+
 /* Specificity, not order: the expanded header's inset ring is one class lighter
-   and would otherwise win wherever it happened to sit in the sheet. */
+   and would otherwise win wherever it happened to sit in the sheet. It rings
+   the button, not the disc, so it still surrounds the whole control. */
 .tbtp.is-collapsed .tbtp__head:focus-visible {
 	outline: none;
-	box-shadow: var(--tbt-shadow-raised), var(--tbt-focus-ring);
+	box-shadow: var(--tbt-focus-ring);
+}
+
+/* ---------------------------------------------------------- The CP sweep */
+
+/* The ring and its arc fill a box exactly the size of the button, above the
+   disc and below the mark. Painted, never hit-tested: the button keeps every
+   pointer event it had. */
+.tbtp__sweep {
+	display: none;
+}
+
+.tbtp.is-collapsed .tbtp__sweep {
+	display: block;
+	position: absolute;
+	top: 0;
+	left: 0;
+	z-index: 1;
+	width: var(--tbtn-cp-mini);
+	height: var(--tbtn-cp-mini);
+	pointer-events: none;
+}
+
+/* The hairline the border used to draw, moved in to r 26 so that it and the
+   arc share a centre and a radius. It steps aside on hover: the filled circle
+   carries the arc on its own. */
+.tbtp__sweep-ring {
+	fill: none;
+	stroke: var(--tbt-border);
+	stroke-width: 1;
+	transition: stroke 0.12s ease;
+}
+
+.tbtp.is-collapsed .tbtp__head:hover .tbtp__sweep-ring,
+.tbtp.is-collapsed .tbtp__head:focus-visible .tbtp__sweep-ring {
+	stroke: transparent;
+}
+
+/* A quarter of that circle. 163.36 round at r 26, so 40.84 of dash against
+   122.52 of gap is 90 degrees of it, and the round caps close both ends. The
+   turn that puts it at 20 is a transform attribute on each circle, so that
+   the CSS transform below is free to be the animation and nothing else. */
+.tbtp__sweep-arc,
+.tbtp__sweep-trail {
+	fill: none;
+	stroke: var(--tbt-blue);
+	stroke-width: 2.5;
+	stroke-linecap: round;
+	stroke-dasharray: 40.84 122.52;
+}
+
+/* The trail is that arc a quarter turn behind it, and it is only ever seen in
+   motion: at rest — and so wherever the animation is switched off — it is not
+   painted at all. */
+.tbtp__sweep-trail {
+	opacity: 0;
+}
+
+/* One turn, once, on hover and on keyboard focus, ending exactly where it
+   began. It hangs off the hover and focus states rather than off a class the
+   script toggles, because nothing about this is driven by data: it answers the
+   pointer and the Tab key and nothing else.
+
+   The group turns and the arcs ride it, which is what keeps the trail a
+   quarter turn behind for the whole 900ms without a second set of angles to
+   keep in step. The disc, the mark and the button do not move. */
+.tbtp__sweep-spin {
+	transform-box: view-box;
+	transform-origin: 28px 28px;
+}
+
+.tbtp.is-collapsed .tbtp__head:hover .tbtp__sweep-spin,
+.tbtp.is-collapsed .tbtp__head:focus-visible .tbtp__sweep-spin {
+	animation: tbtp-sweep 0.9s ease-out;
+}
+
+.tbtp.is-collapsed .tbtp__head:hover .tbtp__sweep-trail,
+.tbtp.is-collapsed .tbtp__head:focus-visible .tbtp__sweep-trail {
+	animation: tbtp-sweep-trail 0.9s ease-out;
+}
+
+@keyframes tbtp-sweep {
+	from { transform: rotate(0deg); }
+	to { transform: rotate(360deg); }
+}
+
+/* The trail fades up behind the arc as it leaves and is gone before it lands,
+   so the circle it stops on is the one it started from. */
+@keyframes tbtp-sweep-trail {
+	from { opacity: 0; }
+	15%, 80% { opacity: 0.25; }
+	to { opacity: 0; }
 }
 
 /* The mark, not a word: two letters that read the same in every language, so
@@ -295,14 +411,18 @@
 
 .tbtp.is-collapsed .tbtp__mini {
 	display: block;
+	/* Positioned only so that it sits above the disc and the ring, both of
+	   which are absolute and would otherwise paint over in-flow text. */
+	position: relative;
+	z-index: 2;
 	font-family: var(--tbt-font-identity);
-	font-size: 16px;
+	font-size: 15px;
 	font-weight: 700;
 	line-height: 1;
-	letter-spacing: 0.04em;
+	letter-spacing: 1.8px;
 	/* Tracking is added after every letter, the last one included, so the pair
 	   sits half a step left of centre without this. */
-	text-indent: 0.02em;
+	text-indent: 0.9px;
 }
 
 /* Opacity and scale: the circle arrives rather than appears. */
@@ -389,7 +509,6 @@
    the pitch the whole list is built on. */
 .tbtp-student__name,
 .tbtp-student__task,
-.tbtp-student__level,
 .tbtp-student__state {
 	min-width: 0;
 	line-height: 1;
@@ -404,8 +523,7 @@
 	color: var(--tbt-ink);
 }
 
-.tbtp-student__task,
-.tbtp-student__level {
+.tbtp-student__task {
 	font-size: 15px;
 	font-weight: 400;
 	color: var(--tbt-muted);
@@ -589,6 +707,10 @@
 	}
 }
 
+/* This covers the sweep as well, and covers it properly: with no animation the
+   arc never leaves its resting 20 to 110, and the trail keeps the opacity 0 it
+   is drawn at, so neither of them moves or appears. The hover fill is not an
+   animation and still changes — it simply changes at once. */
 @media (prefers-reduced-motion: reduce) {
 	.tbtp-dock,
 	.tbtp-dock * {

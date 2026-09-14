@@ -177,22 +177,15 @@ class TBT_Notes_Progress_Panel {
 			// No timezone offset travels with this. The panel used to compute
 			// the site's midnight in the browser to seed from the start of the
 			// day; the list is a feed now and seeds from the moment the class
-			// was opened. The only thing still reasoning about "today" is the
-			// counter, and TBT_Notes_DB::count_activity_today() does that
-			// server-side where wp_timezone() is already to hand.
+			// was opened. Nothing on screen reasons about "today" any more
+			// either: the day's tally left the header, and the server's own
+			// TBT_Notes_DB::count_activity_today() goes on answering the GET
+			// where wp_timezone() is already to hand.
 			'i18n'         => array(
 				'title'       => __( 'CLASS:', 'tbt-notes' ),
 				'done'        => __( 'Done', 'tbt-notes' ),
 				'working'     => __( 'Working', 'tbt-notes' ),
 				'idle'        => __( 'Not started', 'tbt-notes' ),
-				// %1$d is the number of tasks finished today across the class; %2$d
-				// and %3$d are how much of the class has finished at least one. The
-				// singular form is carried separately because a bare "1 tasks" is
-				// exactly the sort of thing a paying teacher notices.
-				/* translators: 1: tasks finished today across the class, 2: students who have finished something, 3: students in the class. */
-				'count'       => __( '%1$d tasks today · %2$d of %3$d done', 'tbt-notes' ),
-				/* translators: 1: tasks finished today across the class, 2: students who have finished something, 3: students in the class. */
-				'countOne'    => __( '%1$d task today · %2$d of %3$d done', 'tbt-notes' ),
 				'finished'    => __( 'finished', 'tbt-notes' ),
 				'dismiss'     => __( 'Dismiss', 'tbt-notes' ),
 				/* translators: %d: further completions not shown as their own toast. */
@@ -217,9 +210,9 @@ class TBT_Notes_Progress_Panel {
 	 * carry one class's roster into another teacher's view.
 	 *
 	 * One button serves both states. Expanded it is the header — label, class
-	 * name, the day's tally and the chevron. Collapsed those are all hidden and
-	 * the `CP` mark takes their place, which is why nothing here is conditional:
-	 * the markup is the same either way and CSS decides which half is on screen.
+	 * name and the chevron. Collapsed those are all hidden and the ring and the
+	 * `CP` mark take their place, which is why nothing here is conditional: the
+	 * markup is the same either way and CSS decides which half is on screen.
 	 */
 	public function render() {
 		if ( ! $this->enqueued ) {
@@ -239,11 +232,33 @@ class TBT_Notes_Progress_Panel {
 				 */
 				?>
 				<span class="tbtp__mini" aria-hidden="true">CP</span>
+				<?php
+				/*
+				 * The collapsed circle's ring, drawn rather than bordered. A
+				 * 1px hairline at r 26 carries a 90 degree arc of --tbt-blue:
+				 * the circumference there is 163.36, so 40.84 painted against
+				 * 122.52 skipped is exactly a quarter of it, and the -70 degree
+				 * turn moves the dash's own start — three o'clock — round to
+				 * 20, leaving the arc between 20 and 110. The trail is that
+				 * same arc a quarter turn behind, and CSS paints it only while
+				 * the sweep is running.
+				 *
+				 * Decoration, and hidden from the accessibility tree with it:
+				 * the button's own name and aria-expanded say everything there
+				 * is to say about what it does.
+				 */
+				?>
+				<svg class="tbtp__sweep" viewBox="0 0 56 56" fill="none" aria-hidden="true" focusable="false">
+					<circle class="tbtp__sweep-ring" cx="28" cy="28" r="26"/>
+					<g class="tbtp__sweep-spin">
+						<circle class="tbtp__sweep-trail" cx="28" cy="28" r="26" transform="rotate(-160 28 28)"/>
+						<circle class="tbtp__sweep-arc" cx="28" cy="28" r="26" transform="rotate(-70 28 28)"/>
+					</g>
+				</svg>
 				<span class="tbtp__label">
 					<span class="tbtp__eyebrow"><?php echo esc_html__( 'CLASS:', 'tbt-notes' ); ?></span>
 					<span class="tbtp__class" data-tbtp-classname></span>
 				</span>
-				<span class="tbtp__count" data-tbtp-count></span>
 				<?php
 				/*
 				 * 14 wide by 7 tall, drawn so the arrow fills the box: the path
