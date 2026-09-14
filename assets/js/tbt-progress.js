@@ -46,7 +46,6 @@
 	}
 
 	var rosterEl = panel.querySelector( '[data-tbtp-roster]' );
-	var countEl = panel.querySelector( '[data-tbtp-count]' );
 	var toastsEl = document.querySelector( '[data-tbtp-toasts]' );
 	var classNameEl = panel.querySelector( '[data-tbtp-classname]' );
 
@@ -81,12 +80,6 @@
 	/* Bumped every time a completion is recorded, and stamped on the record so
 	   a `done` entry carries the order it arrived in. */
 	var doneSeq = 0;
-
-	/* Tasks finished by this class today, counted by the server. Deliberately
-	   not the length of `events`: the counter says what the class has done
-	   since midnight, the feed says what has happened since the class was
-	   opened, and those are two different numbers on purpose. */
-	var completedToday = 0;
 
 	var timer = null;
 	var interval = BASE_INTERVAL;
@@ -257,7 +250,6 @@
 				applyActivity( data.activity || [], false );
 				applyPresence( data.presence || [] );
 				lastId = parseInt( data.last_id, 10 ) || 0;
-				completedToday = parseInt( data.completed_today, 10 ) || 0;
 				// Written once per lesson and then left alone. Storing the new
 				// cursor on every reload would walk the starting point forward
 				// and the second reload would show less than the first.
@@ -284,7 +276,6 @@
 				}
 				applyActivity( data.activity || [], true );
 				applyPresence( data.presence || [] );
-				completedToday = parseInt( data.completed_today, 10 ) || 0;
 				var next = parseInt( data.last_id, 10 ) || 0;
 				if ( next > lastId ) {
 					lastId = next;
@@ -413,13 +404,11 @@
 		// With no class open the panel is hidden anyway, so there is nothing to
 		// say and no hint to offer — the roster simply empties.
 		if ( ! classId ) {
-			countEl.textContent = '';
 			return;
 		}
 
 		if ( ! students.length ) {
 			rosterEl.appendChild( el( 'p', 'tbtp__empty', i18n.empty || '' ) );
-			countEl.textContent = '';
 			return;
 		}
 
@@ -429,24 +418,11 @@
 
 		// The resolver returns the class alphabetically, so filtering it keeps
 		// both remaining groups in that order without a sort.
-		//
-		// `finished` counts students, not work: it is the "1 of 1" half of the
-		// counter, while the tasks half is the server's own count. Counted from
-		// `done` rather than from stateOf(), because the two ask different
-		// questions — the status column says what she is doing right now, this
-		// says whether she has finished anything today. Deriving one from the
-		// other is what made a class with two completed tasks read "0 of 1
-		// done": she was working again, so her earlier completion stopped being
-		// counted.
 		var working = [];
 		var idle = [];
-		var finished = 0;
 
 		for ( var s = 0; s < students.length; s++ ) {
 			var student = students[ s ];
-			if ( Object.prototype.hasOwnProperty.call( done, student.user_id ) ) {
-				finished++;
-			}
 			var state = stateOf( student );
 			if ( 'working' === state ) {
 				working.push( student );
@@ -461,11 +437,6 @@
 		for ( var n = 0; n < idle.length; n++ ) {
 			rosterEl.appendChild( studentRow( idle[ n ], 'idle' ) );
 		}
-
-		countEl.textContent = fmt(
-			1 === completedToday ? i18n.countOne : i18n.count,
-			[ completedToday, finished, students.length ]
-		);
 
 		rosterEl.scrollTop = keepScroll;
 	}
@@ -505,24 +476,21 @@
 		return node;
 	}
 
-	/* One student who is working or has not started. The task column carries
-	   her level when there is one; a level is never invented, so an absent one
-	   leaves the cell empty rather than showing a dash. What she has finished
-	   is not repeated here — it has its own rows above. */
+	/* One student who is working or has not started. The task column stays
+	   empty: she has not finished anything to name in it, and her level is not
+	   the panel's to tell — the teacher shares this screen with the class, and
+	   the levels she has set are between her and each student. What the student
+	   has finished is not repeated here either; it has its own rows above.
+
+	   The empty cell is still appended. The grid places cells by order, so the
+	   status column needs the task column filled even when there is nothing to
+	   put in it. */
 	function studentRow( student, state ) {
 		var node = row( state );
 
 		node.appendChild( el( 'span', 'tbtp-student__dot' ) );
 		node.appendChild( el( 'span', 'tbtp-student__name', student.display_name || '' ) );
-
-		if ( student.level ) {
-			node.appendChild( el( 'span', 'tbtp-student__level', student.level ) );
-		} else {
-			// The grid places cells by order, so the status needs the task
-			// column filled even when there is nothing to put in it.
-			node.appendChild( el( 'span', 'tbtp-student__task' ) );
-		}
-
+		node.appendChild( el( 'span', 'tbtp-student__task' ) );
 		node.appendChild( el( 'span', 'tbtp-student__state', i18n[ state ] || '' ) );
 		return node;
 	}
@@ -649,7 +617,6 @@
 		eventIds = {};
 		done = {};
 		presence = {};
-		completedToday = 0;
 		doneSeq = 0;
 		lastId = 0;
 		seeded = false;
