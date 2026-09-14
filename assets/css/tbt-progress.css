@@ -1,12 +1,17 @@
 /**
- * TBT Notes — live progress panel.
+ * TBT Notes — live progress panel (Class Progress / CP Panel).
  *
- * Follows docs/tbt-live-progress-prototype.html for layout and behaviour.
+ * Geometry follows CP-PANEL-SPEC v1.0: a 560px card, a 67px gradient header
+ * carrying the class name, and a roster on a 32px pitch that scrolls once it
+ * passes five rows.
  *
  * Every colour, radius, shadow and font here comes from the shared TBT
- * vocabulary (tbt-tokens). This sheet defines no colour of its own; the only
- * local variable is a stacking context, which is not something the design
- * system has an opinion about.
+ * vocabulary (tbt-tokens). This sheet defines no colour of its own; the local
+ * variables are geometry and a stacking context, which is not something the
+ * design system has an opinion about. The spec's literal hexes are all token
+ * values already — #0856C9/#063F94 are the brand pair, #1F2937 is --tbt-ink,
+ * #667085 --tbt-muted, #16803C --tbt-success and #D8E3F0 --tbt-border — so the
+ * sheet names the token and never the number.
  *
  * The z-index sits just below Notes' own overlay (--tbtn-z, 2147483000) so
  * that opening the Notes workspace covers the panel rather than fighting it,
@@ -19,8 +24,12 @@
    covered it would hide the answer to the question it just raised. */
 .tbtp-dock {
 	--tbtp-z: 2147482000;
-	--tbtp-width: 320px;
+	--tbtp-width: 560px;
 	--tbtp-edge: 24px;
+	/* The toasts keep the width they shipped with. Widening the panel to the
+	   spec's 560px artboard would otherwise have dragged them along with it,
+	   and a toast is not what this spec is about. */
+	--tbtp-toast-width: 320px;
 
 	position: fixed;
 	right: var(--tbtp-edge);
@@ -29,9 +38,8 @@
 	max-width: calc(100vw - (var(--tbtp-edge) * 2));
 	display: flex;
 	flex-direction: column;
-	/* The collapsed panel is a 64px bubble in a 320px dock, so children are
-	   aligned to the corner rather than stretched to the dock's width. What
-	   wants the full width — the expanded panel, the toasts — asks for it. */
+	/* Children sit on the corner rather than stretching to the dock's width.
+	   What wants the full width — the panel — asks for it. */
 	align-items: flex-end;
 	gap: 10px;
 	/* Toasts plus a full roster can be taller than a laptop viewport. The dock
@@ -46,15 +54,44 @@
 /* ------------------------------------------------------------------ Panel */
 
 .tbtp {
+	/* Spec geometry, named so the arithmetic below reads as the spec does:
+	   header 67 + pad 12 + (5 × 32) + pad 11 = 250px at five rows or more. */
+	--tbtn-cp-head-h: 67px;
+	--tbtn-cp-row-h: 32px;
+	--tbtn-cp-rows: 5;
+	--tbtn-cp-pad-top: 12px;
+	--tbtn-cp-pad-bottom: 11px;
+	/* Left inset of the CLASS: label, and the column the class name starts in
+	   (x 68 — the label is given the 51px between them). */
+	--tbtn-cp-inset: 17px;
+	--tbtn-cp-name-x: 68px;
+	/* The chevron is 14 wide centred at x 520 of 560, so its right edge sits
+	   33px in from the panel edge. That gutter is the header's right padding. */
+	--tbtn-cp-gutter: 33px;
+	/* Both header texts sit on one baseline, 41px below the header's top. */
+	--tbtn-cp-baseline: 41px;
+	/* Row columns: the dot cell is 47px so a dot centred in it lands on
+	   cx 23.5; the name then starts at 47, the task at 262 and the status at
+	   484 — 215px and 222px apart. */
+	--tbtn-cp-dot-col: 47px;
+	--tbtn-cp-name-col: 215px;
+	--tbtn-cp-task-col: 222px;
+	--tbtn-cp-dot: 12.6px;
+
 	width: 100%;
 	display: flex;
 	flex-direction: column;
 	min-height: 0;
 	pointer-events: auto;
 	background: var(--tbt-surface);
-	border: 1px solid var(--tbt-border);
 	border-radius: var(--tbt-radius-panel);
+	/* No border. The spec's 560 x 250 is the card itself, and a 1px frame
+	   spends two of those pixels twice over: it pushed the dot off cx 23.5 and
+	   the three text columns off 47 / 262 / 484, and made the five-row panel
+	   252 tall. The raised shadow already lifts the card off the lesson page,
+	   and the header is a saturated gradient that a hairline adds nothing to. */
 	box-shadow: var(--tbt-shadow-raised);
+	/* Rows must never spill past the 22px bottom corners. */
 	overflow: hidden;
 	font-family: var(--tbt-font-ui);
 	font-size: 16px;
@@ -63,21 +100,35 @@
 	text-align: left;
 }
 
+/* The spec is written in pixels from a 560px artboard, so the panel measures
+   its own boxes the same way rather than inheriting whatever the theme set. */
+.tbtp,
+.tbtp *,
+.tbtp *::before,
+.tbtp *::after {
+	box-sizing: border-box;
+}
+
 .tbtp[hidden] {
 	display: none !important;
 }
 
+/* ----------------------------------------------------------------- Header */
+
 /* A button, not a div with a role: the browser then supplies the keyboard
-   behaviour, the focus ring and the announcement for free. */
+   behaviour, the focus ring and the announcement for free. The gradient is
+   the shipped Tool Hero gradient, token for token and angle for angle. */
 .tbtp__head {
 	position: relative;
 	display: flex;
 	align-items: center;
-	gap: 10px;
+	gap: 12px;
 	width: 100%;
+	height: var(--tbtn-cp-head-h);
 	margin: 0;
-	padding: 16px 20px;
+	padding: 0 var(--tbtn-cp-gutter) 0 var(--tbtn-cp-inset);
 	border: 0;
+	border-radius: var(--tbt-radius-panel) var(--tbt-radius-panel) 0 0;
 	background: linear-gradient(135deg, var(--tbt-blue), var(--tbt-blue-dark));
 	color: #fff;
 	cursor: pointer;
@@ -90,174 +141,197 @@
 	box-shadow: inset var(--tbt-focus-ring);
 }
 
+/* Label and class name share one line and one baseline.
+
+   The baseline is placed rather than centred. Flex baseline alignment hangs
+   the line from the top of the content box, so a padding of "41 minus the
+   font's ascent" puts the baseline exactly on 41 — 17.7px is Roboto's ascent
+   at 21px with line-height 1, 11.8px is the same at 14px. Centring the block
+   instead would land about 2px high and drift with the font size. */
 .tbtp__label {
-	flex: 1;
+	flex: 1 1 auto;
 	min-width: 0;
+	align-self: stretch;
 	display: flex;
-	flex-direction: column;
-	gap: 2px;
+	align-items: baseline;
+	padding-top: calc(var(--tbtn-cp-baseline) - 17.7px);
 }
 
+/* Reserving the gap to x 68 rather than letting the label's own width decide
+   keeps the class name on the same column whatever the translation does to
+   the word — and a longer one pushes the name right instead of truncating. */
 .tbtp__eyebrow {
-	font-family: var(--tbt-font-identity);
-	font-size: 11px;
+	flex: none;
+	min-width: calc(var(--tbtn-cp-name-x) - var(--tbtn-cp-inset));
+	font-family: var(--tbt-font-ui);
+	font-size: 13px;
 	font-weight: 700;
-	letter-spacing: 0.04em;
-	opacity: 0.8;
+	line-height: 1;
+	letter-spacing: 0.4px;
+	opacity: 0.82;
 }
 
 /* A class name is the teacher's own text and can be any length. It gets one
-   line and an ellipsis: wrapping would push the count and chevron around. */
+   line and an ellipsis: wrapping would push the counter and chevron around. */
 .tbtp__class {
-	font-size: 15px;
-	font-weight: 600;
+	min-width: 0;
+	font-size: 21px;
+	font-weight: 700;
+	line-height: 1;
+	letter-spacing: -0.2px;
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
 }
 
+/* The counter belongs to the collapsed header only: expanded, the list below
+   says the same thing in more detail. */
 .tbtp__count {
-	font-size: 13px;
-	font-weight: 600;
-	opacity: 0.85;
+	display: none;
+	flex: none;
+	align-self: stretch;
+	padding-top: calc(var(--tbtn-cp-baseline) - 11.8px);
+	font-size: 14px;
+	font-weight: 700;
+	line-height: 1;
+	white-space: nowrap;
 }
 
+.tbtp.is-collapsed .tbtp__count {
+	display: block;
+}
+
+/* 14 × 7, so the whole arrow is the glyph and the SVG box needs no padding:
+   the path is inset by half the stroke width so the round caps stop exactly
+   on the viewBox edge. */
 .tbtp__chev {
-	width: 16px;
-	height: 16px;
+	width: 14px;
+	height: 7px;
 	flex: none;
 	transition: transform 0.18s ease;
 }
 
-/* The ring and its number belong to the collapsed bubble and are not drawn at
-   all while the panel is open, where the header carries the same count as text. */
-.tbtp__ring,
-.tbtp__bubble-count {
-	display: none;
+/* Up while the list is open, down while it is not. */
+.tbtp.is-collapsed .tbtp__chev {
+	transform: rotate(180deg);
 }
 
-.tbtp__ring-track {
-	stroke: #fff;
-	opacity: 0.3;
-}
+/* ------------------------------------------------------------------- List */
 
-/* Green because the number it reports is completions, and green is the system's
-   success colour. It is not a state indicator on a control, so it does not
-   collide with "selected is blue, never green". Rotated so the arc grows from
-   twelve o'clock rather than three. */
-.tbtp__ring-fill {
-	stroke: var(--tbt-success);
-	transform: rotate(-90deg);
-	transform-origin: 50% 50%;
-	transition: stroke-dasharray 0.3s ease;
-}
-
+/* The padding frames the scroll viewport rather than scrolling with it, so
+   the first row's centre stays 28px below the header edge (12 + half of 32)
+   and the last row keeps its 11px whatever the scroll position. */
 .tbtp__body {
 	display: flex;
 	flex-direction: column;
 	min-height: 0;
+	padding: var(--tbtn-cp-pad-top) 0 var(--tbtn-cp-pad-bottom);
 }
 
-/* ------------------------------------------------------------ At rest */
-
-/* A 64px circle in the corner: the ring, the count, and nothing else. The
-   whole head stays the button, so the keyboard behaviour and the focus ring
-   are the same control in both states. */
-.tbtp.is-collapsed {
-	width: 64px;
-	border-radius: 50%;
-	overflow: visible;
-}
-
-.tbtp.is-collapsed .tbtp__body,
-.tbtp.is-collapsed .tbtp__label,
-.tbtp.is-collapsed .tbtp__count,
-.tbtp.is-collapsed .tbtp__chev {
+.tbtp.is-collapsed .tbtp__body {
 	display: none;
 }
 
-.tbtp.is-collapsed .tbtp__head {
-	width: 64px;
-	height: 64px;
-	padding: 0;
-	border-radius: 50%;
-	justify-content: center;
-}
-
-.tbtp.is-collapsed .tbtp__ring {
-	display: block;
-	position: absolute;
-	inset: 0;
-	width: 64px;
-	height: 64px;
-}
-
-.tbtp.is-collapsed .tbtp__bubble-count {
-	display: block;
-	position: relative;
-	font-size: 15px;
-	font-weight: 700;
-	color: #fff;
-}
-
-/* --------------------------------------------------------------- Roster */
-
+/* Five rows and no more. `max-height` rather than `height` is what makes a
+   three-student class end after the third row instead of leaving two rows of
+   empty card below it. `overscroll-behavior` keeps the lesson page behind the
+   panel still when the teacher scrolls to either end of the roster. */
 .tbtp__roster {
-	flex: 1 1 auto;
+	flex: 0 1 auto;
 	min-height: 0;
-	max-height: 340px;
-	overflow: auto;
+	max-height: calc(var(--tbtn-cp-rows) * var(--tbtn-cp-row-h));
+	overflow-y: auto;
+	overscroll-behavior: contain;
+	scrollbar-width: thin;
+	scrollbar-color: var(--tbt-border) transparent;
+}
+
+.tbtp__roster::-webkit-scrollbar {
+	width: 8px;
+}
+
+.tbtp__roster::-webkit-scrollbar-track {
+	background: transparent;
+}
+
+.tbtp__roster::-webkit-scrollbar-thumb {
+	background: var(--tbt-border);
+	border-radius: var(--tbt-radius-pill);
 }
 
 .tbtp__empty {
 	margin: 0;
-	padding: 16px 20px;
+	padding: 4px var(--tbtn-cp-inset);
 	font-size: 14px;
 	color: var(--tbt-muted);
 }
 
-.tbtp-student {
-	display: flex;
-	align-items: center;
-	gap: 12px;
-	padding: 12px 20px;
-	border-bottom: 1px solid var(--tbt-border);
-}
+/* -------------------------------------------------------------------- Row */
 
-.tbtp-student:last-child {
-	border-bottom: none;
+/* Four columns on a 32px pitch. The dot cell is sized so that centring the
+   dot in it is the same thing as putting it on cx 23.5; the three text
+   columns then start on 47, 262 and 484 without a single magic offset. */
+.tbtp-student {
+	display: grid;
+	grid-template-columns:
+		var(--tbtn-cp-dot-col)
+		var(--tbtn-cp-name-col)
+		var(--tbtn-cp-task-col)
+		minmax(0, 1fr);
+	align-items: center;
+	height: var(--tbtn-cp-row-h);
 }
 
 .tbtp-student__dot {
-	width: 10px;
-	height: 10px;
+	width: var(--tbtn-cp-dot);
+	height: var(--tbtn-cp-dot);
 	border-radius: 50%;
-	flex: none;
+	justify-self: center;
 	background: var(--tbt-border);
 }
 
-.tbtp-student__name {
-	flex: 1;
+/* Every column is one line that truncates. A name long enough to reach the
+   task column gets an ellipsis rather than a second line, which would break
+   the pitch the whole list is built on. */
+.tbtp-student__name,
+.tbtp-student__task,
+.tbtp-student__level,
+.tbtp-student__state {
 	min-width: 0;
+	line-height: 1;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.tbtp-student__name {
 	font-size: 15px;
-	font-weight: 500;
+	font-weight: 600;
+	color: var(--tbt-ink);
 }
 
 .tbtp-student__task,
 .tbtp-student__level {
-	display: block;
-	font-size: 12px;
+	font-size: 15px;
 	font-weight: 400;
 	color: var(--tbt-muted);
-	margin-top: 1px;
-	overflow-wrap: anywhere;
 }
 
 .tbtp-student__state {
-	font-size: 13px;
-	font-weight: 600;
-	flex: none;
+	font-size: 15px;
+	font-weight: 700;
 	color: var(--tbt-muted);
+}
+
+/* The spec sizes this column for the two states it names, Done and Working,
+   and 484 leaves it 76px before the card edge. "Not started" is the third
+   state the panel has always had and the longest of the three — it wants 79px
+   at 15px and would arrive as "Not starte…", on the state most of the class is
+   in when a lesson opens. It gives up the one pixel instead; the weight and
+   the colour stay put, so the column still reads as one column. The ellipsis
+   above remains the guard for a machine with no Roboto to fall back on. */
+.tbtp-student.is-idle .tbtp-student__state {
+	font-size: 14px;
 }
 
 .tbtp-student.is-done .tbtp-student__dot {
@@ -300,7 +374,8 @@
    claim the dock's gap and float the panel off the corner. */
 .tbtp-toasts {
 	flex: 0 0 auto;
-	width: 100%;
+	width: var(--tbtp-toast-width);
+	max-width: 100%;
 	display: flex;
 	flex-direction: column;
 	gap: 10px;
@@ -403,10 +478,20 @@
 }
 
 /* The panel is a lesson-time instrument on a desktop screen. Narrow enough
-   and it would cover the page it reports on, so it gives the width back. */
+   and it would cover the page it reports on, so it gives the width back —
+   and with the width goes the fixed column grid, which only adds up at the
+   560px the spec is drawn at. Below that the columns share what there is. */
 @media (max-width: 600px) {
 	.tbtp-dock {
 		--tbtp-edge: 12px;
+	}
+
+	.tbtp-student {
+		grid-template-columns:
+			var(--tbtn-cp-dot-col)
+			minmax(0, 1.1fr)
+			minmax(0, 1.2fr)
+			minmax(0, 0.5fr);
 	}
 }
 

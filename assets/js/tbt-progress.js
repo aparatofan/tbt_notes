@@ -21,10 +21,10 @@
  * remembered class. The announcement is a hint about what to watch, never a
  * grant of access: every request re-checks the class server-side.
  *
- * At rest the panel is a bubble: the number of tasks the class has finished
- * today, inside a ring showing how much of the class has finished something.
- * The two measure different things on purpose — see setBubble(). Clicking it
- * opens the full roster.
+ * At rest the panel is its own header: the class name on the left and the
+ * day's tally on the right, with the list folded away underneath. Clicking it
+ * opens the roster and takes the tally with it, because the list then says the
+ * same thing in more detail.
  */
 ( function () {
 	'use strict';
@@ -44,12 +44,7 @@
 	var rosterEl = panel.querySelector( '[data-tbtp-roster]' );
 	var countEl = panel.querySelector( '[data-tbtp-count]' );
 	var toastsEl = document.querySelector( '[data-tbtp-toasts]' );
-	var bubbleEl = panel.querySelector( '[data-tbtp-bubble]' );
-	var ringEl = panel.querySelector( '[data-tbtp-ring]' );
 	var classNameEl = panel.querySelector( '[data-tbtp-classname]' );
-
-	// Matches r="25" on the ring circles in the panel's markup.
-	var RING_CIRCUMFERENCE = 2 * Math.PI * 25;
 
 	var STORE_OPEN = 'tbtNotesProgressOpen';
 	var TOAST_LIFE = 6000;
@@ -72,6 +67,12 @@
 	var lastId = 0;
 	var seeded = false;
 
+	/* Bumped every time a completion is recorded, and stamped on the record.
+	   It is what lets the finished group sort newest-first, so a completion
+	   arriving mid-lesson lands at the top of the list rather than wherever
+	   the student's name happens to fall in the alphabet. */
+	var doneSeq = 0;
+
 	/* Tasks finished by this class today, counted by the server. Not derived
 	   from `done`, which holds one record per student and would read 1 for a
 	   student who finished four things. */
@@ -80,11 +81,6 @@
 	var timer = null;
 	var interval = BASE_INTERVAL;
 	var inFlight = false;
-
-	/* The number the bubble was last drawn with. Kept because the head's
-	   accessible name depends on both it and whether the panel is collapsed,
-	   and the two change independently. */
-	var bubbleTasks = 0;
 
 	/* --------------------------------------------------------------- Utils */
 
@@ -262,7 +258,11 @@
 				// give. Kept apart from a zero: 0 of 10 is a real result and
 				// must still show.
 				score: null === row.score || undefined === row.score ? null : parseInt( row.score, 10 ),
-				scoreMax: null === row.score_max || undefined === row.score_max ? null : parseInt( row.score_max, 10 )
+				scoreMax: null === row.score_max || undefined === row.score_max ? null : parseInt( row.score_max, 10 ),
+				// Monotonic, and assigned in the order the work happened
+				// because this loop runs oldest-first. A student who finishes
+				// a second thing gets a fresh one and moves back to the top.
+				seq: ++doneSeq
 			};
 			done[ uid ] = record;
 
@@ -314,39 +314,55 @@
 	var ORDER = { done: 0, working: 1, idle: 2 };
 
 	function render() {
+		/* Read before the wipe and written back after it. Rebuilding the list
+		   would otherwise send it back to the top on every poll, and a teacher
+		   reading a row halfway down would lose her place every ten seconds.
+		   Restoring a remembered 0 is the same statement as staying pinned to
+		   the top, so the two cases need no separate branch — and the list is
+		   never scrolled on the teacher's behalf either way. */
+		var keepScroll = rosterEl.scrollTop;
+
 		rosterEl.textContent = '';
 
 		// With no class open the panel is hidden anyway, so there is nothing to
 		// say and no hint to offer — the roster simply empties.
 		if ( ! classId ) {
 			countEl.textContent = '';
-			setBubble( 0, 0, 0 );
 			return;
 		}
 
 		if ( ! students.length ) {
 			rosterEl.appendChild( el( 'p', 'tbtp__empty', i18n.empty || '' ) );
 			countEl.textContent = '';
-			setBubble( 0, 0, 0 );
 			return;
 		}
 
-		// The resolver already returned the class alphabetically, so a stable
-		// sort on the state alone leaves each group alphabetical inside itself.
+		// The resolver already returned the class alphabetically and the sort
+		// is stable, so returning 0 leaves a group in that order. Only the
+		// finished group asks for something else: newest completion first, so
+		// the freshest news is the row at the top of the list. The other two
+		// groups have no comparable moment to sort by and stay alphabetical.
 		var rows = students.slice();
 		rows.sort( function ( a, b ) {
-			return ORDER[ stateOf( a ) ] - ORDER[ stateOf( b ) ];
+			var byState = ORDER[ stateOf( a ) ] - ORDER[ stateOf( b ) ];
+			if ( byState ) {
+				return byState;
+			}
+			if ( 'done' !== stateOf( a ) ) {
+				return 0;
+			}
+			return ( done[ b.user_id ].seq || 0 ) - ( done[ a.user_id ].seq || 0 );
 		} );
 
-		// `finished` counts students, not work, and is now the ring's numerator
-		// alone: the line and the bubble read the server's task count instead.
+		// `finished` counts students, not work: it is the "1 of 1" half of the
+		// counter, while the tasks half is the server's own count.
 		//
 		// Counted from `done` rather than from stateOf(). The two ask different
-		// questions: the pill says what she is doing right now, the ring says
-		// whether she has finished anything today. Deriving one from the other
-		// is what made a class with two completed tasks read "0 of 1 done" —
-		// she was working again, so her earlier completion stopped being
-		// counted. Sorting still ranks by stateOf(), which is correct: a
+		// questions: the status column says what she is doing right now, this
+		// says whether she has finished anything today. Deriving one from the
+		// other is what made a class with two completed tasks read "0 of 1
+		// done" — she was working again, so her earlier completion stopped
+		// being counted. Sorting still ranks by stateOf(), which is correct: a
 		// student who is working sorts as working.
 		var finished = 0;
 		for ( var i = 0; i < rows.length; i++ ) {
@@ -361,62 +377,31 @@
 			1 === completedToday ? i18n.countOne : i18n.count,
 			[ completedToday, finished, rows.length ]
 		);
-		setBubble( completedToday, finished, rows.length );
+
+		rosterEl.scrollTop = keepScroll;
 	}
 
-	/* The collapsed face of the panel. The number is work finished today; the
-	   ring is how much of the class has finished something.
-
-	   They are different measures on purpose. A task count has no denominator —
-	   nothing knows how many tasks were set — so it cannot drive a ring, and the
-	   class fraction is the only honest one available. In a 1:1 lesson that ring
-	   is empty or full and reads as a status dot, which is the right signal
-	   there.
-
-	   `stroke-dasharray` is the whole trick — a dash as long as the finished arc
-	   followed by a gap as long as the circle leaves exactly that arc painted. */
-	function setBubble( tasks, finished, total ) {
-		bubbleTasks = tasks;
-
-		var fraction = total > 0 ? finished / total : 0;
-		bubbleEl.textContent = tasks > 0 ? String( tasks ) : '';
-		ringEl.setAttribute(
-			'stroke-dasharray',
-			( fraction * RING_CIRCUMFERENCE ).toFixed( 2 ) + ' ' + RING_CIRCUMFERENCE.toFixed( 2 )
-		);
-		syncHeadLabel();
-	}
-
-	/* Collapsed, the ring is all there is to read, so the button is named from
-	   the count. Expanded, its own text — the eyebrow, the class name and the
-	   count — is a better name than anything written here, so the attribute is
-	   removed rather than left to override it. setCollapsed decides which of
-	   the two applies; this only rebuilds the name that follows from it. */
-	function syncHeadLabel() {
-		if ( panel.classList.contains( 'is-collapsed' ) ) {
-			head.setAttribute( 'aria-label', fmt( i18n.ringLabel, [ bubbleTasks ] ) );
-			return;
-		}
-		head.removeAttribute( 'aria-label' );
-	}
-
+	/* One row, four cells, one line: dot, name, task, status. The task is a
+	   column of its own rather than a second line under the name — a row is
+	   32px tall and anything that wrapped would break the pitch the list is
+	   built on. Each cell truncates on its own. */
 	function studentRow( student, state ) {
 		var row = el( 'div', 'tbtp-student is-' + state );
 
 		row.appendChild( el( 'span', 'tbtp-student__dot' ) );
+		row.appendChild( el( 'span', 'tbtp-student__name', student.display_name || '' ) );
 
-		var name = el( 'span', 'tbtp-student__name', student.display_name || '' );
-
-		// The sub-line is what she last finished, whether or not she has since
-		// started something else — tying it to the `done` state meant starting a
-		// second task erased the record of the first from the panel. Otherwise
-		// it is her level when there is one. A level is never invented: an
-		// absent one leaves the line out entirely rather than showing a dash.
+		// The task column is what she last finished, whether or not she has
+		// since started something else — tying it to the `done` state meant
+		// starting a second task erased the record of the first from the panel.
+		// Otherwise it is her level when there is one. A level is never
+		// invented: an absent one leaves the cell empty rather than showing a
+		// dash.
 		//
 		// The tick is load-bearing, not decoration. Without it a working
 		// student with a finished task behind her reads as working *on* that
 		// task, which is the opposite of what the row is saying. It is applied
-		// in the done state too, where the pill already says Done: one rule
+		// in the done state too, where the status already says Done: one rule
 		// that always holds beats two that depend on state.
 		//
 		// The score follows when the tool sent one. Drag & Drop reports a real
@@ -430,11 +415,14 @@
 			if ( null !== record.score && null !== record.scoreMax ) {
 				label += ' · ' + record.score + '/' + record.scoreMax;
 			}
-			name.appendChild( el( 'span', 'tbtp-student__task', label ) );
+			row.appendChild( el( 'span', 'tbtp-student__task', label ) );
 		} else if ( student.level ) {
-			name.appendChild( el( 'span', 'tbtp-student__level', student.level ) );
+			row.appendChild( el( 'span', 'tbtp-student__level', student.level ) );
+		} else {
+			// The grid places cells by order, so the status needs the task
+			// column filled even when there is nothing to put in it.
+			row.appendChild( el( 'span', 'tbtp-student__task' ) );
 		}
-		row.appendChild( name );
 
 		row.appendChild( el( 'span', 'tbtp-student__state', i18n[ state ] || '' ) );
 		return row;
@@ -561,6 +549,7 @@
 		done = {};
 		presence = {};
 		completedToday = 0;
+		doneSeq = 0;
 		lastId = 0;
 		seeded = false;
 		interval = BASE_INTERVAL;
@@ -581,10 +570,13 @@
 		}
 	}
 
+	/* No aria-label either way: the head's own text names it better than
+	   anything written here could. Collapsed that text is the class name and
+	   the day's tally, expanded it is the class name with the list it controls
+	   sitting underneath, and `aria-expanded` says which of the two it is. */
 	function setCollapsed( collapsed ) {
 		panel.classList.toggle( 'is-collapsed', collapsed );
 		head.setAttribute( 'aria-expanded', String( ! collapsed ) );
-		syncHeadLabel();
 		remember( STORE_OPEN, collapsed ? '0' : '1' );
 	}
 
