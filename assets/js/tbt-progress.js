@@ -1,16 +1,21 @@
 /**
  * TBT Notes — live progress panel.
  *
- * Shows one class at a time: who finished a piece of work today, who is
- * working right now, and who has not started. It polls every ten seconds and
- * toasts each completion as it arrives.
+ * Shows one class at a time as a feed: every piece of work finished since the
+ * teacher opened the class, who is working right now, and who has not started.
+ * It polls every ten seconds and toasts each completion as it arrives.
  *
- * Two rules shape most of what follows.
+ * Three rules shape most of what follows.
  *
- * The first response after choosing a class SEEDS state and toasts nothing.
- * Opening the panel at three in the afternoon must not fire a toast for every
- * completion since breakfast; a toast means "this just happened", so only the
- * incremental polls raise them.
+ * The first response after choosing a class SEEDS state and toasts nothing. A
+ * toast means "this just happened", so only the incremental polls raise them.
+ *
+ * The list is a feed, not a roster. One row per completed task, newest at the
+ * top — a student who finishes four things gets four rows. The `done` map still
+ * exists and still answers "has this student finished anything", which is what
+ * the status column and the counter need; it simply stopped being what the list
+ * is built from, because a map keyed by student can only ever hold one title
+ * per student and the second deck overwrote the first.
  *
  * Nothing from the server is ever written as markup. Student names and deck
  * titles are other people's text, and they reach the page as text nodes.
@@ -21,10 +26,9 @@
  * remembered class. The announcement is a hint about what to watch, never a
  * grant of access: every request re-checks the class server-side.
  *
- * At rest the panel is its own header: the class name on the left and the
- * day's tally on the right, with the list folded away underneath. Clicking it
- * opens the roster and takes the tally with it, because the list then says the
- * same thing in more detail.
+ * At rest the panel is a circle in the corner — the CP Mini — carrying no
+ * class name, no counter and no dot, because at rest there is nothing to read.
+ * Clicking it opens the full panel; the chevron in the header closes it again.
  */
 ( function () {
 	'use strict';
@@ -47,35 +51,41 @@
 	var classNameEl = panel.querySelector( '[data-tbtp-classname]' );
 
 	var STORE_OPEN = 'tbtNotesProgressOpen';
+	/* Prefix, not a key: the cursor is per class, so the stored name carries
+	   the class ID. See forgetOtherSeeds(). */
+	var STORE_SEED = 'tbtNotesProgressSeed';
 	var TOAST_LIFE = 6000;
 	var TOAST_MAX = 3;
 	var BASE_INTERVAL = ( parseInt( cfg.pollSeconds, 10 ) || 10 ) * 1000;
 	var MAX_INTERVAL = 120000;
 
-	/* The site's UTC offset in milliseconds, or null when the page carried none.
-	   Localized values arrive as strings, so a site on UTC ("0") has to stay
-	   distinguishable from a missing one. */
-	var SITE_OFFSET = isNaN( parseInt( cfg.tzOffset, 10 ) ) ? null : parseInt( cfg.tzOffset, 10 ) * 1000;
+	/* State for the class currently on screen.
 
-	/* State for the class currently on screen. `done` maps a student ID to the
-	   title of the last thing they finished today; `presence` is the set of
-	   students with a live heartbeat. */
+	   `events` is the feed: one entry per activity row, newest first, and the
+	   only thing the completion rows are built from. `done` maps a student ID
+	   to the last thing they finished — a different question, asked by
+	   stateOf() and by the counter. `presence` is the set of students with a
+	   live heartbeat. */
 	var classId = 0;
 	var students = [];
+	var events = [];
 	var done = {};
 	var presence = {};
 	var lastId = 0;
 	var seeded = false;
 
-	/* Bumped every time a completion is recorded, and stamped on the record.
-	   It is what lets the finished group sort newest-first, so a completion
-	   arriving mid-lesson lands at the top of the list rather than wherever
-	   the student's name happens to fall in the alphabet. */
+	/* Activity row IDs already in `events`. A poll that overlaps a re-seed can
+	   hand the same row over twice, and a row is a thing that happened once. */
+	var eventIds = {};
+
+	/* Bumped every time a completion is recorded, and stamped on the record so
+	   a `done` entry carries the order it arrived in. */
 	var doneSeq = 0;
 
-	/* Tasks finished by this class today, counted by the server. Not derived
-	   from `done`, which holds one record per student and would read 1 for a
-	   student who finished four things. */
+	/* Tasks finished by this class today, counted by the server. Deliberately
+	   not the length of `events`: the counter says what the class has done
+	   since midnight, the feed says what has happened since the class was
+	   opened, and those are two different numbers on purpose. */
 	var completedToday = 0;
 
 	var timer = null;
@@ -120,27 +130,60 @@
 		}
 	}
 
-	/* Local midnight, expressed in UTC, which is how the activity table stores
-	   time. "Today" is the site's day, not the server's and not the laptop's: a
-	   lesson at nine in the morning in Warsaw must not read as yesterday's work,
-	   and the count beside this roster is taken from site-local midnight
-	   server-side, so a seed asking from the browser's own midnight would
-	   contradict it for a teacher working from another timezone. Without an
-	   offset to work from, the browser's midnight is the best guess left. */
-	function startOfTodayUtc() {
-		var d = new Date();
+	function forget( key ) {
+		try {
+			window.sessionStorage.removeItem( key );
+		} catch ( e ) {}
+	}
 
-		if ( null === SITE_OFFSET ) {
-			d.setHours( 0, 0, 0, 0 );
-		} else {
-			// Shifted into site time, midnight is taken with the UTC getters and
-			// shifted back, so the browser's own zone never enters the arithmetic.
-			d = new Date( d.getTime() + SITE_OFFSET );
-			d.setUTCHours( 0, 0, 0, 0 );
-			d = new Date( d.getTime() - SITE_OFFSET );
+	/* ------------------------------------------------------- Feed cursor */
+
+	/* Where this class's feed began, so a reload mid-lesson comes back to the
+	   same starting point rather than to the moment of the reload. Per class,
+	   because the answer is only ever about the class on screen. */
+	function seedKey( id ) {
+		return STORE_SEED + ':' + id;
+	}
+
+	function recallSeed( id ) {
+		return parseInt( recall( seedKey( id ) ), 10 ) || 0;
+	}
+
+	/* Every other class's stored cursor is some earlier lesson's, and replaying
+	   it would open that class on a feed of work that finished hours ago.
+	   Opening a class is the moment they stop being worth keeping. */
+	function forgetOtherSeeds( keep ) {
+		var doomed = [];
+		var store;
+
+		try {
+			store = window.sessionStorage;
+			for ( var i = 0; i < store.length; i++ ) {
+				var key = store.key( i );
+				if ( key && 0 === key.indexOf( STORE_SEED + ':' ) && key !== seedKey( keep ) ) {
+					doomed.push( key );
+				}
+			}
+		} catch ( e ) {
+			return;
 		}
 
-		return d.toISOString().slice( 0, 19 ).replace( 'T', ' ' );
+		// Removed in a second pass: deleting while walking the store shifts
+		// the indices out from under the loop.
+		for ( var d = 0; d < doomed.length; d++ ) {
+			forget( doomed[ d ] );
+		}
+	}
+
+	/* A second ago, as the UTC stamp the activity table stores.
+	
+	   Not "now". A datetime cursor is compared with a strict `>` at second
+	   resolution, while the cursor the same response hands back is the table's
+	   current highest ID — so a completion written in the very second the class
+	   was opened falls between the two and would never appear in the feed at
+	   all. One second of overlap costs, at worst, a row that is a second old. */
+	function justNowUtc() {
+		return new Date( Date.now() - 1000 ).toISOString().slice( 0, 19 ).replace( 'T', ' ' );
 	}
 
 	/* --------------------------------------------------------------- Fetch */
@@ -179,16 +222,25 @@
 			} );
 	}
 
+	/* The feed starts when the teacher opens the class, not at midnight: a
+	   panel opened at two in the afternoon is asking what is happening in this
+	   lesson, and the morning's work is what the counter is for.
+
+	   So the seed asks from the current cursor and gets an empty list back —
+	   unless this tab already watched this class today, in which case it asks
+	   from where that lesson began and the completions come back. */
 	function seed() {
 		if ( ! classId ) {
 			return;
 		}
+		var stored = recallSeed( classId );
+
 		inFlight = true;
 		request(
 			[
 				'class_id=' + encodeURIComponent( classId ),
 				'roster=1',
-				'since=' + encodeURIComponent( startOfTodayUtc() )
+				'since=' + encodeURIComponent( stored ? String( stored ) : justNowUtc() )
 			],
 			function ( data ) {
 				var wanted = classId;
@@ -200,10 +252,16 @@
 				}
 				students = ( data.students || [] ).slice();
 				done = {};
+				events = [];
+				eventIds = {};
 				applyActivity( data.activity || [], false );
 				applyPresence( data.presence || [] );
 				lastId = parseInt( data.last_id, 10 ) || 0;
 				completedToday = parseInt( data.completed_today, 10 ) || 0;
+				// Written once per lesson and then left alone. Storing the new
+				// cursor on every reload would walk the starting point forward
+				// and the second reload would show less than the first.
+				remember( seedKey( wanted ), stored || lastId );
 				seeded = true;
 				render();
 			}
@@ -238,16 +296,27 @@
 
 	/* ---------------------------------------------------------- Reductions */
 
-	/* Rows arrive newest first. Walking them in reverse means that when a
-	   student finished twice between polls, the newest title is the one that
-	   survives, and the toasts appear in the order the work happened. */
+	/* Rows arrive newest first. Walking them in reverse and pushing each onto
+	   the front of the feed puts them back in newest-first order, gives the
+	   toasts the order the work actually happened in, and leaves `done` holding
+	   the newest title for each student.
+
+	   Every row becomes its own feed entry, including a second one from a
+	   student already marked done — she finished another deck, and that is
+	   precisely the case the roster used to lose. */
 	function applyActivity( rows, announce ) {
 		var fresh = [];
 
 		for ( var i = rows.length - 1; i >= 0; i-- ) {
 			var row = rows[ i ];
 			var uid = parseInt( row.user_id, 10 ) || 0;
+			var rowId = parseInt( row.id, 10 ) || 0;
 			if ( ! uid ) {
+				continue;
+			}
+			// A re-seed can overlap a poll and replay rows the feed already
+			// holds. The row's own ID is what makes the entry idempotent.
+			if ( rowId && Object.prototype.hasOwnProperty.call( eventIds, rowId ) ) {
 				continue;
 			}
 
@@ -260,16 +329,25 @@
 				score: null === row.score || undefined === row.score ? null : parseInt( row.score, 10 ),
 				scoreMax: null === row.score_max || undefined === row.score_max ? null : parseInt( row.score_max, 10 ),
 				// Monotonic, and assigned in the order the work happened
-				// because this loop runs oldest-first. A student who finishes
-				// a second thing gets a fresh one and moves back to the top.
+				// because this loop runs oldest-first.
 				seq: ++doneSeq
 			};
 			done[ uid ] = record;
 
-			// Every row is its own event, including a second one from a student
-			// already marked done — they finished another deck. The toast
-			// carries the row's own title rather than reading it back out of
-			// `done`, which by then holds only the newest.
+			events.unshift( {
+				id: rowId,
+				userId: uid,
+				name: record.name,
+				title: record.title,
+				score: record.score,
+				scoreMax: record.scoreMax
+			} );
+			if ( rowId ) {
+				eventIds[ rowId ] = true;
+			}
+
+			// The toast carries the row's own title rather than reading it
+			// back out of `done`, which by then holds only the newest.
 			if ( announce ) {
 				fresh.push( record );
 			}
@@ -289,10 +367,10 @@
 
 	/* Presence is asked first, and the order is the whole point.
 
-	   `done` holds everyone who finished anything since midnight, so testing it
-	   first meant a student's first completion of the day froze her as done and
-	   every later heartbeat was discarded — she could play three more games and
-	   the panel would still be showing the first one.
+	   `done` holds everyone who finished anything, so testing it first meant a
+	   student's first completion froze her as done and every later heartbeat
+	   was discarded — she could play three more games and the panel would still
+	   be showing the first one.
 
 	   A heartbeat means the last sixty seconds. The server clears a student's
 	   presence the moment it records a completion, and the tools stop beating at
@@ -311,8 +389,16 @@
 
 	/* --------------------------------------------------------------- Render */
 
-	var ORDER = { done: 0, working: 1, idle: 2 };
+	/* Three groups, in the order the roster used to sort into: what has been
+	   finished, who is working, who has not started.
 
+	   The first group is the feed and is counted in tasks; the other two are
+	   counted in students. A student who is working and has finished things
+	   appears in both — her working row says what she is doing now, her
+	   completion rows say what she has already done, and neither answers for
+	   the other. A student who has finished and stopped has her completion
+	   rows and no student row at all: there is nothing left to report about
+	   her that the rows above do not already say. */
 	function render() {
 		/* Read before the wipe and written back after it. Rebuilding the list
 		   would otherwise send it back to the top on every poll, and a teacher
@@ -337,45 +423,48 @@
 			return;
 		}
 
-		// The resolver already returned the class alphabetically and the sort
-		// is stable, so returning 0 leaves a group in that order. Only the
-		// finished group asks for something else: newest completion first, so
-		// the freshest news is the row at the top of the list. The other two
-		// groups have no comparable moment to sort by and stay alphabetical.
-		var rows = students.slice();
-		rows.sort( function ( a, b ) {
-			var byState = ORDER[ stateOf( a ) ] - ORDER[ stateOf( b ) ];
-			if ( byState ) {
-				return byState;
-			}
-			if ( 'done' !== stateOf( a ) ) {
-				return 0;
-			}
-			return ( done[ b.user_id ].seq || 0 ) - ( done[ a.user_id ].seq || 0 );
-		} );
+		for ( var e = 0; e < events.length; e++ ) {
+			rosterEl.appendChild( eventRow( events[ e ] ) );
+		}
 
-		// `finished` counts students, not work: it is the "1 of 1" half of the
-		// counter, while the tasks half is the server's own count.
+		// The resolver returns the class alphabetically, so filtering it keeps
+		// both remaining groups in that order without a sort.
 		//
-		// Counted from `done` rather than from stateOf(). The two ask different
-		// questions: the status column says what she is doing right now, this
+		// `finished` counts students, not work: it is the "1 of 1" half of the
+		// counter, while the tasks half is the server's own count. Counted from
+		// `done` rather than from stateOf(), because the two ask different
+		// questions — the status column says what she is doing right now, this
 		// says whether she has finished anything today. Deriving one from the
 		// other is what made a class with two completed tasks read "0 of 1
-		// done" — she was working again, so her earlier completion stopped
-		// being counted. Sorting still ranks by stateOf(), which is correct: a
-		// student who is working sorts as working.
+		// done": she was working again, so her earlier completion stopped being
+		// counted.
+		var working = [];
+		var idle = [];
 		var finished = 0;
-		for ( var i = 0; i < rows.length; i++ ) {
-			var state = stateOf( rows[ i ] );
-			if ( Object.prototype.hasOwnProperty.call( done, rows[ i ].user_id ) ) {
+
+		for ( var s = 0; s < students.length; s++ ) {
+			var student = students[ s ];
+			if ( Object.prototype.hasOwnProperty.call( done, student.user_id ) ) {
 				finished++;
 			}
-			rosterEl.appendChild( studentRow( rows[ i ], state ) );
+			var state = stateOf( student );
+			if ( 'working' === state ) {
+				working.push( student );
+			} else if ( 'idle' === state ) {
+				idle.push( student );
+			}
+		}
+
+		for ( var w = 0; w < working.length; w++ ) {
+			rosterEl.appendChild( studentRow( working[ w ], 'working' ) );
+		}
+		for ( var n = 0; n < idle.length; n++ ) {
+			rosterEl.appendChild( studentRow( idle[ n ], 'idle' ) );
 		}
 
 		countEl.textContent = fmt(
 			1 === completedToday ? i18n.countOne : i18n.count,
-			[ completedToday, finished, rows.length ]
+			[ completedToday, finished, students.length ]
 		);
 
 		rosterEl.scrollTop = keepScroll;
@@ -385,47 +474,57 @@
 	   column of its own rather than a second line under the name — a row is
 	   32px tall and anything that wrapped would break the pitch the list is
 	   built on. Each cell truncates on its own. */
+	function row( state ) {
+		return el( 'div', 'tbtp-student is-' + state );
+	}
+
+	/* One completed task. Not one student: four decks from the same student are
+	   four of these, each carrying its own title, newest at the top.
+	   
+	   The tick is load-bearing, not decoration. Without it the row reads as
+	   working *on* that task, which is the opposite of what it is saying.
+	   
+	   The score follows when the tool sent one. Drag & Drop reports a real score
+	   with every completion, so "done" on a ten-gap exercise can mean 2/10 as
+	   easily as 10/10. Null and 0 must not be conflated — a student who filled
+	   every gap and got none right scores 0 of 10, and that row has to read
+	   0/10 rather than hide its score like a Swipe deck. */
+	function eventRow( event ) {
+		var node = row( 'done' );
+
+		node.appendChild( el( 'span', 'tbtp-student__dot' ) );
+		node.appendChild( el( 'span', 'tbtp-student__name', event.name || '' ) );
+
+		var label = event.title ? '✓ ' + event.title : '✓';
+		if ( null !== event.score && null !== event.scoreMax ) {
+			label += ' · ' + event.score + '/' + event.scoreMax;
+		}
+		node.appendChild( el( 'span', 'tbtp-student__task', label ) );
+
+		node.appendChild( el( 'span', 'tbtp-student__state', i18n.done || '' ) );
+		return node;
+	}
+
+	/* One student who is working or has not started. The task column carries
+	   her level when there is one; a level is never invented, so an absent one
+	   leaves the cell empty rather than showing a dash. What she has finished
+	   is not repeated here — it has its own rows above. */
 	function studentRow( student, state ) {
-		var row = el( 'div', 'tbtp-student is-' + state );
+		var node = row( state );
 
-		row.appendChild( el( 'span', 'tbtp-student__dot' ) );
-		row.appendChild( el( 'span', 'tbtp-student__name', student.display_name || '' ) );
+		node.appendChild( el( 'span', 'tbtp-student__dot' ) );
+		node.appendChild( el( 'span', 'tbtp-student__name', student.display_name || '' ) );
 
-		// The task column is what she last finished, whether or not she has
-		// since started something else — tying it to the `done` state meant
-		// starting a second task erased the record of the first from the panel.
-		// Otherwise it is her level when there is one. A level is never
-		// invented: an absent one leaves the cell empty rather than showing a
-		// dash.
-		//
-		// The tick is load-bearing, not decoration. Without it a working
-		// student with a finished task behind her reads as working *on* that
-		// task, which is the opposite of what the row is saying. It is applied
-		// in the done state too, where the status already says Done: one rule
-		// that always holds beats two that depend on state.
-		//
-		// The score follows when the tool sent one. Drag & Drop reports a real
-		// score with every completion, so "done" on a ten-gap exercise can mean
-		// 2/10 as easily as 10/10. Null and 0 must not be conflated — a student
-		// who filled every gap and got none right scores 0 of 10, and that row
-		// has to read 0/10 rather than hide its score like a Swipe deck.
-		var record = done[ student.user_id ];
-		if ( record && record.title ) {
-			var label = '✓ ' + record.title;
-			if ( null !== record.score && null !== record.scoreMax ) {
-				label += ' · ' + record.score + '/' + record.scoreMax;
-			}
-			row.appendChild( el( 'span', 'tbtp-student__task', label ) );
-		} else if ( student.level ) {
-			row.appendChild( el( 'span', 'tbtp-student__level', student.level ) );
+		if ( student.level ) {
+			node.appendChild( el( 'span', 'tbtp-student__level', student.level ) );
 		} else {
 			// The grid places cells by order, so the status needs the task
 			// column filled even when there is nothing to put in it.
-			row.appendChild( el( 'span', 'tbtp-student__task' ) );
+			node.appendChild( el( 'span', 'tbtp-student__task' ) );
 		}
 
-		row.appendChild( el( 'span', 'tbtp-student__state', i18n[ state ] || '' ) );
-		return row;
+		node.appendChild( el( 'span', 'tbtp-student__state', i18n[ state ] || '' ) );
+		return node;
 	}
 
 	/* --------------------------------------------------------------- Toasts */
@@ -546,6 +645,8 @@
 	function choose( id, title ) {
 		classId = parseInt( id, 10 ) || 0;
 		students = [];
+		events = [];
+		eventIds = {};
 		done = {};
 		presence = {};
 		completedToday = 0;
@@ -566,17 +667,26 @@
 		render();
 
 		if ( classId ) {
+			forgetOtherSeeds( classId );
 			seed();
 		}
 	}
 
-	/* No aria-label either way: the head's own text names it better than
-	   anything written here could. Collapsed that text is the class name and
-	   the day's tally, expanded it is the class name with the list it controls
-	   sitting underneath, and `aria-expanded` says which of the two it is. */
+	/* Expanded, the head's own text names it better than anything written here
+	   could: the class name, with the list it controls sitting underneath, and
+	   `aria-expanded` saying which of the two states it is in.
+
+	   Collapsed there is no such text. The circle's two letters are a mark
+	   rather than a word and are hidden from the accessibility tree, so the
+	   button borrows a name for as long as it is a circle. */
 	function setCollapsed( collapsed ) {
 		panel.classList.toggle( 'is-collapsed', collapsed );
 		head.setAttribute( 'aria-expanded', String( ! collapsed ) );
+		if ( collapsed ) {
+			head.setAttribute( 'aria-label', i18n.panel || 'Class progress' );
+		} else {
+			head.removeAttribute( 'aria-label' );
+		}
 		remember( STORE_OPEN, collapsed ? '0' : '1' );
 	}
 
@@ -587,7 +697,7 @@
 	document.addEventListener( 'tbt-notes:class-change', function ( e ) {
 		var detail = e.detail || {};
 		var id = parseInt( detail.id, 10 ) || 0;
-		// Same class, new name: relabel and leave the roster alone. Renaming a
+		// Same class, new name: relabel and leave the feed alone. Renaming a
 		// class mid-lesson is not a change of subject, and running it through
 		// choose() would wipe the completions already on screen.
 		if ( id && id === classId ) {

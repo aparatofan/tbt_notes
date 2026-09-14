@@ -1,9 +1,14 @@
 /**
  * TBT Notes — live progress panel (Class Progress / CP Panel).
  *
- * Geometry follows CP-PANEL-SPEC v1.0: a 560px card, a 67px gradient header
- * carrying the class name, and a roster on a 32px pitch that scrolls once it
- * passes five rows.
+ * Geometry follows CP-PANEL-SPEC v1.1: expanded, a 560px card with a 67px
+ * gradient header carrying the class name, and a list on a 32px pitch that
+ * scrolls once it passes five rows. Collapsed, a 56px circle — the CP Mini —
+ * in the same corner of the same dock.
+ *
+ * The two states share one button. Everything the expanded header shows is
+ * hidden rather than removed when the circle takes over, so opening the panel
+ * is a class toggle and nothing has to be rebuilt.
  *
  * Every colour, radius, shadow and font here comes from the shared TBT
  * vocabulary (tbt-tokens). This sheet defines no colour of its own; the local
@@ -77,6 +82,8 @@
 	--tbtn-cp-name-col: 215px;
 	--tbtn-cp-task-col: 222px;
 	--tbtn-cp-dot: 12.6px;
+	/* The collapsed circle. Round, so one value is the whole geometry. */
+	--tbtn-cp-mini: 56px;
 
 	width: 100%;
 	display: flex;
@@ -184,10 +191,11 @@
 	text-overflow: ellipsis;
 }
 
-/* The counter belongs to the collapsed header only: expanded, the list below
-   says the same thing in more detail. */
+/* The day's tally, on the same 41px baseline as the class name beside it. It
+   reads the class's whole day, which the list below no longer does: the list
+   is a feed and starts when the teacher opens the class. The two are meant to
+   differ, and the counter is the half that reaches back to midnight. */
 .tbtp__count {
-	display: none;
 	flex: none;
 	align-self: stretch;
 	padding-top: calc(var(--tbtn-cp-baseline) - 11.8px);
@@ -197,23 +205,110 @@
 	white-space: nowrap;
 }
 
-.tbtp.is-collapsed .tbtp__count {
-	display: block;
-}
-
 /* 14 × 7, so the whole arrow is the glyph and the SVG box needs no padding:
    the path is inset by half the stroke width so the round caps stop exactly
-   on the viewBox edge. */
+   on the viewBox edge. It points up and stays up: it is only ever on screen
+   while the list is open, and what it offers is closing it. */
 .tbtp__chev {
 	width: 14px;
 	height: 7px;
 	flex: none;
-	transition: transform 0.18s ease;
 }
 
-/* Up while the list is open, down while it is not. */
-.tbtp.is-collapsed .tbtp__chev {
-	transform: rotate(180deg);
+/* ---------------------------------------------------------------- CP Mini */
+
+/* Collapsed, the panel is a 56px circle in the same corner of the same dock.
+   The dock is anchored bottom-right and lays its children out flush to that
+   corner, so the circle's right and bottom edges land on the panel's without
+   being told to, and the expanded panel grows upward from a corner that never
+   moves.
+
+   The card steps aside entirely: its white surface, its raised shadow and its
+   clipping all belong to the expanded state. `overflow: visible` because the
+   circle's own shadow, and the 1px it lifts on hover, are drawn outside a box
+   that is now exactly the size of the circle. */
+.tbtp.is-collapsed {
+	width: var(--tbtn-cp-mini);
+	background: transparent;
+	border-radius: 50%;
+	box-shadow: none;
+	overflow: visible;
+}
+
+/* Hidden, not removed. */
+.tbtp.is-collapsed .tbtp__label,
+.tbtp.is-collapsed .tbtp__count,
+.tbtp.is-collapsed .tbtp__chev,
+.tbtp.is-collapsed .tbtp__body {
+	display: none;
+}
+
+/* Resting: the pale selected-row blue, blue letters, a hairline border and the
+   flat shadow. The gradient, the 67px height, the top-only radius and the
+   header's two paddings are expanded-state appearance and are all replaced. */
+.tbtp.is-collapsed .tbtp__head {
+	justify-content: center;
+	gap: 0;
+	width: var(--tbtn-cp-mini);
+	height: var(--tbtn-cp-mini);
+	padding: 0;
+	border: 1px solid var(--tbt-border);
+	border-radius: 50%;
+	background: var(--tbt-selected-bg);
+	color: var(--tbt-blue);
+	box-shadow: var(--tbt-shadow);
+	animation: tbtp-mini-in 0.12s ease-out;
+	/* Only the circle transitions. The expanded header's fill never changes,
+	   and giving it a box-shadow transition would fade its focus ring in. */
+	transition:
+		background-color 0.12s ease,
+		color 0.12s ease,
+		border-color 0.12s ease,
+		box-shadow 0.12s ease,
+		transform 0.12s ease;
+}
+
+/* Hover fills the circle. Focus keeps that fill rather than inventing a third
+   look for the keyboard, and the ring is added to the shadow already there. */
+.tbtp.is-collapsed .tbtp__head:hover,
+.tbtp.is-collapsed .tbtp__head:focus-visible {
+	background: var(--tbt-blue);
+	color: #fff;
+	border-color: transparent;
+	box-shadow: var(--tbt-shadow-raised);
+	transform: translateY(-1px);
+}
+
+/* Specificity, not order: the expanded header's inset ring is one class lighter
+   and would otherwise win wherever it happened to sit in the sheet. */
+.tbtp.is-collapsed .tbtp__head:focus-visible {
+	outline: none;
+	box-shadow: var(--tbt-shadow-raised), var(--tbt-focus-ring);
+}
+
+/* The mark, not a word: two letters that read the same in every language, so
+   they are not translated and not announced — the button carries an
+   `aria-label` for as long as it is a circle. */
+.tbtp__mini {
+	display: none;
+}
+
+.tbtp.is-collapsed .tbtp__mini {
+	display: block;
+	font-family: var(--tbt-font-identity);
+	font-size: 16px;
+	font-weight: 700;
+	line-height: 1;
+	letter-spacing: 0.04em;
+	/* Tracking is added after every letter, the last one included, so the pair
+	   sits half a step left of centre without this. */
+	text-indent: 0.02em;
+}
+
+/* Opacity and scale: the circle arrives rather than appears. */
+@keyframes tbtp-mini-in {
+	from { opacity: 0; transform: scale(0.9); }
+	to { opacity: 1; transform: none; }
 }
 
 /* ------------------------------------------------------------------- List */
@@ -228,14 +323,12 @@
 	padding: var(--tbtn-cp-pad-top) 0 var(--tbtn-cp-pad-bottom);
 }
 
-.tbtp.is-collapsed .tbtp__body {
-	display: none;
-}
-
-/* Five rows and no more. `max-height` rather than `height` is what makes a
-   three-student class end after the third row instead of leaving two rows of
-   empty card below it. `overscroll-behavior` keeps the lesson page behind the
-   panel still when the teacher scrolls to either end of the roster. */
+/* Five rows and no more, and the list genuinely grows now: a completion is a
+   row of its own, so one student finishing four decks adds four. `max-height`
+   rather than `height` is what makes a three-row list end after the third
+   instead of leaving two rows of empty card below it. `overscroll-behavior`
+   keeps the lesson page behind the panel still when the teacher scrolls to
+   either end. */
 .tbtp__roster {
 	flex: 0 1 auto;
 	min-height: 0;
@@ -268,7 +361,8 @@
 
 /* -------------------------------------------------------------------- Row */
 
-/* Four columns on a 32px pitch. The dot cell is sized so that centring the
+/* Four columns on a 32px pitch, and one geometry for both kinds of row: a
+   completed task and a student. The dot cell is sized so that centring the
    dot in it is the same thing as putting it on cx 23.5; the three text
    columns then start on 47, 262 and 484 without a single magic offset. */
 .tbtp-student {

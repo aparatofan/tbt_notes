@@ -2,9 +2,10 @@
 /**
  * The teacher's live progress panel.
  *
- * A docked panel showing, for one class, who has finished a piece of work
- * today, who is working right now, and who has not started. It polls; nothing
- * about it is pushed.
+ * A docked panel showing, for one class, every piece of work finished since
+ * the teacher opened it, who is working right now, and who has not started. It
+ * polls; nothing about it is pushed. At rest it is a 56px circle in the corner
+ * — the CP Mini — and clicking that opens the full panel.
  *
  * Loading is gated twice. The capability check is cheap and runs first; the
  * roster resolver then decides whether this user has any class to look at, and
@@ -173,12 +174,12 @@ class TBT_Notes_Progress_Panel {
 			'restBase'     => esc_url_raw( rest_url( TBT_NOTES_REST_NAMESPACE . '/activity' ) ),
 			'nonce'        => wp_create_nonce( 'wp_rest' ),
 			'pollSeconds'  => self::POLL_SECONDS,
-			// The site's current UTC offset, in seconds. The panel's idea of
-			// "today" has to be the same instant the server counts from in
-			// TBT_Notes_DB::count_activity_today(); a browser computing its own
-			// midnight disagrees with it the moment a teacher works from another
-			// timezone, and the count would then contradict the roster beside it.
-			'tzOffset'     => wp_timezone()->getOffset( new DateTime( 'now', new DateTimeZone( 'UTC' ) ) ),
+			// No timezone offset travels with this. The panel used to compute
+			// the site's midnight in the browser to seed from the start of the
+			// day; the list is a feed now and seeds from the moment the class
+			// was opened. The only thing still reasoning about "today" is the
+			// counter, and TBT_Notes_DB::count_activity_today() does that
+			// server-side where wp_timezone() is already to hand.
 			'i18n'         => array(
 				'title'       => __( 'CLASS:', 'tbt-notes' ),
 				'done'        => __( 'Done', 'tbt-notes' ),
@@ -197,6 +198,10 @@ class TBT_Notes_Progress_Panel {
 				/* translators: %d: further completions not shown as their own toast. */
 				'andMore'     => __( 'and %d more', 'tbt-notes' ),
 				'empty'       => __( 'No students in this class yet.', 'tbt-notes' ),
+				// The collapsed circle's two letters are a mark rather than a
+				// word, and are hidden from the accessibility tree. This is
+				// what the button is called for as long as it is a circle.
+				'panel'       => __( 'Class progress', 'tbt-notes' ),
 				'offline'     => __( 'Reconnecting…', 'tbt-notes' ),
 				'collapse'    => __( 'Collapse', 'tbt-notes' ),
 				'expand'      => __( 'Expand', 'tbt-notes' ),
@@ -211,9 +216,10 @@ class TBT_Notes_Progress_Panel {
 	 * script from a permission-checked response, so a cached page can never
 	 * carry one class's roster into another teacher's view.
 	 *
-	 * The header is the whole of the collapsed panel and the top of the
-	 * expanded one, which is why the counter lives in it rather than in the
-	 * body: closing the list must not take the day's tally away with it.
+	 * One button serves both states. Expanded it is the header — label, class
+	 * name, the day's tally and the chevron. Collapsed those are all hidden and
+	 * the `CP` mark takes their place, which is why nothing here is conditional:
+	 * the markup is the same either way and CSS decides which half is on screen.
 	 */
 	public function render() {
 		if ( ! $this->enqueued ) {
@@ -224,6 +230,15 @@ class TBT_Notes_Progress_Panel {
 		<div class="tbtp-toasts" data-tbtp-toasts aria-live="polite" aria-atomic="false"></div>
 		<section class="tbtp" id="tbtp-panel" hidden>
 			<button type="button" class="tbtp__head" id="tbtp-head" aria-expanded="false" aria-controls="tbtp-body">
+				<?php
+				/*
+				 * Not translated: two letters that name the component the same
+				 * way in every language. Hidden from the accessibility tree,
+				 * because the script gives the button a real name for as long
+				 * as it is a circle.
+				 */
+				?>
+				<span class="tbtp__mini" aria-hidden="true">CP</span>
 				<span class="tbtp__label">
 					<span class="tbtp__eyebrow"><?php echo esc_html__( 'CLASS:', 'tbt-notes' ); ?></span>
 					<span class="tbtp__class" data-tbtp-classname></span>
