@@ -180,7 +180,7 @@ class TBT_Notes_Progress_Panel {
 			// timezone, and the count would then contradict the roster beside it.
 			'tzOffset'     => wp_timezone()->getOffset( new DateTime( 'now', new DateTimeZone( 'UTC' ) ) ),
 			'i18n'         => array(
-				'title'       => __( 'CLASS PROGRESS', 'tbt-notes' ),
+				'title'       => __( 'CLASS:', 'tbt-notes' ),
 				'done'        => __( 'Done', 'tbt-notes' ),
 				'working'     => __( 'Working', 'tbt-notes' ),
 				'idle'        => __( 'Not started', 'tbt-notes' ),
@@ -192,8 +192,6 @@ class TBT_Notes_Progress_Panel {
 				'count'       => __( '%1$d tasks today · %2$d of %3$d done', 'tbt-notes' ),
 				/* translators: 1: tasks finished today across the class, 2: students who have finished something, 3: students in the class. */
 				'countOne'    => __( '%1$d task today · %2$d of %3$d done', 'tbt-notes' ),
-				/* translators: %1$d: tasks finished today across the class. */
-				'ringLabel'   => __( '%1$d tasks finished today. Show class progress.', 'tbt-notes' ),
 				'finished'    => __( 'finished', 'tbt-notes' ),
 				'dismiss'     => __( 'Dismiss', 'tbt-notes' ),
 				/* translators: %d: further completions not shown as their own toast. */
@@ -212,6 +210,10 @@ class TBT_Notes_Progress_Panel {
 	 * Deliberately empty of student data: everything inside is built by the
 	 * script from a permission-checked response, so a cached page can never
 	 * carry one class's roster into another teacher's view.
+	 *
+	 * The header is the whole of the collapsed panel and the top of the
+	 * expanded one, which is why the counter lives in it rather than in the
+	 * body: closing the list must not take the day's tally away with it.
 	 */
 	public function render() {
 		if ( ! $this->enqueued ) {
@@ -222,18 +224,22 @@ class TBT_Notes_Progress_Panel {
 		<div class="tbtp-toasts" data-tbtp-toasts aria-live="polite" aria-atomic="false"></div>
 		<section class="tbtp" id="tbtp-panel" hidden>
 			<button type="button" class="tbtp__head" id="tbtp-head" aria-expanded="false" aria-controls="tbtp-body">
-				<svg class="tbtp__ring" viewBox="0 0 64 64" aria-hidden="true" focusable="false">
-					<circle class="tbtp__ring-track" cx="32" cy="32" r="25" fill="none" stroke-width="5"/>
-					<circle class="tbtp__ring-fill" cx="32" cy="32" r="25" fill="none" stroke-width="5" stroke-linecap="round" data-tbtp-ring />
-				</svg>
-				<span class="tbtp__bubble-count" data-tbtp-bubble aria-hidden="true"></span>
 				<span class="tbtp__label">
-					<span class="tbtp__eyebrow"><?php echo esc_html__( 'CLASS PROGRESS', 'tbt-notes' ); ?></span>
+					<span class="tbtp__eyebrow"><?php echo esc_html__( 'CLASS:', 'tbt-notes' ); ?></span>
 					<span class="tbtp__class" data-tbtp-classname></span>
 				</span>
 				<span class="tbtp__count" data-tbtp-count></span>
-				<svg class="tbtp__chev" viewBox="0 0 16 16" fill="none" aria-hidden="true" focusable="false">
-					<path d="M4 10l4-4 4 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+				<?php
+				/*
+				 * 14 wide by 7 tall, drawn so the arrow fills the box: the path
+				 * is inset by half the 2.4 stroke, so the round caps and the
+				 * round join stop exactly on the viewBox edge instead of being
+				 * clipped. It points up, and CSS turns it over when the list
+				 * is closed.
+				 */
+				?>
+				<svg class="tbtp__chev" viewBox="0 0 14 7" fill="none" aria-hidden="true" focusable="false">
+					<path d="M1.2 5.8L7 1.2l5.8 4.6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
 				</svg>
 			</button>
 			<div class="tbtp__body" id="tbtp-body">
