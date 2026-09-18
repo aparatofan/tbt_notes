@@ -534,6 +534,8 @@ class TBT_Notes_Frontend {
 			'newNoteIntro'      => __( 'Choose how this note starts. You can edit or delete anything afterwards.', 'tbt-notes' ),
 			'tplLessonName'     => __( 'Lesson template', 'tbt-notes' ),
 			'tplLessonDesc'     => __( 'The standard running order, headings ready to fill in.', 'tbt-notes' ),
+			'tplLessonHwName'   => __( 'Lesson + homework check', 'tbt-notes' ),
+			'tplLessonHwDesc'   => __( 'The running order with a homework check after Swipe.', 'tbt-notes' ),
 			'tplEmptyName'      => __( 'Empty page', 'tbt-notes' ),
 			'tplEmptyDesc'      => __( 'A blank note. Start from nothing and structure it your own way.', 'tbt-notes' ),
 			'tplBlank'          => __( 'Blank', 'tbt-notes' ),
