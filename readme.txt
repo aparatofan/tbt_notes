@@ -3,7 +3,7 @@ Contributors: thebluetree
 Requires at least: 6.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 1.17.0
+Stable tag: 1.18.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -48,6 +48,17 @@ No. Each student is assigned to at most one class (v1 design).
 No. The editor autosaves as the teacher types.
 
 == Changelog ==
+
+= 1.18.0 =
+* Notes gained a small read-only API and a mount point for other TBT tools.
+  Another plugin can now ask Notes whether a user may see a given note, which
+  classes a teacher manages, and what a set of notes are called, instead of
+  reading Notes' tables or re-deciding who owns what for itself. Alongside it,
+  a student's open note now carries an empty, unstyled element another tool can
+  render into, and an event that fires when the open note changes. Nothing is
+  visible on screen and nothing about writing, reading, printing or sharing
+  notes has changed; the API only reports permissions, it never grants them.
+  The contract is written down in docs/EXTENSION-API.md.
 
 = 1.17.0 =
 * For students, the Show bar now stays put at the top of the screen while
