@@ -3,7 +3,7 @@ Contributors: thebluetree
 Requires at least: 6.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 1.10.1
+Stable tag: 1.16.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -48,6 +48,14 @@ No. Each student is assigned to at most one class (v1 design).
 No. The editor autosaves as the teacher types.
 
 == Changelog ==
+
+= 1.16.0 =
+* A refresh now returns to the class and lesson that were open, instead of
+  going back to the class library. The open class and lesson are kept in the
+  page address, so the browser's Back button behaves exactly as before and a
+  lesson address can be copied into a message or a bookmark. Opening someone
+  else's link still shows only what that person is allowed to see; the address
+  names a lesson, it does not grant access to one. Overlay mode is unchanged.
 
 = 1.15.0 =
 * A third starting point in the new-note picker: "Lesson + homework check". It

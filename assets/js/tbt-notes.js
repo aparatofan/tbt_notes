@@ -102,6 +102,9 @@
 	// repaint. It starts as null rather than the no-class key so the very first
 	// render still fires once and says explicitly that nothing is open.
 	var announcedClassKey = null;
+	// Page Mode only: the last hash written by syncHash(). Compared on every
+	// render so the history API is touched only when the URL actually changes.
+	var lastSyncedHash = null;
 
 	/* --------------------------------------------------------------- Helpers */
 
@@ -827,6 +830,19 @@
 		api( 'GET', 'me' ).then( function ( data ) {
 			state.classes = data.classes || [];
 			state.loaded = true;
+			// Restore from the URL before the usual opening view is decided.
+			// The class is looked up in the list the `me` response just
+			// returned, never fetched: that response holds only the classes
+			// this viewer may see, so a hash naming any other id finds nothing
+			// and falls through to normal startup. A class deleted since the
+			// URL was bookmarked does the same, and the next render() rewrites
+			// the hash to match.
+			var restore = parseHash();
+			var wanted = restore ? findClassById( restore.classId ) : null;
+			if ( wanted ) {
+				openClass( wanted, restore.lessonId );
+				return;
+			}
 			if ( state.isTeacher ) {
 				state.view = 'root';
 				render();
@@ -942,6 +958,7 @@
 			pageSticky.update();
 		}
 		announceClass();
+		syncHash();
 	}
 
 	/**
@@ -979,6 +996,88 @@
 				title: title
 			}
 		} ) );
+	}
+
+	/**
+	 * Keep the URL in step with the open class and lesson (Page Mode only).
+	 *
+	 * Called from render() rather than from each navigation point: render() is
+	 * the single funnel every state change already passes through, so one call
+	 * here covers openClass, selectLesson, showClassesRoot, the create/delete
+	 * flows and the back button without any of them knowing about the URL.
+	 *
+	 * In Overlay Mode the hash belongs to the lesson page underneath, so this
+	 * returns immediately and the page URL never changes.
+	 *
+	 * history.replaceState, never assignment to location.hash: assignment pushes
+	 * a history entry and fires hashchange, which Divi's one-page scrolling
+	 * reacts to. replaceState does neither.
+	 */
+	function syncHash() {
+		if ( ! isPageMode ) {
+			return;
+		}
+
+		var want = '#';
+		if ( state.view === 'class' && state.currentClass && state.currentClass.id ) {
+			want = '#tbt-class=' + ( parseInt( state.currentClass.id, 10 ) || 0 );
+			if ( state.currentLesson && state.currentLesson.id ) {
+				want += '&tbt-lesson=' + ( parseInt( state.currentLesson.id, 10 ) || 0 );
+			}
+		}
+
+		if ( want === lastSyncedHash ) {
+			return;
+		}
+		lastSyncedHash = want;
+
+		// Nothing to clear: writing a bare '#' onto a URL that never carried a
+		// hash would dirty it for no gain. Once a hash has been written, '#'
+		// does clear it.
+		if ( want === '#' && ! window.location.hash ) {
+			return;
+		}
+
+		history.replaceState( null, '', window.location.pathname + window.location.search + want );
+	}
+
+	/**
+	 * Read the class and lesson ids back out of the hash.
+	 *
+	 * Both keys are namespaced so they cannot collide with a Divi or theme
+	 * anchor. Ids are integers; anything else is ignored, which means a theme
+	 * anchor like #contact simply parses to nothing and startup behaves as it
+	 * always did.
+	 *
+	 * @return {Object|null} { classId, lessonId } or null when there is nothing
+	 *                       to restore. lessonId is 0 when absent.
+	 */
+	function parseHash() {
+		if ( ! isPageMode || ! window.location.hash ) {
+			return null;
+		}
+
+		var classId = 0;
+		var lessonId = 0;
+
+		window.location.hash.replace( /^#/, '' ).split( '&' ).forEach( function ( pair ) {
+			var eq = pair.indexOf( '=' );
+			if ( eq < 1 ) {
+				return;
+			}
+			var key = pair.slice( 0, eq );
+			var raw = pair.slice( eq + 1 );
+			if ( ! /^[0-9]+$/.test( raw ) ) {
+				return;
+			}
+			if ( 'tbt-class' === key ) {
+				classId = parseInt( raw, 10 );
+			} else if ( 'tbt-lesson' === key ) {
+				lessonId = parseInt( raw, 10 );
+			}
+		} );
+
+		return classId ? { classId: classId, lessonId: lessonId } : null;
 	}
 
 	function renderView() {
@@ -1402,7 +1501,32 @@
 
 	/* ----------------------------------------------------------- Open a class */
 
-	function openClass( cls ) {
+	/**
+	 * Look a class up in the list the `me` response returned.
+	 *
+	 * @param {number} id Class id from the hash.
+	 * @return {Object|null}
+	 */
+	function findClassById( id ) {
+		for ( var i = 0; i < state.classes.length; i++ ) {
+			if ( ( parseInt( state.classes[ i ].id, 10 ) || 0 ) === id ) {
+				return state.classes[ i ];
+			}
+		}
+		return null;
+	}
+
+	/**
+	 * Open a class, optionally on a named lesson.
+	 *
+	 * @param {Object} cls          The class to open.
+	 * @param {number} [wantLessonId] Lesson to select, from the URL hash. When it
+	 *                                names no lesson in this class — deleted since
+	 *                                the URL was saved, or never in it — the first
+	 *                                lesson opens as it always did and the next
+	 *                                render() corrects the hash.
+	 */
+	function openClass( cls, wantLessonId ) {
 		state.currentClass = cls;
 		state.classIsNew = false;
 		state.lessons = [];
@@ -1415,7 +1539,16 @@
 		loadExtras( cls.id );
 		api( 'GET', 'classes/' + cls.id + '/lessons' ).then( function ( data ) {
 			state.lessons = data.lessons || [];
-			state.currentLesson = state.lessons.length ? state.lessons[ 0 ] : null;
+			var wanted = null;
+			if ( wantLessonId ) {
+				for ( var i = 0; i < state.lessons.length; i++ ) {
+					if ( ( parseInt( state.lessons[ i ].id, 10 ) || 0 ) === wantLessonId ) {
+						wanted = state.lessons[ i ];
+						break;
+					}
+				}
+			}
+			state.currentLesson = wanted || ( state.lessons.length ? state.lessons[ 0 ] : null );
 			state.loadingLessons = false;
 			render();
 		} ).catch( function ( err ) {
