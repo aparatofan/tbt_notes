@@ -49,6 +49,16 @@ No. The editor autosaves as the teacher types.
 
 == Changelog ==
 
+= 1.15.0 =
+* A third starting point in the new-note picker: "Lesson + homework check". It
+  is the usual running order with a HOMEWORK CHECK section after Swipe and no
+  OPTIONS section. The Lesson template and Empty page are unchanged, and Lesson
+  template is still the one pre-selected.
+* The gutter dot that shows which highlight colour is armed is now easy to read
+  at a glance. It was drawn in the pale highlight colour at low opacity, which
+  was close to invisible on white; armed, it now uses a stronger version of the
+  same colour. Highlighted text and the colour swatches look exactly as before.
+
 = 1.10.1 =
 * The class list header (page mode) takes the shared Admin Bar layout: a
   thin line joins the title, search and button, the search and button have

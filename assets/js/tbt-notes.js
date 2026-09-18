@@ -270,7 +270,7 @@
 
 	/* ----------------------------------------------------------- Note templates */
 
-	// The two starting points offered when a teacher creates a note. Kept as
+	// The starting points offered when a teacher creates a note. Kept as
 	// semantic HTML (the editor's native format) so headings and the nested list
 	// survive the sanitiser untouched.
 	//
@@ -300,6 +300,25 @@
 				'<h3>LESSON PLAN</h3>' +
 				'<ol><li>Update on work and life<ol><li>one good thing</li></ol></li></ol>' +
 				'<h3>OPTIONS</h3><p><br></p>' +
+				'<h3>LESSON NOTES</h3><p><br></p>' +
+				'<h3>NEXT STEPS</h3><p><br></p>' +
+				'<h3>HOMEWORK</h3><p><br></p>',
+		},
+		{
+			id: 'lesson-hw',
+			nameKey: 'tplLessonHwName',
+			nameFallback: 'Lesson + homework check',
+			descKey: 'tplLessonHwDesc',
+			descFallback: 'The running order with a homework check after Swipe.',
+			blank: false,
+			html:
+				'<h3>SWIPE</h3>' +
+				'<ol><li>link</li></ol>' +
+				'<h3>HOMEWORK CHECK</h3><p><br></p>' +
+				'<h3>HOW TO SAY IT</h3>' +
+				'<ol><li>function</li></ol>' +
+				'<h3>LESSON PLAN</h3>' +
+				'<ol><li>Update on work and life<ol><li>one good thing</li></ol></li></ol>' +
 				'<h3>LESSON NOTES</h3><p><br></p>' +
 				'<h3>NEXT STEPS</h3><p><br></p>' +
 				'<h3>HOMEWORK</h3><p><br></p>',
