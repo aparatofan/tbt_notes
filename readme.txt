@@ -3,7 +3,7 @@ Contributors: thebluetree
 Requires at least: 6.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 1.16.0
+Stable tag: 1.17.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -48,6 +48,13 @@ No. Each student is assigned to at most one class (v1 design).
 No. The editor autosaves as the teacher types.
 
 == Changelog ==
+
+= 1.17.0 =
+* For students, the Show bar now stays put at the top of the screen while
+  scrolling a long note, so switching between the full note and a highlight
+  category no longer means scrolling back up. It pins under the class title
+  strip and returns to its place once the note has scrolled past. Teachers and
+  overlay mode are unchanged.
 
 = 1.16.0 =
 * A refresh now returns to the class and lesson that were open, instead of

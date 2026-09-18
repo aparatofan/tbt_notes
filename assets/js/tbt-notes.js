@@ -5605,20 +5605,24 @@
 	 * startup. It re-finds the live elements on every scroll, so it does not
 	 * depend on the render lifecycle.
 	 *
-	 * Two members pin, in this order, as an ordered group:
+	 * Three members pin, in this order, as an ordered group:
 	 *
 	 *   1. the class title strip (.tbt-notes-topbar) — so the class name is
 	 *      visible at every scroll position;
-	 *   2. the Quill editor toolbar (.ql-toolbar).
+	 *   2. the Quill editor toolbar (.ql-toolbar);
+	 *   3. the student's highlight filter bar (.tbt-notes-filterbar), so a long
+	 *      note can be re-filtered without scrolling back to the top.
 	 *
-	 * Each member is optional: students have no toolbar, and the strip still pins
-	 * on its own.
+	 * Each member is optional, and 2 and 3 never compete: a teacher has the
+	 * toolbar and no filter bar, a student the reverse. The strip still pins on
+	 * its own.
 	 *
-	 * Both are MOVED (never cloned) into a position:fixed host mounted on <body>,
+	 * All are MOVED (never cloned) into a position:fixed host mounted on <body>,
 	 * with an in-flow spacer holding each one's place. Cloning would silently
 	 * break them — the strip carries the live lesson-header input bound to the
-	 * autosave controller, and the toolbar is bound to the Quill instance. The
-	 * host lives on <body> rather than using position:sticky because a theme
+	 * autosave controller, the toolbar is bound to the Quill instance, and the
+	 * filter buttons are bound to the content area they re-render. The host
+	 * lives on <body> rather than using position:sticky because a theme
 	 * wrapper (e.g. a Divi element with overflow or transform) creates a
 	 * containing block that traps a sticky element; see the matching note in
 	 * tbt-notes.css.
@@ -5628,6 +5632,7 @@
 	function initPageStickyHeader() {
 		var host = null;
 		var toolbarSlot = null;
+		var filterSlot = null;
 		var lastOffset = null;
 
 		// Ordered group, top to bottom. `find` locates the live element, `owner`
@@ -5667,6 +5672,24 @@
 				spacer: null,
 				box: null,
 			},
+			{
+				name: 'filterbar',
+				spacerCls: 'tbt-notes-filterbar-spacer',
+				find: function ( appEl ) {
+					return appEl.querySelector( '.tbt-notes-filterbar' );
+				},
+				// The lesson pane, so the bar unpins once the note itself has
+				// scrolled past — the same rule the toolbar follows.
+				owner: function ( elm ) {
+					return elm.closest( '.tbt-notes-detail' );
+				},
+				mount: function ( elm ) {
+					filterSlot.appendChild( elm );
+				},
+				el: null,
+				spacer: null,
+				box: null,
+			},
 		];
 
 		function ensureHost() {
@@ -5679,6 +5702,11 @@
 			// The toolbar's own styling is written against this wrapper.
 			toolbarSlot = el( 'div', 'tbt-notes-editor-quillwrap' );
 			host.appendChild( toolbarSlot );
+			// Last, so a pinned filter bar sits under the strip. The topbar
+			// member inserts itself ahead of the toolbar slot, so the three
+			// stack in members order whatever order they pin in.
+			filterSlot = el( 'div', 'tbt-notes-sticky-filterslot' );
+			host.appendChild( filterSlot );
 			document.body.appendChild( host );
 		}
 
@@ -5836,17 +5864,23 @@
 		}
 
 		/**
-		 * The strip spans the workspace, but the toolbar has to keep the width and
-		 * inset of the editor column it came from, so its slot is offset inside the
-		 * host rather than filling it.
+		 * The strip spans the workspace, but the toolbar and the filter bar each
+		 * have to keep the width and inset of the column they came from, so their
+		 * slots are offset inside the host rather than filling it.
+		 *
+		 * Offsetting the slot rather than the moved element is what keeps unpin()
+		 * free of new cleanup: it still just puts the element back beside its
+		 * spacer, and the styles stay on the slot it left behind.
 		 */
 		function placeMember( member, appRect ) {
-			if ( member.name !== 'toolbar' ) {
+			var slot = 'toolbar' === member.name ? toolbarSlot
+				: ( 'filterbar' === member.name ? filterSlot : null );
+			if ( ! slot ) {
 				return;
 			}
 			var boxRect = member.box.getBoundingClientRect();
-			toolbarSlot.style.marginLeft = ( boxRect.left - appRect.left ) + 'px';
-			toolbarSlot.style.width = boxRect.width + 'px';
+			slot.style.marginLeft = ( boxRect.left - appRect.left ) + 'px';
+			slot.style.width = boxRect.width + 'px';
 		}
 
 		window.addEventListener( 'scroll', update, true );
