@@ -102,6 +102,9 @@
 	// repaint. It starts as null rather than the no-class key so the very first
 	// render still fires once and says explicitly that nothing is open.
 	var announcedClassKey = null;
+	// Page Mode only: the last hash written by syncHash(). Compared on every
+	// render so the history API is touched only when the URL actually changes.
+	var lastSyncedHash = null;
 
 	/* --------------------------------------------------------------- Helpers */
 
@@ -827,6 +830,19 @@
 		api( 'GET', 'me' ).then( function ( data ) {
 			state.classes = data.classes || [];
 			state.loaded = true;
+			// Restore from the URL before the usual opening view is decided.
+			// The class is looked up in the list the `me` response just
+			// returned, never fetched: that response holds only the classes
+			// this viewer may see, so a hash naming any other id finds nothing
+			// and falls through to normal startup. A class deleted since the
+			// URL was bookmarked does the same, and the next render() rewrites
+			// the hash to match.
+			var restore = parseHash();
+			var wanted = restore ? findClassById( restore.classId ) : null;
+			if ( wanted ) {
+				openClass( wanted, restore.lessonId );
+				return;
+			}
 			if ( state.isTeacher ) {
 				state.view = 'root';
 				render();
@@ -942,6 +958,7 @@
 			pageSticky.update();
 		}
 		announceClass();
+		syncHash();
 	}
 
 	/**
@@ -979,6 +996,88 @@
 				title: title
 			}
 		} ) );
+	}
+
+	/**
+	 * Keep the URL in step with the open class and lesson (Page Mode only).
+	 *
+	 * Called from render() rather than from each navigation point: render() is
+	 * the single funnel every state change already passes through, so one call
+	 * here covers openClass, selectLesson, showClassesRoot, the create/delete
+	 * flows and the back button without any of them knowing about the URL.
+	 *
+	 * In Overlay Mode the hash belongs to the lesson page underneath, so this
+	 * returns immediately and the page URL never changes.
+	 *
+	 * history.replaceState, never assignment to location.hash: assignment pushes
+	 * a history entry and fires hashchange, which Divi's one-page scrolling
+	 * reacts to. replaceState does neither.
+	 */
+	function syncHash() {
+		if ( ! isPageMode ) {
+			return;
+		}
+
+		var want = '#';
+		if ( state.view === 'class' && state.currentClass && state.currentClass.id ) {
+			want = '#tbt-class=' + ( parseInt( state.currentClass.id, 10 ) || 0 );
+			if ( state.currentLesson && state.currentLesson.id ) {
+				want += '&tbt-lesson=' + ( parseInt( state.currentLesson.id, 10 ) || 0 );
+			}
+		}
+
+		if ( want === lastSyncedHash ) {
+			return;
+		}
+		lastSyncedHash = want;
+
+		// Nothing to clear: writing a bare '#' onto a URL that never carried a
+		// hash would dirty it for no gain. Once a hash has been written, '#'
+		// does clear it.
+		if ( want === '#' && ! window.location.hash ) {
+			return;
+		}
+
+		history.replaceState( null, '', window.location.pathname + window.location.search + want );
+	}
+
+	/**
+	 * Read the class and lesson ids back out of the hash.
+	 *
+	 * Both keys are namespaced so they cannot collide with a Divi or theme
+	 * anchor. Ids are integers; anything else is ignored, which means a theme
+	 * anchor like #contact simply parses to nothing and startup behaves as it
+	 * always did.
+	 *
+	 * @return {Object|null} { classId, lessonId } or null when there is nothing
+	 *                       to restore. lessonId is 0 when absent.
+	 */
+	function parseHash() {
+		if ( ! isPageMode || ! window.location.hash ) {
+			return null;
+		}
+
+		var classId = 0;
+		var lessonId = 0;
+
+		window.location.hash.replace( /^#/, '' ).split( '&' ).forEach( function ( pair ) {
+			var eq = pair.indexOf( '=' );
+			if ( eq < 1 ) {
+				return;
+			}
+			var key = pair.slice( 0, eq );
+			var raw = pair.slice( eq + 1 );
+			if ( ! /^[0-9]+$/.test( raw ) ) {
+				return;
+			}
+			if ( 'tbt-class' === key ) {
+				classId = parseInt( raw, 10 );
+			} else if ( 'tbt-lesson' === key ) {
+				lessonId = parseInt( raw, 10 );
+			}
+		} );
+
+		return classId ? { classId: classId, lessonId: lessonId } : null;
 	}
 
 	function renderView() {
@@ -1402,7 +1501,32 @@
 
 	/* ----------------------------------------------------------- Open a class */
 
-	function openClass( cls ) {
+	/**
+	 * Look a class up in the list the `me` response returned.
+	 *
+	 * @param {number} id Class id from the hash.
+	 * @return {Object|null}
+	 */
+	function findClassById( id ) {
+		for ( var i = 0; i < state.classes.length; i++ ) {
+			if ( ( parseInt( state.classes[ i ].id, 10 ) || 0 ) === id ) {
+				return state.classes[ i ];
+			}
+		}
+		return null;
+	}
+
+	/**
+	 * Open a class, optionally on a named lesson.
+	 *
+	 * @param {Object} cls          The class to open.
+	 * @param {number} [wantLessonId] Lesson to select, from the URL hash. When it
+	 *                                names no lesson in this class — deleted since
+	 *                                the URL was saved, or never in it — the first
+	 *                                lesson opens as it always did and the next
+	 *                                render() corrects the hash.
+	 */
+	function openClass( cls, wantLessonId ) {
 		state.currentClass = cls;
 		state.classIsNew = false;
 		state.lessons = [];
@@ -1415,7 +1539,16 @@
 		loadExtras( cls.id );
 		api( 'GET', 'classes/' + cls.id + '/lessons' ).then( function ( data ) {
 			state.lessons = data.lessons || [];
-			state.currentLesson = state.lessons.length ? state.lessons[ 0 ] : null;
+			var wanted = null;
+			if ( wantLessonId ) {
+				for ( var i = 0; i < state.lessons.length; i++ ) {
+					if ( ( parseInt( state.lessons[ i ].id, 10 ) || 0 ) === wantLessonId ) {
+						wanted = state.lessons[ i ];
+						break;
+					}
+				}
+			}
+			state.currentLesson = wanted || ( state.lessons.length ? state.lessons[ 0 ] : null );
 			state.loadingLessons = false;
 			render();
 		} ).catch( function ( err ) {
@@ -5472,20 +5605,24 @@
 	 * startup. It re-finds the live elements on every scroll, so it does not
 	 * depend on the render lifecycle.
 	 *
-	 * Two members pin, in this order, as an ordered group:
+	 * Three members pin, in this order, as an ordered group:
 	 *
 	 *   1. the class title strip (.tbt-notes-topbar) — so the class name is
 	 *      visible at every scroll position;
-	 *   2. the Quill editor toolbar (.ql-toolbar).
+	 *   2. the Quill editor toolbar (.ql-toolbar);
+	 *   3. the student's highlight filter bar (.tbt-notes-filterbar), so a long
+	 *      note can be re-filtered without scrolling back to the top.
 	 *
-	 * Each member is optional: students have no toolbar, and the strip still pins
-	 * on its own.
+	 * Each member is optional, and 2 and 3 never compete: a teacher has the
+	 * toolbar and no filter bar, a student the reverse. The strip still pins on
+	 * its own.
 	 *
-	 * Both are MOVED (never cloned) into a position:fixed host mounted on <body>,
+	 * All are MOVED (never cloned) into a position:fixed host mounted on <body>,
 	 * with an in-flow spacer holding each one's place. Cloning would silently
 	 * break them — the strip carries the live lesson-header input bound to the
-	 * autosave controller, and the toolbar is bound to the Quill instance. The
-	 * host lives on <body> rather than using position:sticky because a theme
+	 * autosave controller, the toolbar is bound to the Quill instance, and the
+	 * filter buttons are bound to the content area they re-render. The host
+	 * lives on <body> rather than using position:sticky because a theme
 	 * wrapper (e.g. a Divi element with overflow or transform) creates a
 	 * containing block that traps a sticky element; see the matching note in
 	 * tbt-notes.css.
@@ -5495,6 +5632,7 @@
 	function initPageStickyHeader() {
 		var host = null;
 		var toolbarSlot = null;
+		var filterSlot = null;
 		var lastOffset = null;
 
 		// Ordered group, top to bottom. `find` locates the live element, `owner`
@@ -5534,6 +5672,24 @@
 				spacer: null,
 				box: null,
 			},
+			{
+				name: 'filterbar',
+				spacerCls: 'tbt-notes-filterbar-spacer',
+				find: function ( appEl ) {
+					return appEl.querySelector( '.tbt-notes-filterbar' );
+				},
+				// The lesson pane, so the bar unpins once the note itself has
+				// scrolled past — the same rule the toolbar follows.
+				owner: function ( elm ) {
+					return elm.closest( '.tbt-notes-detail' );
+				},
+				mount: function ( elm ) {
+					filterSlot.appendChild( elm );
+				},
+				el: null,
+				spacer: null,
+				box: null,
+			},
 		];
 
 		function ensureHost() {
@@ -5546,6 +5702,11 @@
 			// The toolbar's own styling is written against this wrapper.
 			toolbarSlot = el( 'div', 'tbt-notes-editor-quillwrap' );
 			host.appendChild( toolbarSlot );
+			// Last, so a pinned filter bar sits under the strip. The topbar
+			// member inserts itself ahead of the toolbar slot, so the three
+			// stack in members order whatever order they pin in.
+			filterSlot = el( 'div', 'tbt-notes-sticky-filterslot' );
+			host.appendChild( filterSlot );
 			document.body.appendChild( host );
 		}
 
@@ -5703,17 +5864,23 @@
 		}
 
 		/**
-		 * The strip spans the workspace, but the toolbar has to keep the width and
-		 * inset of the editor column it came from, so its slot is offset inside the
-		 * host rather than filling it.
+		 * The strip spans the workspace, but the toolbar and the filter bar each
+		 * have to keep the width and inset of the column they came from, so their
+		 * slots are offset inside the host rather than filling it.
+		 *
+		 * Offsetting the slot rather than the moved element is what keeps unpin()
+		 * free of new cleanup: it still just puts the element back beside its
+		 * spacer, and the styles stay on the slot it left behind.
 		 */
 		function placeMember( member, appRect ) {
-			if ( member.name !== 'toolbar' ) {
+			var slot = 'toolbar' === member.name ? toolbarSlot
+				: ( 'filterbar' === member.name ? filterSlot : null );
+			if ( ! slot ) {
 				return;
 			}
 			var boxRect = member.box.getBoundingClientRect();
-			toolbarSlot.style.marginLeft = ( boxRect.left - appRect.left ) + 'px';
-			toolbarSlot.style.width = boxRect.width + 'px';
+			slot.style.marginLeft = ( boxRect.left - appRect.left ) + 'px';
+			slot.style.width = boxRect.width + 'px';
 		}
 
 		window.addEventListener( 'scroll', update, true );
