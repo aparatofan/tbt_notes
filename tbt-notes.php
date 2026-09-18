@@ -3,7 +3,7 @@
  * Plugin Name:       TBT Notes
  * Plugin URI:        https://thebluetree.example/
  * Description:       Per-class lesson notes for The Blue Tree. A teacher writes notes per class; each logged-in student sees only the notes for the class they are assigned to, in a slide-out side panel.
- * Version:           1.17.0
+ * Version:           1.18.0
  * Requires at least: 6.0
  * Requires PHP:      8.0
  * Author:            The Blue Tree
@@ -23,7 +23,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 /**
  * Plugin version. Bump on release.
  */
-define( 'TBT_NOTES_VERSION', '1.17.0' );
+define( 'TBT_NOTES_VERSION', '1.18.0' );
 
 /**
  * Database schema version. Bump when the table structure changes so that
@@ -52,6 +52,7 @@ require_once TBT_NOTES_PLUGIN_DIR . 'includes/class-tbt-notes-expression-cards.p
 require_once TBT_NOTES_PLUGIN_DIR . 'includes/class-tbt-notes-ai-quick-note.php';
 require_once TBT_NOTES_PLUGIN_DIR . 'includes/class-tbt-notes-rest.php';
 require_once TBT_NOTES_PLUGIN_DIR . 'includes/class-tbt-notes-roster.php';
+require_once TBT_NOTES_PLUGIN_DIR . 'includes/class-tbt-notes-api.php';
 require_once TBT_NOTES_PLUGIN_DIR . 'includes/class-tbt-notes-activity-rest.php';
 require_once TBT_NOTES_PLUGIN_DIR . 'includes/class-tbt-notes-progress-panel.php';
 require_once TBT_NOTES_PLUGIN_DIR . 'includes/class-tbt-notes-frontend.php';
@@ -147,3 +148,54 @@ function tbt_notes_register_hub_item( $items ) {
 	return $items;
 }
 add_filter( 'tbt_hub_items', 'tbt_notes_register_hub_item' );
+
+/* ------------------------------------------------------------------ Public API */
+
+/*
+ * The read-only API other TBT plugins call. The work lives in TBT_Notes_API;
+ * these file-level wrappers are the supported surface, so a caller needs no
+ * class name and no knowledge of where Notes keeps anything. Each is guarded
+ * with function_exists so a site that somehow loads two copies of Notes fails
+ * on the duplicate plugin rather than on a fatal redeclaration.
+ *
+ * All three are read-only and none of them grants anything: lesson context
+ * reports the flags, it does not enforce them. See docs/EXTENSION-API.md.
+ */
+
+if ( ! function_exists( 'tbt_notes_lesson_context' ) ) {
+	/**
+	 * Does this lesson exist, and what may this user do with it?
+	 *
+	 * @param int $lesson_id Lesson ID.
+	 * @param int $user_id   User ID, or 0 for the current user.
+	 * @return array|null Context array, or null when the lesson does not exist.
+	 */
+	function tbt_notes_lesson_context( int $lesson_id, int $user_id = 0 ): ?array {
+		return TBT_Notes_API::lesson_context( $lesson_id, $user_id );
+	}
+}
+
+if ( ! function_exists( 'tbt_notes_class_ids_for_manager' ) ) {
+	/**
+	 * The class ids this user manages. Empty for a student or a visitor.
+	 *
+	 * @param int $user_id User ID, or 0 for the current user.
+	 * @return int[]
+	 */
+	function tbt_notes_class_ids_for_manager( int $user_id = 0 ): array {
+		return TBT_Notes_API::class_ids_for_manager( $user_id );
+	}
+}
+
+if ( ! function_exists( 'tbt_notes_lessons_brief' ) ) {
+	/**
+	 * Display titles in bulk. Ids the user may not view are omitted.
+	 *
+	 * @param int[] $lesson_ids Lesson IDs.
+	 * @param int   $user_id    User ID, or 0 for the current user.
+	 * @return array[] Keyed by lesson ID.
+	 */
+	function tbt_notes_lessons_brief( array $lesson_ids, int $user_id = 0 ): array {
+		return TBT_Notes_API::lessons_brief( $lesson_ids, $user_id );
+	}
+}

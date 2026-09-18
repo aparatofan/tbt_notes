@@ -958,6 +958,7 @@
 			pageSticky.update();
 		}
 		announceClass();
+		announceLessonView();
 		syncHash();
 	}
 
@@ -994,6 +995,37 @@
 			detail: {
 				id: id,
 				title: title
+			}
+		} ) );
+	}
+
+	/**
+	 * Tell anything listening that a student is looking at a note, so it can
+	 * mount into the slot rendered under it.
+	 *
+	 * Mirrors announceClass() with one deliberate difference: no deduplication
+	 * key. announceClass skips a repeat because the progress panel only needs
+	 * to know the class changed, but here every render builds a fresh slot
+	 * element, so a consumer must re-mount into the new node each time. A
+	 * dedupe guard would leave it mounted on a node no longer in the document.
+	 *
+	 * The event carries ids, not nodes: the consumer queries for the slot
+	 * itself, exactly as it would for any other element on the page. Reading
+	 * the ids back off the slot is what ties the two together — no slot, no
+	 * event, and the ids announced are always the ones the slot carries.
+	 *
+	 * Called from render() rather than renderClassView() so it fires once the
+	 * new DOM is in place, not while the tree is still being assembled.
+	 */
+	function announceLessonView() {
+		var slot = content.querySelector( '[data-tbt-slot="lesson-foot"]' );
+		if ( ! slot ) {
+			return;
+		}
+		document.dispatchEvent( new CustomEvent( 'tbt-notes:lesson-view', {
+			detail: {
+				classId: parseInt( slot.getAttribute( 'data-class-id' ), 10 ) || 0,
+				lessonId: parseInt( slot.getAttribute( 'data-lesson-id' ), 10 ) || 0
 			}
 		} ) );
 	}
@@ -2189,6 +2221,9 @@
 				detail.appendChild( buildFilterBar( state.currentLesson, contentArea ) );
 				detail.appendChild( contentArea );
 				renderLessonContent( contentArea, state.currentLesson );
+				// A mount point for other TBT tools, outside the content area so
+				// the filter buttons cannot destroy whatever is mounted in it.
+				detail.appendChild( lessonFootSlot( state.currentLesson ) );
 			}
 		} else if ( isTeacher ) {
 			var prompt = el( 'div', modeCls( 'tbt-empty', 'tbt-notes-empty' ) );
@@ -2402,6 +2437,34 @@
 			renderLessonContent( contentArea, lesson );
 		} ) );
 		return bar;
+	}
+
+	/**
+	 * Student-only mount point under the note: an empty element another TBT
+	 * plugin can render into, carrying the two ids it needs.
+	 *
+	 * Deliberately a sibling of the content area rather than a child of it.
+	 * Pressing a highlight filter clears and refills the content area, so
+	 * anything mounted inside it would be destroyed by a filter press; out here
+	 * the slot survives untouched.
+	 *
+	 * Empty and unstyled: Notes puts nothing in it and reserves no space for
+	 * it, and the plugin that mounts into it owns every pixel it then shows.
+	 * Students only — the teacher's editor branch gets no slot.
+	 *
+	 * @param {Object} lesson The open lesson.
+	 * @return {HTMLElement} The empty slot element.
+	 */
+	function lessonFootSlot( lesson ) {
+		var cls = state.currentClass;
+		// The lesson's own class_id first, so the two ids always describe the
+		// same note; the open class is only a fallback.
+		var classId = parseInt( lesson.class_id, 10 ) || ( cls && parseInt( cls.id, 10 ) ) || 0;
+		var slot = el( 'div', 'tbt-notes-slot' );
+		slot.setAttribute( 'data-tbt-slot', 'lesson-foot' );
+		slot.setAttribute( 'data-class-id', String( classId ) );
+		slot.setAttribute( 'data-lesson-id', String( parseInt( lesson.id, 10 ) || 0 ) );
+		return slot;
 	}
 
 	/**
