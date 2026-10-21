@@ -292,47 +292,44 @@
 		{
 			id: 'lesson',
 			nameKey: 'tplLessonName',
-			nameFallback: 'Lesson template',
+			nameFallback: 'Template 1',
 			descKey: 'tplLessonDesc',
-			descFallback: 'The standard running order, headings ready to fill in.',
+			descFallback: 'Swipe, Drill, HTSI, Lesson plan',
 			blank: false,
 			html:
 				'<h3>SWIPE</h3>' +
+				'<ol><li>link</li></ol>' +
+				'<h3>DRILL</h3>' +
 				'<ol><li>link</li></ol>' +
 				'<h3>HOW TO SAY IT</h3>' +
 				'<ol><li>function</li></ol>' +
 				'<h3>LESSON PLAN</h3>' +
 				'<ol><li>Update on work and life<ol><li>one good thing</li></ol></li></ol>' +
-				'<h3>OPTIONS</h3><p><br></p>' +
 				'<h3>LESSON NOTES</h3><p><br></p>' +
-				'<h3>NEXT STEPS</h3><p><br></p>' +
+				'<h3>NEXT</h3><p><br></p>' +
 				'<h3>HOMEWORK</h3><p><br></p>',
 		},
 		{
 			id: 'lesson-hw',
 			nameKey: 'tplLessonHwName',
-			nameFallback: 'Lesson + homework check',
+			nameFallback: 'Template 2',
 			descKey: 'tplLessonHwDesc',
-			descFallback: 'The running order with a homework check after Swipe.',
+			descFallback: 'Homework, Lesson plan',
 			blank: false,
 			html:
-				'<h3>SWIPE</h3>' +
-				'<ol><li>link</li></ol>' +
 				'<h3>HOMEWORK CHECK</h3><p><br></p>' +
-				'<h3>HOW TO SAY IT</h3>' +
-				'<ol><li>function</li></ol>' +
 				'<h3>LESSON PLAN</h3>' +
 				'<ol><li>Update on work and life<ol><li>one good thing</li></ol></li></ol>' +
 				'<h3>LESSON NOTES</h3><p><br></p>' +
-				'<h3>NEXT STEPS</h3><p><br></p>' +
+				'<h3>NEXT</h3><p><br></p>' +
 				'<h3>HOMEWORK</h3><p><br></p>',
 		},
 		{
 			id: 'empty',
 			nameKey: 'tplEmptyName',
-			nameFallback: 'Empty page',
+			nameFallback: 'Template 3',
 			descKey: 'tplEmptyDesc',
-			descFallback: 'A blank note. Start from nothing and structure it your own way.',
+			descFallback: 'Empty page',
 			blank: true,
 			// One empty paragraph, not an empty string: Quill needs a valid block
 			// to place the cursor in, and a truly empty body leaves the editor in
