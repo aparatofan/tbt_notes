@@ -3,7 +3,7 @@ Contributors: thebluetree
 Requires at least: 6.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 1.18.0
+Stable tag: 1.18.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -48,6 +48,13 @@ No. Each student is assigned to at most one class (v1 design).
 No. The editor autosaves as the teacher types.
 
 == Changelog ==
+
+= 1.18.1 =
+* A lesson row now shows one icon per contributing tool instead of a single
+  icon for everything. Each icon has its own tooltip, its own count and its own
+  panel; opening one closes the other. A contributing group may name that
+  tooltip with a new optional `action` field; without it the row keeps the
+  existing "Pokaż fiszki". No schema change.
 
 = 1.18.0 =
 * Notes gained a small read-only API and a mount point for other TBT tools.

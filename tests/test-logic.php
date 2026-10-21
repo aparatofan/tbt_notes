@@ -1510,6 +1510,18 @@ function test_extras_sanitize() {
 	ok( $anchored[0]['items'][0]['lesson_id'] === 42, 'lesson_id is absint-ed' );
 	ok( $anchored[0]['items'][1]['lesson_id'] === 0, 'an absent lesson_id defaults to 0 (not anchored)' );
 	ok( $anchored[0]['items'][2]['lesson_id'] === 9, 'a negative lesson_id cannot survive as negative' );
+
+	// action is the optional lesson-row tooltip; absent means "use the generic one".
+	$actions = TBT_Notes_REST::sanitize_extras(
+		array(
+			array( 'key' => 'a', 'action' => 'Pokaż ćwiczenie', 'items' => array( array( 'url' => 'https://x.pl/a' ) ) ),
+			array( 'key' => 'b', 'action' => 'Otwórz <b>to</b><script>x</script>', 'items' => array( array( 'url' => 'https://x.pl/b' ) ) ),
+			array( 'key' => 'c', 'items' => array( array( 'url' => 'https://x.pl/c' ) ) ),
+		)
+	);
+	ok( $actions[0]['action'] === 'Pokaż ćwiczenie', 'action survives sanitising' );
+	ok( ! contains( $actions[1]['action'], '<' ) && contains( $actions[1]['action'], 'Otwórz' ), 'an action with tags is stripped to text' );
+	ok( $actions[2]['action'] === '', 'a group without action returns empty' );
 }
 test_extras_sanitize();
 
