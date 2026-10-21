@@ -528,9 +528,11 @@ class TBT_Notes_REST {
 		 *
 		 * Each contributor appends zero or more groups shaped as:
 		 *   array(
-		 *     'key'   => 'some_slug',   // unique, [a-z_]
-		 *     'label' => 'Heading',
-		 *     'items' => array(
+		 *     'key'    => 'some_slug',   // unique, [a-z_]
+		 *     'label'  => 'Heading',
+		 *     'action' => 'Open it',     // optional lesson-row tooltip / aria-label
+		 *     'icon'   => '<svg…>',      // optional, allowlisted SVG
+		 *     'items'  => array(
 		 *       array( 'id' => 1, 'title' => '…', 'subtitle' => '…', 'url' => '…' ),
 		 *     ),
 		 *   )
@@ -603,13 +605,16 @@ class TBT_Notes_REST {
 
 			$clean[] = array(
 				'key'   => $key,
-				'label' => isset( $group['label'] ) ? sanitize_text_field( (string) $group['label'] ) : '',
+				'label'  => isset( $group['label'] ) ? sanitize_text_field( (string) $group['label'] ) : '',
+				// Optional tooltip / aria-label for the group's lesson-row control.
+				// Empty when absent; the panel then uses its generic string.
+				'action' => isset( $group['action'] ) ? sanitize_text_field( (string) $group['action'] ) : '',
 				// Optional group artwork, supplied as raw SVG by the contributor so
 				// Notes needs no icon of its own for content it did not create.
 				// Empty when absent or when nothing survived the allowlist; the
 				// panel then falls back to its own neutral glyph.
-				'icon'  => isset( $group['icon'] ) ? self::sanitize_extras_icon( $group['icon'] ) : '',
-				'items' => $items,
+				'icon'   => isset( $group['icon'] ) ? self::sanitize_extras_icon( $group['icon'] ) : '',
+				'items'  => $items,
 			);
 		}
 

@@ -83,7 +83,8 @@
 		extrasClassId: 0,
 		extrasOpenGroups: {},
 		extrasOpenItem: '',
-		extrasOpenLesson: 0,
+		// 'l:' + lessonId + ':' + groupKey of the open lesson-row button, or ''.
+		extrasOpenRow: '',
 		sidebarFolded: false,
 		// Page Mode class-list search term, kept for the session so a re-render
 		// (delete a class, open one and come back) returns to the same filtered list.
@@ -1616,7 +1617,7 @@
 		state.extrasClassId = classId;
 		state.extrasOpenGroups = {};
 		state.extrasOpenItem = '';
-		state.extrasOpenLesson = 0;
+		state.extrasOpenRow = '';
 
 		api( 'GET', 'classes/' + classId + '/extras' ).then( function ( data ) {
 			// The user may have moved to another class while this was in flight.
@@ -1665,6 +1666,9 @@
 	 * was made — is deliberately excluded so it falls through to the group list
 	 * instead of pointing at a row that is not there.
 	 *
+	 * Entries keep the order groups arrive in (filter priority), so a lesson's
+	 * entries are already contiguous per group; see lessonExtrasGroups().
+	 *
 	 * @return {Object} lessonId → entries.
 	 */
 	function extrasByLesson() {
@@ -1684,6 +1688,39 @@
 			map[ entry.lessonId ].push( entry );
 		} );
 		return map;
+	}
+
+	/**
+	 * One lesson's entries split by contributing group, in the order the groups
+	 * arrived, so each tool gets its own control on the row.
+	 *
+	 * @param {Array} entries Entries anchored to one lesson.
+	 * @return {Array} Of { group, entries }.
+	 */
+	function lessonExtrasGroups( entries ) {
+		var out = [];
+		var byKey = {};
+		entries.forEach( function ( entry ) {
+			var key = entry.group.key;
+			if ( ! byKey[ key ] ) {
+				byKey[ key ] = { group: entry.group, entries: [] };
+				out.push( byKey[ key ] );
+			}
+			byKey[ key ].entries.push( entry );
+		} );
+		return out;
+	}
+
+	/**
+	 * The open-state key, and focus-restore key, of one group's control on one
+	 * lesson row.
+	 *
+	 * @param {number} lessonId Lesson the row belongs to.
+	 * @param {Object} group    Contributing group.
+	 * @return {string}
+	 */
+	function lessonExtrasKey( lessonId, group ) {
+		return 'l:' + lessonId + ':' + group.key;
 	}
 
 	/**
@@ -1746,43 +1783,55 @@
 				return;
 			}
 
-			var isOpen = state.extrasOpenLesson === lessonId;
-			row.classList.add( 'has-extras' );
-			row.classList.toggle( 'is-extras-open', isOpen );
-
+			var groups = lessonExtrasGroups( entries );
+			var openGroup = null;
 			// Before the delete control, so the destructive action stays last.
 			var deleteBtn = row.querySelector( '.tbt-notes-listitem__delete' );
-			var button = lessonExtrasButton( lessonId, entries, isOpen );
-			if ( deleteBtn ) {
-				row.insertBefore( button, deleteBtn );
-			} else {
-				row.appendChild( button );
-			}
 
-			if ( isOpen ) {
-				row.appendChild( lessonExtrasPanel( entries ) );
+			groups.forEach( function ( g ) {
+				var isOpen = state.extrasOpenRow === lessonExtrasKey( lessonId, g.group );
+				if ( isOpen ) {
+					openGroup = g;
+				}
+				var button = lessonExtrasButton( lessonId, g.group, g.entries, isOpen );
+				if ( deleteBtn ) {
+					row.insertBefore( button, deleteBtn );
+				} else {
+					row.appendChild( button );
+				}
+			} );
+
+			row.classList.add( 'has-extras' );
+			row.classList.toggle( 'is-extras-open', !! openGroup );
+
+			if ( openGroup ) {
+				row.appendChild( lessonExtrasPanel( openGroup.entries ) );
 			}
 		} );
 	}
 
 	/**
-	 * The control on a lesson row: the contributor's mark, plus a count when the
-	 * lesson has more than one item.
+	 * One group's control on a lesson row: the contributor's mark, plus a count
+	 * when that group has more than one item on the lesson. The label is the
+	 * group's own `action`, falling back to the generic string.
 	 *
-	 * @param {number} lessonId Lesson the row belongs to.
-	 * @param {Array}  entries  Items anchored to it.
-	 * @param {boolean} isOpen  Whether its panel is showing.
+	 * @param {number}  lessonId Lesson the row belongs to.
+	 * @param {Object}  group    Contributing group.
+	 * @param {Array}   entries  This group's items anchored to the lesson.
+	 * @param {boolean} isOpen   Whether its panel is showing.
 	 * @return {HTMLElement}
 	 */
-	function lessonExtrasButton( lessonId, entries, isOpen ) {
+	function lessonExtrasButton( lessonId, group, entries, isOpen ) {
+		var rowKey = lessonExtrasKey( lessonId, group );
+		var label = group.action || t( 'extrasOpenDeck', 'Pokaż fiszki' );
 		var button = el( 'button', 'tbt-notes-lesson-extras' + ( isOpen ? ' is-open' : '' ) );
 		button.type = 'button';
 		button.setAttribute( 'aria-expanded', isOpen ? 'true' : 'false' );
-		button.setAttribute( 'data-tbt-extras-key', 'l:' + lessonId );
-		button.setAttribute( 'aria-label', t( 'extrasOpenDeck', 'Pokaż fiszki' ) );
-		button.title = t( 'extrasOpenDeck', 'Pokaż fiszki' );
+		button.setAttribute( 'data-tbt-extras-key', rowKey );
+		button.setAttribute( 'aria-label', label );
+		button.title = label;
 
-		button.appendChild( extrasIcon( entries[ 0 ].group ) );
+		button.appendChild( extrasIcon( group ) );
 		if ( entries.length > 1 ) {
 			button.appendChild( el( 'span', 'tbt-notes-lesson-extras__count', String( entries.length ) ) );
 		}
@@ -1791,11 +1840,11 @@
 			// The row itself opens the note. Without this, one tap would both
 			// switch the note and open the deck.
 			e.stopPropagation();
-			var wasOpen = state.extrasOpenLesson === lessonId;
-			state.extrasOpenLesson = wasOpen ? 0 : lessonId;
+			var wasOpen = state.extrasOpenRow === rowKey;
+			state.extrasOpenRow = wasOpen ? '' : rowKey;
 			// Opening one closes every other, on either surface.
 			state.extrasOpenItem = ( ! wasOpen && entries.length === 1 ) ? entries[ 0 ].key : '';
-			paintExtras( 'l:' + lessonId );
+			paintExtras( rowKey );
 		} );
 
 		return button;
@@ -2016,7 +2065,7 @@
 			// in the group list closes whatever a lesson row had open.
 			state.extrasOpenItem = isOpen ? '' : itemKey;
 			if ( ! inLessonPanel ) {
-				state.extrasOpenLesson = 0;
+				state.extrasOpenRow = '';
 			}
 			paintExtras( 'i:' + itemKey );
 		} );
