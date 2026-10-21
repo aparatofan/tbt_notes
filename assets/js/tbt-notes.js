@@ -1047,7 +1047,10 @@
 	 * reacts to. replaceState does neither.
 	 */
 	function syncHash() {
-		if ( ! isPageMode ) {
+		// Not before the `me` response: bootstrap() renders a loading state
+		// first, and syncing that would clear the hash (and the remembered one)
+		// before parseHash() has had a chance to read it.
+		if ( ! isPageMode || ! state.loaded ) {
 			return;
 		}
 
@@ -1063,6 +1066,7 @@
 			return;
 		}
 		lastSyncedHash = want;
+		rememberHash( want ); // '#' means "library" and is stored too
 
 		// Nothing to clear: writing a bare '#' onto a URL that never carried a
 		// hash would dirty it for no gain. Once a hash has been written, '#'
@@ -1074,6 +1078,23 @@
 		history.replaceState( null, '', window.location.pathname + window.location.search + want );
 	}
 
+	/*
+	 * One tab's memory of where the teacher was. sessionStorage, not localStorage:
+	 * it survives a reload and a trip to another TBT tool in the same tab, and a
+	 * new tab still opens on the library. Storage can be off or throw (private
+	 * windows, blocked site data), so every access is guarded and failure just
+	 * means the old behaviour.
+	 */
+	var HASH_KEY = 'tbtNotesLastHash';
+
+	function rememberHash( hash ) {
+		try { window.sessionStorage.setItem( HASH_KEY, hash ); } catch ( e ) {}
+	}
+
+	function rememberedHash() {
+		try { return window.sessionStorage.getItem( HASH_KEY ) || ''; } catch ( e ) { return ''; }
+	}
+
 	/**
 	 * Read the class and lesson ids back out of the hash.
 	 *
@@ -1082,18 +1103,33 @@
 	 * anchor like #contact simply parses to nothing and startup behaves as it
 	 * always did.
 	 *
+	 * A hash in the URL always wins, so bookmarks and shared links keep working.
+	 * Without one — the menu link is a bare /tbt-notes/ — the hash this tab last
+	 * synced is used instead.
+	 *
 	 * @return {Object|null} { classId, lessonId } or null when there is nothing
 	 *                       to restore. lessonId is 0 when absent.
 	 */
 	function parseHash() {
-		if ( ! isPageMode || ! window.location.hash ) {
+		if ( ! isPageMode ) {
+			return null;
+		}
+		return parseHashString( window.location.hash || rememberedHash() );
+	}
+
+	/**
+	 * @param {string} str A hash such as '#tbt-class=12&tbt-lesson=345'.
+	 * @return {Object|null} As parseHash().
+	 */
+	function parseHashString( str ) {
+		if ( ! str ) {
 			return null;
 		}
 
 		var classId = 0;
 		var lessonId = 0;
 
-		window.location.hash.replace( /^#/, '' ).split( '&' ).forEach( function ( pair ) {
+		String( str ).replace( /^#/, '' ).split( '&' ).forEach( function ( pair ) {
 			var eq = pair.indexOf( '=' );
 			if ( eq < 1 ) {
 				return;

@@ -3,7 +3,7 @@ Contributors: thebluetree
 Requires at least: 6.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 1.18.1
+Stable tag: 1.18.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -48,6 +48,14 @@ No. Each student is assigned to at most one class (v1 design).
 No. The editor autosaves as the teacher types.
 
 == Changelog ==
+
+= 1.18.2 =
+* Page Mode reopens the class and lesson you were working on when you come
+  back through the menu in the same browser tab (e.g. Notes -> Swipe -> Notes),
+  not only on a refresh. The last synced hash is kept in sessionStorage and used
+  when the URL has none; a URL hash still wins. A new tab still opens on the
+  class library. Also fixes the loading render clearing the hash before it was
+  read. Overlay Mode is unchanged. No schema change.
 
 = 1.18.1 =
 * A lesson row now shows one icon per contributing tool instead of a single
