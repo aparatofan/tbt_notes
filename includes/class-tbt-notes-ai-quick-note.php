@@ -45,7 +45,7 @@ class TBT_Notes_AI_Quick_Note {
 	/**
 	 * Max AI requests per logged-in user per hour (spec §12).
 	 */
-	const RATE_LIMIT = 20;
+	const RATE_LIMIT = 60;
 
 	/**
 	 * Default CEFR level used when the client does not specify one.
@@ -593,6 +593,9 @@ class TBT_Notes_AI_Quick_Note {
 	 * @return true|WP_Error
 	 */
 	protected static function check_rate_limit() {
+		if ( TBT_Notes_Capabilities::is_rate_limit_exempt() ) {
+			return true;
+		}
 		$count = (int) get_transient( self::rate_key() );
 		if ( $count >= self::RATE_LIMIT ) {
 			return new WP_Error( 'tbt_ai_rate', __( 'You have reached the hourly limit for AI requests. Please try again later.', 'tbt-notes' ), array( 'status' => 429 ) );
@@ -604,6 +607,9 @@ class TBT_Notes_AI_Quick_Note {
 	 * Increment the current user's hourly counter.
 	 */
 	protected static function bump_rate_limit() {
+		if ( TBT_Notes_Capabilities::is_rate_limit_exempt() ) {
+			return;
+		}
 		$key   = self::rate_key();
 		$count = (int) get_transient( $key );
 		set_transient( $key, $count + 1, HOUR_IN_SECONDS );

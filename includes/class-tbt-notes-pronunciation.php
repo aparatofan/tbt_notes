@@ -456,6 +456,9 @@ class TBT_Notes_Pronunciation {
 	 * @return true|WP_Error
 	 */
 	protected static function check_rate_limit() {
+		if ( TBT_Notes_Capabilities::is_rate_limit_exempt() ) {
+			return true;
+		}
 		$count = (int) get_transient( self::rate_key() );
 		if ( $count >= self::RATE_LIMIT ) {
 			return new WP_Error( 'tbt_notes_pron_rate', __( 'You have reached the hourly audio generation limit. Please try again later.', 'tbt-notes' ), array( 'status' => 429 ) );
@@ -467,6 +470,9 @@ class TBT_Notes_Pronunciation {
 	 * Increment the current user's hourly counter.
 	 */
 	protected static function bump_rate_limit() {
+		if ( TBT_Notes_Capabilities::is_rate_limit_exempt() ) {
+			return;
+		}
 		$key   = self::rate_key();
 		$count = (int) get_transient( $key );
 		set_transient( $key, $count + 1, HOUR_IN_SECONDS );

@@ -3,7 +3,7 @@ Contributors: thebluetree
 Requires at least: 6.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 1.18.2
+Stable tag: 1.18.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -48,6 +48,14 @@ No. Each student is assigned to at most one class (v1 design).
 No. The editor autosaves as the teacher types.
 
 == Changelog ==
+
+= 1.18.4 =
+* Administrators (manage_options) are no longer held to the hourly AI limits
+  for AI Quick Note, expression cards or pronunciation audio, and accumulate
+  no counter. The new `tbt_notes_rate_limit_exempt` filter can switch the
+  exemption off. The AI Quick Note limit for everyone else rises from 20 to
+  60 requests per hour; expression cards (50) and audio (30) are unchanged.
+  No schema change.
 
 = 1.18.2 =
 * Page Mode reopens the class and lesson you were working on when you come
