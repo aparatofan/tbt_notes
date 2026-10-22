@@ -257,7 +257,7 @@ class TBT_Notes_Activity_REST {
 
 		// The roster is asked for explicitly rather than sent every time. A
 		// panel needs it to show who has not started, but names do not change
-		// between two polls ten seconds apart, and shipping them on every one
+		// between two polls five seconds apart, and shipping them on every one
 		// would be a get_users() per poll for the life of the lesson.
 		if ( $request->get_param( 'roster' ) ) {
 			$out['students'] = TBT_Notes_Roster::students_in_class( $class_id );
