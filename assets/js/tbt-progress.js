@@ -3,7 +3,7 @@
  *
  * Shows one class at a time as a feed: every piece of work finished since the
  * teacher opened the class, who is working right now, and who has not started.
- * It polls every ten seconds and toasts each completion as it arrives.
+ * It polls every five seconds and toasts each completion as it arrives.
  *
  * Three rules shape most of what follows.
  *
@@ -55,7 +55,7 @@
 	var STORE_SEED = 'tbtNotesProgressSeed';
 	var TOAST_LIFE = 6000;
 	var TOAST_MAX = 3;
-	var BASE_INTERVAL = ( parseInt( cfg.pollSeconds, 10 ) || 10 ) * 1000;
+	var BASE_INTERVAL = ( parseInt( cfg.pollSeconds, 10 ) || 5 ) * 1000;
 	var MAX_INTERVAL = 120000;
 
 	/* State for the class currently on screen.
@@ -393,7 +393,7 @@
 	function render() {
 		/* Read before the wipe and written back after it. Rebuilding the list
 		   would otherwise send it back to the top on every poll, and a teacher
-		   reading a row halfway down would lose her place every ten seconds.
+		   reading a row halfway down would lose her place every five seconds.
 		   Restoring a remembered 0 is the same statement as staying pinned to
 		   the top, so the two cases need no separate branch — and the list is
 		   never scrolled on the teacher's behalf either way. */

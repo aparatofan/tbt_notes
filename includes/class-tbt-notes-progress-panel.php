@@ -38,7 +38,7 @@ class TBT_Notes_Progress_Panel {
 	/**
 	 * Seconds between polls.
 	 */
-	const POLL_SECONDS = 10;
+	const POLL_SECONDS = 5;
 
 	/**
 	 * Classes this teacher may see, resolved once per request.

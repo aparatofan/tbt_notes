@@ -156,7 +156,7 @@ class TBT_Notes_Roster {
 	 * Turn a list of user IDs into roster rows.
 	 *
 	 * One get_users() call rather than get_userdata() per student: this runs
-	 * behind a ten-second poll, so an N+1 here is N+1 every ten seconds for
+	 * behind a five-second poll, so an N+1 here is N+1 every five seconds for
 	 * every teacher with the panel open.
 	 *
 	 * A membership row whose WordPress user no longer exists is dropped rather
