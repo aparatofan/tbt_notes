@@ -2839,10 +2839,12 @@
 					} ).catch( function ( err ) {
 						genBtn.disabled = false;
 						genBtn.textContent = t( 'generateCard', 'Generate card' );
-						studentBody.appendChild( el( 'span', 'tbt-expression-error', err.message ) );
+						studentActions.appendChild( el( 'span', 'tbt-expression-error', err.message ) );
 					} );
 				} );
-				studentBody.appendChild( genBtn );
+				// In the head's actions slot, so it sits on the item's line like
+				// the teacher's button and the pronunciation Generate audio button.
+				studentActions.appendChild( genBtn );
 			}
 			// else: no card and generation is off → render nothing extra (the
 			// server won't send cardless items to students in that case anyway).

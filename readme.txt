@@ -3,7 +3,7 @@ Contributors: thebluetree
 Requires at least: 6.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 1.18.5
+Stable tag: 1.18.6
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -48,6 +48,11 @@ No. Each student is assigned to at most one class (v1 design).
 No. The editor autosaves as the teacher types.
 
 == Changelog ==
+
+= 1.18.6 =
+* Student view, Useful expression filter: the Generate card button now sits
+  on the same line as the expression, as Generate audio does under
+  Pronunciation, instead of below it. No schema change.
 
 = 1.18.5 =
 * Class Progress checks for completed work every five seconds instead of ten,
