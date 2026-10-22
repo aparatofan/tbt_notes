@@ -162,11 +162,25 @@ class TBT_Notes_AI_Quick_Note {
 				. 'Then a numbered Markdown list of the 3 sentences, using "1. ", "2. ", "3. ". '
 				. 'Do not add definitions, translations, explanations, or a label.',
 
-			'questions' => 'Create exactly 3 short B1/B2 discussion questions about the following topic. '
-				. 'Begin with a level-2 heading (##) reading "LET\'S TALK ABOUT X" in capitals, '
-				. 'replacing X with the topic. '
-				. 'Then a numbered Markdown list of the 3 questions, using "1. ", "2. ", "3. ". '
-				. 'Do not add anything else.',
+			'grammar'   => 'Explain the following grammar point for an English lesson: practical, brief, clear and '
+				. 'engaging. Use guided discovery: the student meets the examples and notices the pattern before '
+				. 'reading the rule. Mix everyday and business or workplace examples. '
+				. 'Use the exact structure below and nothing else. '
+				. 'Begin with a level-2 heading (##) containing only the grammar point in capitals. '
+				. 'Then a level-3 heading (###) reading "Notice". Under it, a numbered Markdown list of exactly '
+				. '3 example sentences using "1. ", "2. ", "3. ": at least one everyday and at least one business '
+				. 'or workplace example, with the target form in bold. Then a bulleted Markdown list ("- ") of '
+				. '2 short questions that lead the student to spot the form and the meaning; do not answer them. '
+				. 'Then a level-3 heading reading "The rule". Under it, a bulleted list of 2 to 4 short points '
+				. 'covering form and use, in plain English, each with its key words in bold. '
+				. 'Then a level-3 heading reading "Watch out". Under it, one common mistake, especially one Polish '
+				. 'learners make, as two lines: "✗ " followed by the wrong sentence, then "✓ " followed by the '
+				. 'corrected sentence. '
+				. 'Then a level-3 heading reading "Your turn". Under it, a numbered list of exactly 2 short '
+				. 'practice items (gap-fills or sentences to complete), one everyday and one business, with gaps '
+				. 'written as "___". End with one line beginning "**Answers:** " giving both answers. '
+				. 'Keep the whole answer under about 180 words. '
+				. 'Do not add an introduction, a summary, a label, or any other section.',
 
 			'compare'   => 'Compare the two words or expressions from the teacher request in simple B1 English. '
 				. 'Begin with a level-2 heading (##) reading "X VS Y" in capitals, replacing X and Y with '
@@ -222,8 +236,8 @@ class TBT_Notes_AI_Quick_Note {
 				'label' => __( 'Example', 'tbt-notes' ),
 			),
 			array(
-				'key'   => 'questions',
-				'label' => __( 'Questions', 'tbt-notes' ),
+				'key'   => 'grammar',
+				'label' => __( 'Grammar', 'tbt-notes' ),
 			),
 			array(
 				'key'   => 'compare',
