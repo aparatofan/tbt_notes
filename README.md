@@ -281,8 +281,12 @@ Unlike the pronunciation and expression-card generation (which students can now
 use), AI Quick Note stays **teacher-only** and server-side — it is an authoring
 aid inside the editor, which students never see. The request is gated by the
 `manage_tbt_notes` capability, prompts over 2000 characters are rejected, each
-teacher is capped at **20 requests per hour**, and the OpenAI key is **never**
+teacher is capped at **60 requests per hour**, and the OpenAI key is **never**
 exposed to the browser.
+
+Administrators (`manage_options`) are exempt from all the hourly AI limits
+(Quick Note 60, expression cards 50, audio 30 per hour); add
+`add_filter( 'tbt_notes_rate_limit_exempt', '__return_false' );` to limit them again.
 
 Per the project's API-key decision this feature reads its **own** constants from
 a server-side PHP snippet (do **not** edit `wp-config.php`):

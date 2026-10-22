@@ -128,6 +128,26 @@ class TBT_Notes_Capabilities {
 	}
 
 	/**
+	 * Is the current user exempt from the per-user hourly AI limits?
+	 * Administrators are exempt by default; the limits exist to cap
+	 * accidental spend by teachers and students, not to block the owner.
+	 *
+	 *   add_filter( 'tbt_notes_rate_limit_exempt', '__return_false' ); // re-enable for admins
+	 *
+	 * @return bool
+	 */
+	public static function is_rate_limit_exempt() {
+		$exempt = self::user_can_manage_all();
+		/**
+		 * Filter whether the current user bypasses the AI hourly limits.
+		 *
+		 * @param bool $exempt  Default: true for manage_options.
+		 * @param int  $user_id Current user ID.
+		 */
+		return (bool) apply_filters( 'tbt_notes_rate_limit_exempt', $exempt, get_current_user_id() );
+	}
+
+	/**
 	 * Whether students (class members without the manage capability) may generate
 	 * flashcards and pronunciation audio themselves. Defaults to enabled. Switch off
 	 * with either:

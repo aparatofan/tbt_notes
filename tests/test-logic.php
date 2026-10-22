@@ -58,8 +58,16 @@ function wp_kses( $html, $allowed ) {
 	return $html;
 }
 
+/**
+ * Cap-aware like user_can(): `true` grants every cap, an array grants the
+ * listed cap slugs, anything else grants none.
+ */
 function current_user_can( $cap ) {
-	return ! empty( $GLOBALS['__cur_can'] );
+	$val = $GLOBALS['__cur_can'];
+	if ( is_array( $val ) ) {
+		return in_array( $cap, $val, true );
+	}
+	return ! empty( $val );
 }
 
 /**
@@ -1107,6 +1115,29 @@ function test_students_can_generate() {
 	remove_all_filters( 'tbt_notes_students_can_generate' );
 }
 test_students_can_generate();
+
+echo "Capabilities — admin exemption from AI hourly limits:\n";
+function test_rate_limit_exempt() {
+	$saved_can = $GLOBALS['__cur_can'];
+	remove_all_filters( 'tbt_notes_rate_limit_exempt' );
+
+	$GLOBALS['__cur_can'] = array( 'manage_options', TBT_NOTES_CAP );
+	ok( TBT_Notes_Capabilities::is_rate_limit_exempt() === true, 'an admin (manage_options) is exempt' );
+
+	$GLOBALS['__cur_can'] = array( TBT_NOTES_CAP );
+	ok( TBT_Notes_Capabilities::is_rate_limit_exempt() === false, 'a teacher with only manage_tbt_notes is not exempt' );
+
+	$GLOBALS['__cur_can'] = array();
+	ok( TBT_Notes_Capabilities::is_rate_limit_exempt() === false, 'a student with neither cap is not exempt' );
+
+	$GLOBALS['__cur_can'] = array( 'manage_options', TBT_NOTES_CAP );
+	add_filter( 'tbt_notes_rate_limit_exempt', '__return_false' );
+	ok( TBT_Notes_Capabilities::is_rate_limit_exempt() === false, 'the filter can limit an admin again' );
+
+	remove_all_filters( 'tbt_notes_rate_limit_exempt' );
+	$GLOBALS['__cur_can'] = $saved_can;
+}
+test_rate_limit_exempt();
 
 echo "Expression cards — can-generate student list (any status, read-only):\n";
 function test_expr_student_can_generate_list() {
