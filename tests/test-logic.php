@@ -1357,13 +1357,15 @@ function test_ai_presets() {
 	foreach ( $choices as $c ) {
 		$keys[] = $c['key'];
 	}
-	$expected = array( 'define', 'translate', 'example', 'questions', 'compare', 'thesaurus', 'collocations' );
+	$expected = array( 'define', 'translate', 'example', 'grammar', 'compare', 'thesaurus', 'collocations' );
 	ok( $keys === $expected, 'all seven preset choices are exposed in order' );
 
 	ok( call_ai_static( 'normalize_preset', array( 'Define' ) ) === 'define', 'preset keys are case-insensitive' );
 	ok( call_ai_static( 'normalize_preset', array( '  thesaurus ' ) ) === 'thesaurus', 'preset keys are trimmed' );
 	ok( call_ai_static( 'normalize_preset', array( 'Collocations' ) ) === 'collocations', 'the collocations preset is recognised' );
+	ok( call_ai_static( 'normalize_preset', array( 'Grammar' ) ) === 'grammar', 'the grammar preset is recognised' );
 	ok( call_ai_static( 'normalize_preset', array( 'flashcard' ) ) === '', 'the retired flashcard preset is rejected' );
+	ok( call_ai_static( 'normalize_preset', array( 'questions' ) ) === '', 'the retired questions preset is rejected' );
 	ok( call_ai_static( 'normalize_preset', array( 'nonsense' ) ) === '', 'unknown presets are dropped' );
 	ok( call_ai_static( 'normalize_preset', array( '' ) ) === '', 'empty preset is dropped' );
 }

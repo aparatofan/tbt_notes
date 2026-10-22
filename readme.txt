@@ -3,7 +3,7 @@ Contributors: thebluetree
 Requires at least: 6.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 1.18.6
+Stable tag: 1.18.7
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -48,6 +48,12 @@ No. Each student is assigned to at most one class (v1 design).
 No. The editor autosaves as the teacher types.
 
 == Changelog ==
+
+= 1.18.7 =
+* AI assistant: the Questions shortcut is replaced by Grammar. It gives a
+  short guided-discovery explanation of a grammar point: three examples to
+  notice (everyday and business), the rule, a common mistake, and two
+  practice items with answers. No schema change.
 
 = 1.18.6 =
 * Student view, Useful expression filter: the Generate card button now sits
