@@ -3,7 +3,7 @@ Contributors: thebluetree
 Requires at least: 6.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 1.18.7
+Stable tag: 1.19.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -48,6 +48,14 @@ No. Each student is assigned to at most one class (v1 design).
 No. The editor autosaves as the teacher types.
 
 == Changelog ==
+
+= 1.19.0 =
+* Search in notes (teacher, Page Mode): a magnifier in the class strip opens
+  a search row with three scopes: This note, This class and All classes
+  (new REST route GET /search, scoped to the classes the teacher manages).
+  Matches ignore case and Polish accents. Marks in the open note never change
+  the note or trigger a save. Students and Overlay Mode are unchanged. No
+  schema change.
 
 = 1.18.7 =
 * AI assistant: the Questions shortcut is replaced by Grammar. It gives a

@@ -90,6 +90,9 @@
 		// (delete a class, open one and come back) returns to the same filtered list.
 		classFilter: '',
 		highlightFilter: 'full',
+		// Teacher search in notes (Page Mode). Kept for the session across
+		// lessons and classes; never in the hash or in storage.
+		search: { open: false, q: '', scope: 'note', current: 0, jump: false },
 		error: '',
 	};
 
@@ -162,6 +165,9 @@
 		print: [ 'M6 9V3h12v6', 'M6 18H4a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2', 'M6 14h12v7H6z' ],
 		settings: [ 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z', 'M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1A1.7 1.7 0 0 0 9 19.4a1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z' ],
 		close: [ 'M18 6L6 18', 'M6 6l12 12' ],
+		search: [ 'M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16z', 'M21 21l-4.35-4.35' ],
+		chevronUp: [ 'M18 15l-6-6-6 6' ],
+		chevronDown: [ 'M6 9l6 6 6-6' ],
 		trash: [ 'M3 6h18', 'M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2', 'M10 11v6', 'M14 11v6' ],
 	};
 
@@ -908,7 +914,11 @@
 		inner.appendChild( titleWrap );
 
 		( opts.buttons || [] ).forEach( function ( btn ) {
-			inner.appendChild( iconButton( btn.symbol, btn.label, btn.onClick, btn.icon ) );
+			var b = iconButton( btn.symbol, btn.label, btn.onClick, btn.icon );
+			if ( btn.setup ) {
+				btn.setup( b );
+			}
+			inner.appendChild( b );
 		} );
 		// Page mode has no overlay to dismiss, so omit the close button (the back
 		// button for class → classes navigation is added separately and stays).
@@ -916,6 +926,10 @@
 			inner.appendChild( iconButton( '✕', t( 'close', 'Close' ), closePanel, 'close' ) );
 		}
 		bar.appendChild( inner );
+		// Anything that must pin with the strip (the search row) hangs below it.
+		if ( opts.after ) {
+			bar.appendChild( opts.after );
+		}
 		
 		return bar;
 	}
@@ -948,6 +962,8 @@
 	 * lesson while scrolled down re-pins the new strip and toolbar immediately.
 	 */
 	function render() {
+		var searchFocus = captureSearchFocus();
+		resetSearchView();
 		if ( pageSticky ) {
 			pageSticky.unpinAll();
 		}
@@ -958,6 +974,7 @@
 		announceClass();
 		announceLessonView();
 		syncHash();
+		searchAfterRender( searchFocus );
 	}
 
 	/**
@@ -2182,6 +2199,18 @@
 		var buttons = [
 			{ symbol: '☰', icon: 'lessons', label: t( 'toggleLessons', 'Show/hide lessons' ), onClick: toggleSidebar },
 		];
+		// Search in notes: teachers in Page Mode only, first in the icon group.
+		var withSearch = isPageMode && isTeacher;
+		if ( withSearch ) {
+			searchUi = { topbar: null, button: null };
+			buttons.unshift( {
+				symbol: '⌕',
+				icon: 'search',
+				label: t( 'searchNotes', 'Search notes' ),
+				onClick: toggleSearch,
+				setup: setupSearchButton,
+			} );
+		}
 		// Back to top sits with the other navigation control, and is offered to
 		// students as well as teachers — a long lesson is long for both.
 		//
@@ -2215,7 +2244,7 @@
 			headerInput.setAttribute( 'aria-label', t( 'lessonHeader', 'Lesson header' ) );
 		}
 
-		content.appendChild( buildTopbar( {
+		var topbar = buildTopbar( {
 			title: cls ? ( cls.title || t( 'untitledClass', 'Untitled class' ) ) : '',
 			subtitle: !isTeacher && state.currentLesson ? lessonTitlePart( state.currentLesson ) : null,
 			subtitleEl: headerInput,
@@ -2228,7 +2257,12 @@
 				render();
 			} : null,
 			buttons: buttons,
-		} ) );
+			after: withSearch && state.search.open ? buildSearchRow() : null,
+		} );
+		if ( withSearch ) {
+			searchUi.topbar = topbar;
+		}
+		content.appendChild( topbar );
 
 		var split = el( 'div', 'tbt-notes-split' + ( state.sidebarFolded ? ' is-folded' : '' ) );
 
@@ -4149,6 +4183,8 @@
 
 		// Honour any pre-selected filter (normally reset to 'full' per lesson).
 		applyTeacherFilter( lesson, editorEl, summaryPanel );
+
+		setActiveEditor( lesson, editorEl, summaryPanel, filterGroup.querySelector( 'select' ) );
 	}
 
 	/**
@@ -5049,6 +5085,11 @@
 		} );
 
 		window.setTimeout( function () {
+			// A search that just landed on this note keeps the caret in its field.
+			var active = document.activeElement;
+			if ( active && active.closest && active.closest( '.tbt-notes-search-row' ) ) {
+				return;
+			}
 			if ( ! lesson.header ) {
 				headerInput.focus();
 			} else {
@@ -5781,6 +5822,8 @@
 		var toolbarSlot = null;
 		var filterSlot = null;
 		var lastOffset = null;
+		// A focused element moved by pin/unpin, still to be given focus back.
+		var refocus = null;
 
 		// Ordered group, top to bottom. `find` locates the live element, `owner`
 		// the block it belongs to (once that block has scrolled past, the member
@@ -5907,12 +5950,39 @@
 			document.documentElement.style.setProperty( '--tbtn-offset-top', offset + 'px' );
 		}
 
+		/**
+		 * Moving a node blurs whatever inside it had focus, so a field in the
+		 * strip (the search box, the lesson header) would lose the caret the
+		 * moment the page scrolls far enough to pin or unpin it.
+		 */
+		function keepFocus( elm, move ) {
+			var focused = document.activeElement;
+			var inside = focused && focused !== document.body && elm.contains( focused );
+			move();
+			if ( inside ) {
+				// The host may still be hidden at this point; update() retries.
+				refocus = focused;
+				restoreFocus();
+			}
+		}
+
+		function restoreFocus() {
+			if ( refocus && document.activeElement !== refocus && refocus.isConnected ) {
+				refocus.focus( { preventScroll: true } );
+			}
+			if ( ! refocus || document.activeElement === refocus || ! refocus.isConnected ) {
+				refocus = null;
+			}
+		}
+
 		function pin( member, elm, box, height ) {
 			ensureHost();
 			var spacer = el( 'div', member.spacerCls );
 			spacer.style.height = height + 'px';
 			elm.parentNode.insertBefore( spacer, elm );
-			member.mount( elm );
+			keepFocus( elm, function () {
+				member.mount( elm );
+			} );
 			member.el = elm;
 			member.spacer = spacer;
 			member.box = box;
@@ -5923,8 +5993,11 @@
 				// Back to where the spacer is holding its place. If the spacer is gone
 				// (the view was rebuilt under us), drop the orphan instead.
 				if ( member.spacer && member.spacer.parentNode ) {
-					member.spacer.parentNode.insertBefore( member.el, member.spacer );
-					member.spacer.parentNode.removeChild( member.spacer );
+					var spacer = member.spacer;
+					keepFocus( member.el, function () {
+						spacer.parentNode.insertBefore( member.el, spacer );
+					} );
+					spacer.parentNode.removeChild( spacer );
 				} else if ( member.el.parentNode ) {
 					member.el.parentNode.removeChild( member.el );
 				}
@@ -5965,6 +6038,11 @@
 						return;
 					}
 					var height = member.el.offsetHeight;
+					// The strip can change height while pinned (the search row
+					// opens or closes), so the spacer follows it.
+					if ( member.spacer.style.height !== height + 'px' ) {
+						member.spacer.style.height = height + 'px';
+					}
 					var spacerTop = member.spacer.getBoundingClientRect().top;
 					var boxBottom = member.box.getBoundingClientRect().bottom;
 					// Stay pinned while the original position is still above the line
@@ -6008,6 +6086,7 @@
 			} else {
 				host.style.display = 'none';
 			}
+			restoreFocus();
 		}
 
 		/**
@@ -6037,6 +6116,1044 @@
 			update: update,
 			unpinAll: unpinAll,
 		};
+	}
+
+	/* --------------------------------------------------------- Search in notes */
+
+	/*
+	 * Teacher-only, Page Mode only. One row under the class strip searches the
+	 * open note, every lesson in the open class (bodies are already in
+	 * state.lessons) or every class the teacher manages (GET /search).
+	 *
+	 * Marks in the open note are painted with the CSS Custom Highlight API over
+	 * DOM Ranges. Nothing is ever formatted, wrapped or otherwise written into the
+	 * note, so a search can never reach the autosaver.
+	 *
+	 * render() rebuilds the strip, so the row is rebuilt with it. Everything done
+	 * inside the row (typing, scope, previous/next) updates it in place instead,
+	 * so a keystroke never re-mounts the editor.
+	 */
+
+	var SEARCH_ROW_ID = 'tbt-notes-search-row';
+	var SEARCH_INPUT_ID = 'tbt-notes-search-q';
+	var SEARCH_RESULTS_ID = 'tbt-notes-search-results';
+	var SEARCH_BLOCKS = 'p, li, h1, h2, h3, h4, h5, h6, blockquote, pre';
+	var SEARCH_MAX_RESULTS = 50;
+	var hasHighlightApi = typeof CSS !== 'undefined' && !! CSS.highlights && typeof window.Highlight === 'function';
+
+	// The open lesson's editor handles; set by renderEditorInto(), reset by render().
+	var activeEditor = null;
+	// The row's live elements for the current render, or null with no strip search.
+	var searchUi = null;
+	// This note: one Range per hit, in document order.
+	var noteHits = [];
+	// The dropdown's current content (class/all), so the count can follow it.
+	var searchView = null;
+	var noteTimer = null;
+	var classTimer = null;
+	var allTimer = null;
+	var allSeq = 0;
+	var allCache = null;
+	var classTextCache = {};
+	var searchPrefill = null;
+	var dropdownDismissed = false;
+	var searchOutsideBound = false;
+
+	function searchQuery() {
+		return String( state.search.q || '' ).replace( /\s+/g, ' ' ).trim();
+	}
+
+	function prefersReducedMotion() {
+		return !! ( window.matchMedia && window.matchMedia( '(prefers-reduced-motion: reduce)' ).matches );
+	}
+
+	/**
+	 * fold() with exactly one output character per input character, so a
+	 * position found in the folded text is also a position in the original.
+	 *
+	 * @param {string} text Raw text.
+	 * @return {string}
+	 */
+	function foldAligned( text ) {
+		var whole = fold( text );
+		if ( whole.length === text.length ) {
+			return whole;
+		}
+		var out = '';
+		for ( var i = 0; i < text.length; i++ ) {
+			var f = fold( text.charAt( i ) );
+			out += 1 === f.length ? f : text.charAt( i );
+		}
+		return out;
+	}
+
+	/**
+	 * Visible text of stored lesson HTML, by the same rule as the server's
+	 * TBT_Notes_Search::plain_text(): block ends and <br> are word breaks. The
+	 * DOMParser document is inert — no scripts run and no images load.
+	 *
+	 * @param {string} html Sanitised lesson HTML.
+	 * @return {string}
+	 */
+	function htmlPlainText( html ) {
+		var doc = new DOMParser().parseFromString( '<!doctype html><body>' + ( html || '' ), 'text/html' );
+		Array.prototype.forEach.call( doc.body.querySelectorAll( SEARCH_BLOCKS + ', br' ), function ( n ) {
+			if ( 'BR' === n.nodeName ) {
+				n.parentNode.replaceChild( doc.createTextNode( ' ' ), n );
+			} else {
+				n.appendChild( doc.createTextNode( ' ' ) );
+			}
+		} );
+		return ( doc.body.textContent || '' ).replace( /\u00a0/g, ' ' ).replace( /\s+/g, ' ' ).trim();
+	}
+
+	/**
+	 * Header + text of a lesson for This class, with its folded twin. The open
+	 * lesson reads the live editor; the rest are cached on their exact body and
+	 * header, so typing a query does not re-parse every lesson per keystroke.
+	 *
+	 * @param {Object} lesson Lesson from state.lessons.
+	 * @return {{text: string, folded: string}}
+	 */
+	function lessonSearchText( lesson ) {
+		var header = String( lesson.header || '' );
+		if ( activeEditor && activeEditor.quill && activeEditor.lesson === lesson ) {
+			var live = header + '  ' + activeEditor.quill.getText().replace( /\u00a0/g, ' ' ).replace( /\s+/g, ' ' ).trim();
+			return { text: live, folded: foldAligned( live ), bodyStart: header.length + 2 };
+		}
+		var key = String( lesson.id );
+		var body = String( lesson.body || '' );
+		var cached = classTextCache[ key ];
+		if ( cached && cached.body === body && cached.header === header ) {
+			return cached;
+		}
+		var text = header + '  ' + htmlPlainText( body );
+		cached = { body: body, header: header, text: text, folded: foldAligned( text ), bodyStart: header.length + 2 };
+		classTextCache[ key ] = cached;
+		return cached;
+	}
+
+	/**
+	 * Count and snippet for a folded needle, or null. Same snippet rule as the
+	 * server: about 48 characters before and 72 after, cut at a word. The header
+	 * counts as a hit, but the snippet comes from the note text whenever that
+	 * holds one, so a result does not repeat its own title.
+	 */
+	function findInText( entry, needle ) {
+		if ( entry.folded.indexOf( needle ) < 0 ) {
+			return null;
+		}
+		var count = 0;
+		var at = 0;
+		while ( ( at = entry.folded.indexOf( needle, at ) ) !== -1 ) {
+			count++;
+			at += needle.length;
+		}
+		var text = entry.text;
+		var len = needle.length;
+		var floor = entry.bodyStart || 0;
+		var pos = entry.folded.indexOf( needle, floor );
+		if ( pos < 0 ) {
+			pos = entry.folded.indexOf( needle );
+			floor = 0;
+		}
+		var start = pos - 48;
+		var prefix = '';
+		if ( start > floor ) {
+			var sp = text.slice( start, pos ).indexOf( ' ' );
+			if ( sp !== -1 ) {
+				start += sp + 1;
+			}
+			prefix = '…';
+		} else {
+			start = floor;
+		}
+		var end = pos + len + 72;
+		var suffix = '';
+		if ( end < text.length ) {
+			var sp2 = text.slice( pos + len, end ).lastIndexOf( ' ' );
+			if ( sp2 !== -1 ) {
+				end = pos + len + sp2;
+			}
+			suffix = '…';
+		} else {
+			end = text.length;
+		}
+		return {
+			count: count,
+			before: prefix + text.slice( start, pos ),
+			match: text.slice( pos, pos + len ),
+			after: text.slice( pos + len, end ) + suffix,
+		};
+	}
+
+	/* ---- Editor handle */
+
+	function setActiveEditor( lesson, editorEl, summaryPanel, select ) {
+		var quill = window.Quill && window.Quill.find ? window.Quill.find( editorEl ) : null;
+		if ( ! quill || ! quill.root ) {
+			return;
+		}
+		activeEditor = {
+			lesson: lesson,
+			quill: quill,
+			editorEl: editorEl,
+			summaryPanel: summaryPanel,
+			select: select,
+		};
+		// Keep the marks in step with typing, without moving the page.
+		quill.on( 'text-change', function () {
+			if ( ! activeEditor || activeEditor.quill !== quill || ! state.search.open || 'note' !== state.search.scope ) {
+				return;
+			}
+			clearTimeout( noteTimer );
+			noteTimer = setTimeout( function () {
+				noteTimer = null;
+				runNoteSearch( { scroll: false } );
+			}, 150 );
+		} );
+	}
+
+	/**
+	 * Marks need the editor on screen, so a highlight filter gives way to the
+	 * full note — the same three things the filter select itself changes.
+	 */
+	function ensureFullNote() {
+		var ed = activeEditor;
+		if ( ! ed || 'full' === ( state.highlightFilter || 'full' ) ) {
+			return;
+		}
+		state.highlightFilter = 'full';
+		if ( ed.select ) {
+			ed.select.value = 'full';
+		}
+		applyTeacherFilter( ed.lesson, ed.editorEl, ed.summaryPanel );
+	}
+
+	/* ---- This note */
+
+	/**
+	 * Every hit in the open editor as a Range. Each block is folded into one
+	 * string with a map back to (text node, offset), so a hit may cross the
+	 * highlight <span>s inside a paragraph but never a paragraph break.
+	 *
+	 * @param {string} needle Folded query.
+	 * @return {Range[]}
+	 */
+	function collectNoteHits( needle ) {
+		var hits = [];
+		if ( ! needle || ! activeEditor || ! activeEditor.quill ) {
+			return hits;
+		}
+		var blocks = activeEditor.quill.root.querySelectorAll( SEARCH_BLOCKS );
+		Array.prototype.forEach.call( blocks, function ( block ) {
+			var folded = '';
+			var nodes = [];
+			var offsets = [];
+			var walker = document.createTreeWalker( block, NodeFilter.SHOW_TEXT, null );
+			var node;
+			while ( ( node = walker.nextNode() ) ) {
+				// Quill's list markers and other UI live in .ql-ui, not in the note.
+				if ( node.parentNode && node.parentNode.closest && node.parentNode.closest( '.ql-ui' ) ) {
+					continue;
+				}
+				var data = node.data;
+				for ( var i = 0; i < data.length; i++ ) {
+					var ch = data.charAt( i );
+					var f = /\s/.test( ch ) ? ' ' : fold( ch );
+					for ( var k = 0; k < f.length; k++ ) {
+						folded += f.charAt( k );
+						nodes.push( node );
+						offsets.push( i );
+					}
+				}
+			}
+			var at = 0;
+			var pos;
+			while ( ( pos = folded.indexOf( needle, at ) ) !== -1 ) {
+				var last = pos + needle.length - 1;
+				var range = document.createRange();
+				range.setStart( nodes[ pos ], offsets[ pos ] );
+				range.setEnd( nodes[ last ], offsets[ last ] + 1 );
+				hits.push( range );
+				at = pos + needle.length;
+			}
+		} );
+		return hits;
+	}
+
+	function paintNoteHits() {
+		if ( ! hasHighlightApi ) {
+			return;
+		}
+		var others = new window.Highlight();
+		var current = new window.Highlight();
+		noteHits.forEach( function ( range, i ) {
+			( i === state.search.current ? current : others ).add( range );
+		} );
+		CSS.highlights.set( 'tbt-notes-search', others );
+		CSS.highlights.set( 'tbt-notes-search-current', current );
+	}
+
+	function clearSearchMarks() {
+		noteHits = [];
+		if ( hasHighlightApi ) {
+			CSS.highlights.delete( 'tbt-notes-search' );
+			CSS.highlights.delete( 'tbt-notes-search-current' );
+		}
+	}
+
+	/**
+	 * Bottom edge of what will be pinned over the note once the page scrolls:
+	 * whatever is fixed above the workspace, the strip (with the row) and the
+	 * editor toolbar. Measured from the elements, pinned or not, so a jump from
+	 * the top of the page still lands below the strip that pins on the way.
+	 */
+	function searchStickyBottom() {
+		var top = parseFloat( window.getComputedStyle( document.documentElement ).getPropertyValue( '--tbtn-offset-top' ) ) || 0;
+		var bar = searchUi && searchUi.topbar;
+		var toolbar = activeEditor ? activeEditor.editorEl.parentNode.querySelector( '.ql-toolbar' ) : null;
+		if ( ! toolbar ) {
+			toolbar = document.querySelector( '.tbt-notes-sticky-host .ql-toolbar' );
+		}
+		return top + ( bar ? bar.offsetHeight : 0 ) + ( toolbar ? toolbar.offsetHeight : 0 );
+	}
+
+	function scrollToHit( range ) {
+		var rect = range.getBoundingClientRect();
+		var top = searchStickyBottom() + 16;
+		var bottom = window.innerHeight;
+		if ( rect.top >= top && rect.bottom <= bottom ) {
+			return;
+		}
+		window.scrollBy( {
+			top: rect.top - ( top + ( bottom - top ) / 3 ),
+			behavior: prefersReducedMotion() ? 'auto' : 'smooth',
+		} );
+	}
+
+	/**
+	 * @param {Object} opts first: start from the first hit; scroll: bring the
+	 *                      current hit into view.
+	 */
+	function runNoteSearch( opts ) {
+		opts = opts || {};
+		clearTimeout( noteTimer );
+		noteTimer = null;
+		var needle = fold( searchQuery() );
+		if ( needle ) {
+			ensureFullNote();
+		}
+		var hits = collectNoteHits( needle );
+		clearSearchMarks();
+		noteHits = hits;
+		if ( opts.first || state.search.current < 0 ) {
+			state.search.current = 0;
+		}
+		if ( state.search.current >= hits.length ) {
+			state.search.current = hits.length ? hits.length - 1 : 0;
+		}
+		paintNoteHits();
+		updateSearchCount();
+		if ( opts.scroll && hits.length ) {
+			scrollToHit( hits[ state.search.current ] );
+		}
+	}
+
+	function stepNote( delta ) {
+		if ( null !== noteTimer ) {
+			// A query still settling: land on its first hit rather than step.
+			runNoteSearch( { first: true, scroll: true } );
+			return;
+		}
+		var n = noteHits.length;
+		if ( ! n ) {
+			return;
+		}
+		state.search.current = ( state.search.current + delta + n ) % n;
+		paintNoteHits();
+		updateSearchCount();
+		scrollToHit( noteHits[ state.search.current ] );
+	}
+
+	/* ---- This class */
+
+	function runClassSearch() {
+		clearTimeout( classTimer );
+		classTimer = null;
+		var needle = fold( searchQuery() );
+		if ( ! needle ) {
+			setSearchView( null );
+			return;
+		}
+		var cls = state.currentClass;
+		var classId = cls ? ( parseInt( cls.id, 10 ) || 0 ) : 0;
+		var items = [];
+		var matches = 0;
+		state.lessons.forEach( function ( lesson ) {
+			var found = findInText( lessonSearchText( lesson ), needle );
+			if ( ! found ) {
+				return;
+			}
+			matches += found.count;
+			items.push( {
+				classId: classId,
+				classTitle: cls ? cls.title : '',
+				lessonId: parseInt( lesson.id, 10 ) || 0,
+				title: lessonTitlePart( lesson ),
+				count: found.count,
+				snippet: found,
+			} );
+		} );
+		setSearchView( { scope: 'class', items: items, matches: matches, truncated: false } );
+	}
+
+	/* ---- All classes */
+
+	function runAllSearch() {
+		clearTimeout( allTimer );
+		allTimer = null;
+		allSeq++;
+		var q = searchQuery();
+		if ( ! q ) {
+			setSearchView( null );
+			return;
+		}
+		if ( fold( q ).length < 2 ) {
+			setSearchView( { message: t( 'searchTooShort', 'Type at least 2 letters.' ) } );
+			return;
+		}
+		if ( allCache && allCache.q === q ) {
+			setSearchView( allResultsView( allCache.data ) );
+			return;
+		}
+		setSearchView( { message: t( 'searching', 'Searching…' ) } );
+		var seq = allSeq;
+		allTimer = setTimeout( function () {
+			allTimer = null;
+			var sep = String( cfg.restUrl || '' ).indexOf( '?' ) === -1 ? '?' : '&';
+			api( 'GET', 'search' + sep + 'q=' + encodeURIComponent( q ) ).then( function ( data ) {
+				if ( seq !== allSeq ) {
+					return;
+				}
+				allCache = { q: q, data: data || {} };
+				setSearchView( allResultsView( allCache.data ) );
+			} ).catch( function () {
+				if ( seq !== allSeq ) {
+					return;
+				}
+				setSearchView( { message: t( 'searchError', 'Search is unavailable right now.' ) } );
+			} );
+		}, 300 );
+	}
+
+	/**
+	 * Server hits grouped by class: the open class first, the rest in order of
+	 * their most recent hit (the server already returns hits newest first).
+	 */
+	function allResultsView( data ) {
+		var hits = Array.isArray( data.hits ) ? data.hits : [];
+		var openId = state.currentClass ? ( parseInt( state.currentClass.id, 10 ) || 0 ) : 0;
+		var groups = [];
+		var byId = {};
+		var matches = 0;
+		hits.forEach( function ( hit ) {
+			var classId = parseInt( hit.class_id, 10 ) || 0;
+			if ( ! byId[ classId ] ) {
+				byId[ classId ] = { classId: classId, title: String( hit.class_title || t( 'untitledClass', 'Untitled class' ) ), items: [] };
+				if ( classId === openId ) {
+					groups.unshift( byId[ classId ] );
+				} else {
+					groups.push( byId[ classId ] );
+				}
+			}
+			var count = parseInt( hit.count, 10 ) || 1;
+			matches += count;
+			byId[ classId ].items.push( {
+				classId: classId,
+				lessonId: parseInt( hit.lesson_id, 10 ) || 0,
+				title: lessonTitlePart( { header: hit.header, created_at: hit.created_at } ),
+				count: count,
+				snippet: hit.snippet || {},
+			} );
+		} );
+		return { scope: 'all', groups: groups, notes: hits.length, matches: matches, truncated: !! data.truncated };
+	}
+
+	/* ---- Results dropdown */
+
+	function plural( n, many, manyFallback, one, oneFallback ) {
+		return 1 === n ? fmt( t( one, oneFallback ), [ n ] ) : fmt( t( many, manyFallback ), [ n ] );
+	}
+
+	function notesLabel( n, more ) {
+		var label = plural( n, 'notesCount', '%1$d notes', 'notesCountOne', '%1$d note' );
+		return more ? label.replace( String( n ), n + '+' ) : label;
+	}
+
+	function setSearchView( view ) {
+		searchView = view;
+		renderSearchDropdown();
+		updateSearchCount();
+	}
+
+	function searchHitButton( item ) {
+		var b = el( 'button', 'tbt-notes-search-hit' );
+		b.type = 'button';
+		var head = el( 'span', 'tbt-notes-search-hit__head' );
+		head.appendChild( el( 'span', 'tbt-notes-search-hit__title', item.title ) );
+		var openId = state.currentClass ? ( parseInt( state.currentClass.id, 10 ) || 0 ) : 0;
+		if ( item.classId === openId && state.currentLesson && ( parseInt( state.currentLesson.id, 10 ) || 0 ) === item.lessonId ) {
+			head.appendChild( el( 'span', 'tbt-notes-search-hit__now', '· ' + t( 'openNow', 'open now' ) ) );
+		}
+		head.appendChild( el( 'span', 'tbt-notes-search-hit__count', item.count + '×' ) );
+		b.appendChild( head );
+		var snip = el( 'span', 'tbt-notes-search-hit__snippet' );
+		snip.appendChild( document.createTextNode( String( item.snippet.before || '' ) ) );
+		snip.appendChild( el( 'b', null, String( item.snippet.match || '' ) ) );
+		snip.appendChild( document.createTextNode( String( item.snippet.after || '' ) ) );
+		b.appendChild( snip );
+		b.addEventListener( 'click', function () {
+			openSearchResult( item.classId, item.lessonId );
+		} );
+		b.addEventListener( 'keydown', onSearchHitKeydown );
+		return b;
+	}
+
+	function searchHitList( items ) {
+		var list = el( 'ul', 'tbt-notes-search-results__list' );
+		items.forEach( function ( item ) {
+			var li = el( 'li' );
+			li.appendChild( searchHitButton( item ) );
+			list.appendChild( li );
+		} );
+		return list;
+	}
+
+	function renderSearchDropdown() {
+		if ( ! searchUi || ! searchUi.dropdown ) {
+			return;
+		}
+		var box = searchUi.dropdown;
+		clear( box );
+		var view = searchView;
+		var show = !! view && 'note' !== state.search.scope && !! searchQuery() && ! dropdownDismissed;
+		box.hidden = ! show;
+		if ( ! show ) {
+			return;
+		}
+		if ( view.message ) {
+			box.appendChild( el( 'p', 'tbt-notes-search-results__msg', view.message ) );
+			return;
+		}
+		var q = searchQuery();
+		var notes = 'class' === view.scope ? view.items.length : view.notes;
+		if ( ! notes ) {
+			box.appendChild( el( 'p', 'tbt-notes-search-results__msg', 'class' === view.scope
+				? fmt( t( 'searchNoneClass', 'No notes in this class match “%1$s”.' ), [ q ] )
+				: fmt( t( 'searchNoneAll', 'No notes match “%1$s”.' ), [ q ] ) ) );
+			return;
+		}
+		var meta = fmt( t( 'matchesIn', '%1$s in %2$s' ), [
+			plural( view.matches, 'matchesCount', '%1$d matches', 'matchesCountOne', '%1$d match' ),
+			notesLabel( notes, view.truncated ),
+		] );
+		if ( 'all' === view.scope && view.groups.length > 1 ) {
+			meta += ' ' + fmt( t( 'acrossClasses', 'across %1$d classes' ), [ view.groups.length ] );
+		}
+		box.appendChild( el( 'p', 'tbt-notes-search-results__meta', meta ) );
+
+		if ( 'class' === view.scope ) {
+			box.appendChild( searchHitList( view.items.slice( 0, SEARCH_MAX_RESULTS ) ) );
+			if ( view.items.length > SEARCH_MAX_RESULTS ) {
+				box.appendChild( el( 'p', 'tbt-notes-search-results__more',
+					fmt( t( 'showingOf', 'Showing %1$d of %2$d notes' ), [ SEARCH_MAX_RESULTS, view.items.length ] ) ) );
+			}
+			return;
+		}
+		view.groups.forEach( function ( group ) {
+			var section = el( 'div', 'tbt-notes-search-group' );
+			var head = el( 'div', 'tbt-notes-search-group__head' );
+			head.appendChild( el( 'span', 'tbt-notes-search-group__title', group.title ) );
+			head.appendChild( el( 'span', 'tbt-notes-search-group__count', notesLabel( group.items.length, false ) ) );
+			section.appendChild( head );
+			section.appendChild( searchHitList( group.items ) );
+			box.appendChild( section );
+		} );
+	}
+
+	function searchHitButtons() {
+		return searchUi && searchUi.dropdown && ! searchUi.dropdown.hidden
+			? Array.prototype.slice.call( searchUi.dropdown.querySelectorAll( '.tbt-notes-search-hit' ) )
+			: [];
+	}
+
+	function onSearchHitKeydown( e ) {
+		if ( 'ArrowDown' !== e.key && 'ArrowUp' !== e.key ) {
+			return;
+		}
+		e.preventDefault();
+		var all = searchHitButtons();
+		var i = all.indexOf( e.currentTarget );
+		if ( 'ArrowUp' === e.key ) {
+			if ( i <= 0 ) {
+				searchUi.input.focus();
+			} else {
+				all[ i - 1 ].focus();
+			}
+		} else if ( i < all.length - 1 ) {
+			all[ i + 1 ].focus();
+		}
+	}
+
+	/**
+	 * Open a hit: the note scope takes over and the next render that shows the
+	 * lesson's editor lands on its first hit (see searchAfterRender).
+	 */
+	function openSearchResult( classId, lessonId ) {
+		state.search.scope = 'note';
+		state.search.current = 0;
+		dropdownDismissed = false;
+		var cls = state.currentClass;
+		if ( cls && ( parseInt( cls.id, 10 ) || 0 ) === classId ) {
+			var lesson = null;
+			state.lessons.forEach( function ( l ) {
+				if ( ( parseInt( l.id, 10 ) || 0 ) === lessonId ) {
+					lesson = l;
+				}
+			} );
+			if ( ! lesson ) {
+				return;
+			}
+			if ( state.currentLesson && state.currentLesson.id === lesson.id ) {
+				// Already open: selectLesson() would do nothing, so land in place.
+				syncSearchRow();
+				runNoteSearch( { first: true, scroll: true } );
+				if ( searchUi && searchUi.input ) {
+					searchUi.input.focus();
+				}
+				return;
+			}
+			state.search.jump = true;
+			selectLesson( lesson );
+			return;
+		}
+		var target = null;
+		( state.classes || [] ).forEach( function ( c ) {
+			if ( ( parseInt( c.id, 10 ) || 0 ) === classId ) {
+				target = c;
+			}
+		} );
+		if ( ! target ) {
+			return;
+		}
+		state.search.jump = true;
+		// openClass() does not flush on its own: its other callers leave the
+		// class view first, which already has.
+		flushActiveSaver();
+		openClass( target, lessonId );
+	}
+
+	/* ---- Row */
+
+	function updateSearchCount() {
+		if ( ! searchUi || ! searchUi.count ) {
+			return;
+		}
+		var text = '';
+		if ( 'note' === state.search.scope ) {
+			if ( searchQuery() ) {
+				text = noteHits.length
+					? fmt( t( 'matchOf', '%1$d of %2$d' ), [ state.search.current + 1, noteHits.length ] )
+					: t( 'noMatches', 'No matches' );
+			}
+		} else if ( searchView && ! searchView.message && searchQuery() ) {
+			text = notesLabel( 'class' === searchView.scope ? searchView.items.length : searchView.notes, searchView.truncated );
+		}
+		searchUi.count.textContent = text;
+		var few = noteHits.length < 2;
+		searchUi.prev.disabled = few;
+		searchUi.next.disabled = few;
+	}
+
+	function syncSearchRow() {
+		if ( ! searchUi || ! searchUi.row ) {
+			return;
+		}
+		searchUi.radios.forEach( function ( r ) {
+			var on = r.getAttribute( 'data-scope' ) === state.search.scope;
+			r.setAttribute( 'aria-checked', on ? 'true' : 'false' );
+			r.tabIndex = on ? 0 : -1;
+		} );
+		var noteScope = 'note' === state.search.scope;
+		searchUi.prev.hidden = ! noteScope;
+		searchUi.next.hidden = ! noteScope;
+		searchUi.clearBtn.hidden = ! state.search.q;
+		if ( noteScope ) {
+			searchView = null;
+		}
+		renderSearchDropdown();
+		updateSearchCount();
+	}
+
+	function runSearchForScope( opts ) {
+		if ( 'note' === state.search.scope ) {
+			runNoteSearch( opts );
+		} else if ( 'class' === state.search.scope ) {
+			runClassSearch();
+		} else {
+			runAllSearch();
+		}
+	}
+
+	function setSearchScope( scope ) {
+		if ( scope === state.search.scope ) {
+			return;
+		}
+		state.search.scope = scope;
+		dropdownDismissed = false;
+		if ( 'note' !== scope ) {
+			clearTimeout( noteTimer );
+			noteTimer = null;
+			clearSearchMarks();
+		}
+		syncSearchRow();
+		runSearchForScope( { scroll: true } );
+	}
+
+	function onSearchInput() {
+		state.search.q = searchUi.input.value;
+		searchUi.clearBtn.hidden = ! state.search.q;
+		dropdownDismissed = false;
+		if ( 'note' === state.search.scope ) {
+			clearTimeout( noteTimer );
+			noteTimer = setTimeout( function () {
+				noteTimer = null;
+				runNoteSearch( { first: true, scroll: true } );
+			}, 150 );
+		} else if ( 'class' === state.search.scope ) {
+			clearTimeout( classTimer );
+			classTimer = setTimeout( runClassSearch, 150 );
+		} else {
+			runAllSearch();
+		}
+	}
+
+	function onSearchInputKeydown( e ) {
+		if ( 'Enter' === e.key ) {
+			e.preventDefault();
+			if ( 'note' === state.search.scope ) {
+				stepNote( e.shiftKey ? -1 : 1 );
+				return;
+			}
+			if ( null !== classTimer ) {
+				runClassSearch();
+			}
+			var first = searchHitButtons()[ 0 ];
+			if ( first ) {
+				first.click();
+			}
+		} else if ( 'ArrowDown' === e.key ) {
+			var hits = searchHitButtons();
+			if ( hits.length ) {
+				e.preventDefault();
+				hits[ 0 ].focus();
+			}
+		}
+	}
+
+	function buildSearchRow() {
+		var row = el( 'div', 'tbt-notes-search-row' );
+		row.id = SEARCH_ROW_ID;
+		row.setAttribute( 'role', 'search' );
+
+		var field = el( 'div', 'tbt-notes-search-field' );
+		var glass = icon( 'search' );
+		if ( glass ) {
+			glass.setAttribute( 'class', 'tbt-notes-search-field__icon' );
+			field.appendChild( glass );
+		}
+		var input = el( 'input', 'tbt-notes-search-input' );
+		input.type = 'search';
+		input.id = SEARCH_INPUT_ID;
+		input.placeholder = t( 'searchPh', 'Search…' );
+		input.setAttribute( 'aria-label', t( 'searchNotes', 'Search notes' ) );
+		input.setAttribute( 'aria-controls', SEARCH_RESULTS_ID );
+		input.autocomplete = 'off';
+		input.spellcheck = false;
+		input.maxLength = 100;
+		input.value = state.search.q;
+		input.addEventListener( 'input', onSearchInput );
+		input.addEventListener( 'keydown', onSearchInputKeydown );
+		input.addEventListener( 'focus', function () {
+			if ( dropdownDismissed ) {
+				dropdownDismissed = false;
+				renderSearchDropdown();
+			}
+		} );
+		field.appendChild( input );
+		var clearBtn = iconButton( '✕', t( 'searchClear', 'Clear search' ), function () {
+			input.value = '';
+			onSearchInput();
+			input.focus();
+		}, 'close' );
+		clearBtn.classList.add( 'tbt-notes-search-clear' );
+		field.appendChild( clearBtn );
+		row.appendChild( field );
+
+		var group = el( 'div', 'tbt-notes-search-scope' );
+		group.setAttribute( 'role', 'radiogroup' );
+		group.setAttribute( 'aria-label', t( 'scopeLabel', 'Where to search' ) );
+		var radios = [];
+		[
+			[ 'note', t( 'scopeNote', 'This note' ) ],
+			[ 'class', t( 'scopeClass', 'This class' ) ],
+			[ 'all', t( 'scopeAll', 'All classes' ) ],
+		].forEach( function ( def ) {
+			var r = el( 'button', 'tbt-notes-search-scope__chip', def[ 1 ] );
+			r.type = 'button';
+			r.setAttribute( 'role', 'radio' );
+			r.setAttribute( 'data-scope', def[ 0 ] );
+			r.addEventListener( 'click', function () {
+				setSearchScope( def[ 0 ] );
+			} );
+			r.addEventListener( 'keydown', function ( e ) {
+				var step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[ e.key ];
+				if ( ! step ) {
+					return;
+				}
+				e.preventDefault();
+				var next = radios[ ( radios.indexOf( r ) + step + radios.length ) % radios.length ];
+				setSearchScope( next.getAttribute( 'data-scope' ) );
+				next.focus();
+			} );
+			radios.push( r );
+			group.appendChild( r );
+		} );
+		row.appendChild( group );
+
+		var controls = el( 'div', 'tbt-notes-search-controls' );
+		var count = el( 'span', 'tbt-notes-search-count' );
+		count.setAttribute( 'aria-live', 'polite' );
+		controls.appendChild( count );
+		var prev = iconButton( '↑', t( 'searchPrev', 'Previous match' ), function () {
+			stepNote( -1 );
+		}, 'chevronUp' );
+		var next = iconButton( '↓', t( 'searchNext', 'Next match' ), function () {
+			stepNote( 1 );
+		}, 'chevronDown' );
+		controls.appendChild( prev );
+		controls.appendChild( next );
+		controls.appendChild( iconButton( '✕', t( 'searchClose', 'Close search' ), function () {
+			closeSearch( true );
+		}, 'close' ) );
+		row.appendChild( controls );
+
+		var dropdown = el( 'div', 'tbt-notes-search-results' );
+		dropdown.id = SEARCH_RESULTS_ID;
+		dropdown.hidden = true;
+		row.appendChild( dropdown );
+
+		// Esc anywhere in the row — field, scope, results — closes search.
+		// preventDefault also stops a type="search" field clearing itself.
+		row.addEventListener( 'keydown', function ( e ) {
+			if ( 'Escape' === e.key ) {
+				e.preventDefault();
+				e.stopPropagation();
+				closeSearch( true );
+			}
+		} );
+
+		searchUi = searchUi || {};
+		searchUi.row = row;
+		searchUi.input = input;
+		searchUi.clearBtn = clearBtn;
+		searchUi.radios = radios;
+		searchUi.count = count;
+		searchUi.prev = prev;
+		searchUi.next = next;
+		searchUi.dropdown = dropdown;
+		bindSearchOutsideClick();
+		syncSearchRow();
+		return row;
+	}
+
+	/* ---- Open / close */
+
+	/**
+	 * Text the teacher has selected in the editor, if it makes a sensible query:
+	 * 1–80 characters on one line.
+	 */
+	function editorSelectionText() {
+		var sel = window.getSelection ? window.getSelection() : null;
+		if ( ! sel || sel.isCollapsed || ! sel.anchorNode ) {
+			return '';
+		}
+		var anchor = 1 === sel.anchorNode.nodeType ? sel.anchorNode : sel.anchorNode.parentNode;
+		if ( ! anchor || ! anchor.closest || ! anchor.closest( '.ql-editor' ) ) {
+			return '';
+		}
+		var text = String( sel.toString() );
+		if ( /[\r\n]/.test( text.trim() ) ) {
+			return '';
+		}
+		text = text.trim();
+		return text.length >= 1 && text.length <= 80 ? text : '';
+	}
+
+	function setupSearchButton( b ) {
+		searchUi.button = b;
+		b.classList.add( 'tbt-notes-search-toggle' );
+		b.setAttribute( 'aria-pressed', state.search.open ? 'true' : 'false' );
+		b.setAttribute( 'aria-controls', SEARCH_ROW_ID );
+		// Read the selection before the click moves focus off the editor.
+		b.addEventListener( 'pointerdown', function () {
+			searchPrefill = editorSelectionText();
+		} );
+	}
+
+	function toggleSearch() {
+		var prefill = null !== searchPrefill ? searchPrefill : editorSelectionText();
+		searchPrefill = null;
+		if ( state.search.open ) {
+			closeSearch( true );
+		} else {
+			openSearch( prefill );
+		}
+	}
+
+	function openSearch( prefill ) {
+		if ( ! searchUi || ! searchUi.topbar ) {
+			return;
+		}
+		if ( prefill ) {
+			state.search.q = prefill;
+			state.search.current = 0;
+		}
+		state.search.open = true;
+		dropdownDismissed = false;
+		searchUi.topbar.appendChild( buildSearchRow() );
+		searchUi.button.setAttribute( 'aria-pressed', 'true' );
+		if ( pageSticky ) {
+			pageSticky.update();
+		}
+		searchUi.input.focus();
+		searchUi.input.select();
+		runSearchForScope( { first: !! prefill, scroll: true } );
+	}
+
+	function stopSearchWork() {
+		clearTimeout( noteTimer );
+		clearTimeout( classTimer );
+		clearTimeout( allTimer );
+		noteTimer = null;
+		classTimer = null;
+		allTimer = null;
+		allSeq++;
+		clearSearchMarks();
+		searchView = null;
+	}
+
+	function closeSearch( focusButton ) {
+		state.search.open = false;
+		state.search.jump = false;
+		stopSearchWork();
+		if ( ! searchUi ) {
+			return;
+		}
+		if ( searchUi.row && searchUi.row.parentNode ) {
+			searchUi.row.parentNode.removeChild( searchUi.row );
+		}
+		searchUi = { topbar: searchUi.topbar, button: searchUi.button };
+		if ( searchUi.button ) {
+			searchUi.button.setAttribute( 'aria-pressed', 'false' );
+		}
+		if ( pageSticky ) {
+			pageSticky.update();
+		}
+		if ( focusButton && searchUi.button ) {
+			searchUi.button.focus();
+		}
+	}
+
+	function bindSearchOutsideClick() {
+		if ( searchOutsideBound ) {
+			return;
+		}
+		searchOutsideBound = true;
+		// A click outside the row folds the results away; query and scope stay.
+		document.addEventListener( 'pointerdown', function ( e ) {
+			if ( ! searchUi || ! searchUi.dropdown || searchUi.dropdown.hidden ) {
+				return;
+			}
+			if ( searchUi.row.contains( e.target ) || ( searchUi.button && searchUi.button.contains( e.target ) ) ) {
+				return;
+			}
+			dropdownDismissed = true;
+			searchUi.dropdown.hidden = true;
+		} );
+	}
+
+	/* ---- render() hooks */
+
+	function captureSearchFocus() {
+		var a = document.activeElement;
+		if ( a && SEARCH_INPUT_ID === a.id ) {
+			return { start: a.selectionStart, end: a.selectionEnd };
+		}
+		return null;
+	}
+
+	// Before a render: the ranges, the editor and the row are about to go.
+	function resetSearchView() {
+		stopSearchWork();
+		activeEditor = null;
+		searchUi = null;
+	}
+
+	/**
+	 * After a render: put the caret back if the field had it, then re-run the
+	 * open scope against the new DOM. A pending jump lands on the first hit once
+	 * the lesson's editor is on screen — for openClass() that is the render after
+	 * the lessons arrive, so a render still loading keeps the jump waiting.
+	 */
+	function searchAfterRender( focus ) {
+		if ( ! searchUi || ! searchUi.row || ! searchUi.row.isConnected ) {
+			if ( 'class' !== state.view ) {
+				state.search.jump = false;
+			}
+			return;
+		}
+		if ( focus ) {
+			searchUi.input.focus();
+			try {
+				searchUi.input.setSelectionRange( focus.start, focus.end );
+			} catch ( e ) {
+				// Not every input type supports a selection; the caret simply stays.
+			}
+		}
+		if ( 'note' !== state.search.scope ) {
+			runSearchForScope();
+			return;
+		}
+		if ( ! state.search.jump ) {
+			runNoteSearch( { scroll: false } );
+			return;
+		}
+		if ( state.loadingLessons ) {
+			return;
+		}
+		// The jump stays pending until a frame lands it: if another render comes
+		// first, this frame stands down and that render's frame takes over.
+		var ui = searchUi;
+		window.requestAnimationFrame( function () {
+			if ( ui !== searchUi || ! state.search.jump ) {
+				return;
+			}
+			state.search.jump = false;
+			runNoteSearch( { first: true, scroll: true } );
+			ui.input.focus();
+		} );
 	}
 
 	/* --------------------------------------------------------------- Autosave */

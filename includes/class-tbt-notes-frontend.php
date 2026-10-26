@@ -664,6 +664,42 @@ class TBT_Notes_Frontend {
 			'aiClose'           => __( 'Close', 'tbt-notes' ),
 			'aiError'           => __( 'AI is not available at the moment. Please try again.', 'tbt-notes' ),
 			'aiEmptyPrompt'     => __( 'Please type a prompt for the AI.', 'tbt-notes' ),
+			// Search in notes (teacher, Page Mode).
+			'searchNotes'       => __( 'Search notes', 'tbt-notes' ),
+			'searchPh'          => __( 'Search…', 'tbt-notes' ),
+			'searchClear'       => __( 'Clear search', 'tbt-notes' ),
+			'searchClose'       => __( 'Close search', 'tbt-notes' ),
+			'searchPrev'        => __( 'Previous match', 'tbt-notes' ),
+			'searchNext'        => __( 'Next match', 'tbt-notes' ),
+			'scopeNote'         => __( 'This note', 'tbt-notes' ),
+			'scopeClass'        => __( 'This class', 'tbt-notes' ),
+			'scopeAll'          => __( 'All classes', 'tbt-notes' ),
+			'scopeLabel'        => __( 'Where to search', 'tbt-notes' ),
+			/* translators: 1: current match number, 2: number of matches. */
+			'matchOf'           => __( '%1$d of %2$d', 'tbt-notes' ),
+			'noMatches'         => __( 'No matches', 'tbt-notes' ),
+			/* translators: %1$d: number of notes. */
+			'notesCount'        => __( '%1$d notes', 'tbt-notes' ),
+			/* translators: %1$d: number of notes (one). */
+			'notesCountOne'     => __( '%1$d note', 'tbt-notes' ),
+			/* translators: %1$d: number of matches. */
+			'matchesCount'      => __( '%1$d matches', 'tbt-notes' ),
+			/* translators: %1$d: number of matches (one). */
+			'matchesCountOne'   => __( '%1$d match', 'tbt-notes' ),
+			/* translators: 1: "12 matches", 2: "5 notes". */
+			'matchesIn'         => __( '%1$s in %2$s', 'tbt-notes' ),
+			/* translators: %1$d: number of classes. */
+			'acrossClasses'     => __( 'across %1$d classes', 'tbt-notes' ),
+			'searching'         => __( 'Searching…', 'tbt-notes' ),
+			'searchTooShort'    => __( 'Type at least 2 letters.', 'tbt-notes' ),
+			'searchError'       => __( 'Search is unavailable right now.', 'tbt-notes' ),
+			/* translators: %1$s: the search query. */
+			'searchNoneClass'   => __( 'No notes in this class match “%1$s”.', 'tbt-notes' ),
+			/* translators: %1$s: the search query. */
+			'searchNoneAll'     => __( 'No notes match “%1$s”.', 'tbt-notes' ),
+			'openNow'           => __( 'open now', 'tbt-notes' ),
+			/* translators: 1: notes shown, 2: notes found. */
+			'showingOf'         => __( 'Showing %1$d of %2$d notes', 'tbt-notes' ),
 		);
 	}
 

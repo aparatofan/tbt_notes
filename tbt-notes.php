@@ -3,7 +3,7 @@
  * Plugin Name:       TBT Notes
  * Plugin URI:        https://thebluetree.example/
  * Description:       Per-class lesson notes for The Blue Tree. A teacher writes notes per class; each logged-in student sees only the notes for the class they are assigned to, in a slide-out side panel.
- * Version:           1.18.7
+ * Version:           1.19.0
  * Requires at least: 6.0
  * Requires PHP:      8.0
  * Author:            The Blue Tree
@@ -23,7 +23,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 /**
  * Plugin version. Bump on release.
  */
-define( 'TBT_NOTES_VERSION', '1.18.7' );
+define( 'TBT_NOTES_VERSION', '1.19.0' );
 
 /**
  * Database schema version. Bump when the table structure changes so that
@@ -47,6 +47,7 @@ define( 'TBT_NOTES_REST_NAMESPACE', 'tbt-notes/v1' );
 require_once TBT_NOTES_PLUGIN_DIR . 'includes/class-tbt-notes-db.php';
 require_once TBT_NOTES_PLUGIN_DIR . 'includes/class-tbt-notes-capabilities.php';
 require_once TBT_NOTES_PLUGIN_DIR . 'includes/class-tbt-notes-sanitizer.php';
+require_once TBT_NOTES_PLUGIN_DIR . 'includes/class-tbt-notes-search.php';
 require_once TBT_NOTES_PLUGIN_DIR . 'includes/class-tbt-notes-pronunciation.php';
 require_once TBT_NOTES_PLUGIN_DIR . 'includes/class-tbt-notes-expression-cards.php';
 require_once TBT_NOTES_PLUGIN_DIR . 'includes/class-tbt-notes-ai-quick-note.php';
