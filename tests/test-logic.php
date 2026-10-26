@@ -318,6 +318,41 @@ class TBT_Notes_DB {
 		return array_values( self::$classes );
 	}
 
+	/**
+	 * Search prefilter stand-in. Emulates the lessons table's accent-insensitive
+	 * collation (case and accents fold, ł does not) and LIKE's _ wildcard, and
+	 * records each call so the class set sent to SQL can be asserted.
+	 */
+	public static $search_rows  = array();
+	public static $search_calls = array();
+
+	public static function search_lessons( array $class_ids, array $tokens, $limit = 200 ) {
+		self::$search_calls[] = array( array_map( 'intval', $class_ids ), $tokens, $limit );
+		$out = array();
+		foreach ( self::$search_rows as $row ) {
+			if ( ! in_array( (int) $row['class_id'], array_map( 'intval', $class_ids ), true ) ) {
+				continue;
+			}
+			foreach ( $tokens as $token ) {
+				$re  = '/' . str_replace( '_', '.', preg_quote( $token, '/' ) ) . '/u';
+				$hit = false;
+				foreach ( array( 'body', 'header' ) as $col ) {
+					if ( preg_match( $re, mb_strtolower( remove_accents( $row[ $col ] ), 'UTF-8' ) ) ) {
+						$hit = true;
+					}
+				}
+				if ( ! $hit ) {
+					continue 2;
+				}
+			}
+			$out[] = $row;
+			if ( count( $out ) >= $limit ) {
+				break;
+			}
+		}
+		return $out;
+	}
+
 	public static function get_classes_for_teacher( $teacher_id ) {
 		$out = array();
 		foreach ( self::$classes as $class ) {
@@ -398,10 +433,67 @@ class TBT_Students {
 	}
 }
 
+/**
+ * remove_accents() stand-in: enough of WordPress's map for Polish and the
+ * common Western accents the search tests use. ł is deliberately absent, as in
+ * WordPress, so TBT_Notes_Search has to handle it itself.
+ */
+if ( ! function_exists( 'remove_accents' ) ) {
+	function remove_accents( $text ) {
+		return strtr(
+			(string) $text,
+			array(
+				'ą' => 'a', 'ć' => 'c', 'ę' => 'e', 'ń' => 'n', 'ó' => 'o', 'ś' => 's', 'ź' => 'z', 'ż' => 'z',
+				'Ą' => 'A', 'Ć' => 'C', 'Ę' => 'E', 'Ń' => 'N', 'Ó' => 'O', 'Ś' => 'S', 'Ź' => 'Z', 'Ż' => 'Z',
+				'é' => 'e', 'è' => 'e', 'á' => 'a', 'à' => 'a', 'ü' => 'u', 'ö' => 'o', 'ä' => 'a',
+			)
+		);
+	}
+}
+
+/**
+ * Just enough of WP_REST_Request for handlers that read params.
+ */
+class WP_REST_Request implements ArrayAccess {
+	private $params;
+
+	public function __construct( array $params = array() ) {
+		$this->params = $params;
+	}
+
+	public function get_param( $key ) {
+		return isset( $this->params[ $key ] ) ? $this->params[ $key ] : null;
+	}
+
+	public function offsetExists( $key ): bool {
+		return isset( $this->params[ $key ] );
+	}
+
+	#[\ReturnTypeWillChange]
+	public function offsetGet( $key ) {
+		return $this->get_param( $key );
+	}
+
+	public function offsetSet( $key, $value ): void {
+		$this->params[ $key ] = $value;
+	}
+
+	public function offsetUnset( $key ): void {
+		unset( $this->params[ $key ] );
+	}
+}
+
+if ( ! function_exists( 'rest_ensure_response' ) ) {
+	function rest_ensure_response( $data ) {
+		return $data;
+	}
+}
+
 /* ----------------------------------------------------------------- Load code */
 
 require_once dirname( __DIR__ ) . '/includes/class-tbt-notes-capabilities.php';
 require_once dirname( __DIR__ ) . '/includes/class-tbt-notes-sanitizer.php';
+require_once dirname( __DIR__ ) . '/includes/class-tbt-notes-search.php';
 require_once dirname( __DIR__ ) . '/includes/class-tbt-notes-pronunciation.php';
 require_once dirname( __DIR__ ) . '/includes/class-tbt-notes-expression-cards.php';
 require_once dirname( __DIR__ ) . '/includes/class-tbt-notes-ai-quick-note.php';
@@ -1602,6 +1694,120 @@ function test_extras_icon() {
 	ok( $noicon[0]['icon'] === '', 'a non-SVG icon is dropped, leaving the built-in glyph' );
 }
 test_extras_icon();
+
+/* ------------------------------------------------------------------ Search */
+
+echo "\nSearch helpers:\n";
+function test_search() {
+	ok( TBT_Notes_Search::fold( 'Przełożony ŻÓŁW' ) === 'przelozony zolw', 'fold: ł and Polish accents fold to plain lowercase' );
+
+	ok(
+		TBT_Notes_Search::plain_text( '<p>a <span class="tbt-hl-blue">dead</span>line</p><p>next</p>' ) === 'a deadline next',
+		'plain_text: a highlight span does not split a word; blocks are spaced'
+	);
+	ok( TBT_Notes_Search::plain_text( '<p>R&amp;D&nbsp;team</p>' ) === 'R&D team', 'plain_text: decodes &amp; and &nbsp;' );
+	ok( TBT_Notes_Search::plain_text( "<p>x\xc2\xa0y</p>" ) === 'x y', 'plain_text: a literal non-breaking space becomes a space' );
+	ok( TBT_Notes_Search::plain_text( '<p>one<br>two</p><ul><li>three</li><li>four</li></ul><h2>five</h2>' ) === 'one two three four five', 'plain_text: <br>, list items and headings are word boundaries' );
+	ok( ! contains( TBT_Notes_Search::plain_text( '<p><strong>Plan</strong> <em class="x">ahead</em></p>' ), '<' ), 'plain_text: never returns < from markup' );
+	ok( TBT_Notes_Search::plain_text( '<p>a &lt;b&gt; c</p>' ) === 'a <b> c', 'plain_text: an escaped < in the text is text' );
+
+	$m = TBT_Notes_Search::match( 'mój bezpośredni przełożony', 'przelozony' );
+	ok( is_array( $m ) && 1 === $m['count'], 'match: przelozony finds przełożony' );
+	ok( is_array( $m ) && 'przełożony' === $m['match'], 'match: the snippet match is the original text' );
+	ok( is_array( $m ) && 'mój bezpośredni ' === $m['before'] && '' === $m['after'], 'match: short text is not cut' );
+
+	$m3 = TBT_Notes_Search::match( 'Deadline one, deadline two and the DEADLINE three', 'deadline' );
+	ok( is_array( $m3 ) && 3 === $m3['count'], 'match: counts 3 hits' );
+	ok( is_array( $m3 ) && 'Deadline' === $m3['match'], 'match: the first hit keeps its case' );
+
+	ok( null === TBT_Notes_Search::match( TBT_Notes_Search::plain_text( '<p><strong>Plan</strong> ahead</p>' ), 'strong' ), 'match: markup is never matched' );
+	ok( null === TBT_Notes_Search::match( 'anything', '   ' ), 'match: an empty query matches nothing' );
+	ok( is_array( TBT_Notes_Search::match( 'the deadline for the report', 'The   DEADLINE for' ) ), 'match: query whitespace and case are normalised' );
+
+	$long = str_repeat( 'alpha beta gamma ', 10 ) . 'target' . str_repeat( ' delta epsilon zeta', 10 );
+	$ml   = TBT_Notes_Search::match( $long, 'target' );
+	ok( is_array( $ml ) && 0 === strpos( $ml['before'], '…' ) && ' ' !== mb_substr( $ml['before'], 1, 1 ), 'match: long text is cut at a word boundary with … before' );
+	ok( is_array( $ml ) && '…' === mb_substr( $ml['after'], -1 ) && mb_strlen( $ml['before'] ) <= 50 && mb_strlen( $ml['after'] ) <= 74, 'match: … after, and the context stays near 48/72 characters' );
+	ok( is_array( $ml ) && preg_match( '/ (delta|epsilon|zeta)…$/u', $ml['after'] ), 'match: the after context ends on a whole word' );
+	ok( is_array( $ml ) && preg_match( '/^…(alpha|beta|gamma) /u', $ml['before'] ), 'match: the before context starts on a whole word' );
+
+	ok( array( 'the', 'dead_ine' ) === TBT_Notes_Search::prefilter_tokens( "I'm the deadline" ), 'prefilter_tokens: short tokens dropped, l becomes _' );
+	ok( array( 'prze_ozony' ) === TBT_Notes_Search::prefilter_tokens( 'Przełożony' ), 'prefilter_tokens: ł folds, then becomes _' );
+	ok( array() === TBT_Notes_Search::prefilter_tokens( 'a?' ), 'prefilter_tokens: nothing usable gives no tokens' );
+	ok( array( 'the' ) === TBT_Notes_Search::prefilter_tokens( 'the THE The' ), 'prefilter_tokens: de-duplicated after folding' );
+	ok( 6 === count( TBT_Notes_Search::prefilter_tokens( 'aa bb cc dd ee ff gg hh' ) ), 'prefilter_tokens: capped at 6' );
+	foreach ( TBT_Notes_Search::prefilter_tokens( "50% R&D o'clock _x_ \\ 100" ) as $tok ) {
+		ok( (bool) preg_match( '/^[\p{L}\p{N}_]+$/u', $tok ), 'prefilter_tokens: token "' . $tok . '" holds only letters, digits and _' );
+	}
+}
+test_search();
+
+echo "\nSearch route:\n";
+function test_search_route() {
+	TBT_Notes_DB::reset_roster();
+	TBT_Notes_DB::set_class( 1, 7 );
+	TBT_Notes_DB::set_class( 2, 8 );
+	TBT_Notes_DB::$search_calls = array();
+	TBT_Notes_DB::$search_rows  = array(
+		array( 'id' => 30, 'class_id' => 1, 'header' => '30 - Oct', 'body' => '<p>Pete says the <span class="tbt-hl-blue">deadline</span> for the report.</p>', 'created_at' => '2026-10-03 10:00:00' ),
+		array( 'id' => 20, 'class_id' => 2, 'header' => 'Deadline day', 'body' => '<p>Mój bezpośredni przełożony: the deadline for May.</p>', 'created_at' => '2026-10-02 10:00:00' ),
+		array( 'id' => 10, 'class_id' => 1, 'header' => '10 - Sep', 'body' => '<p class="the deadline for">nothing here</p><p><strong>Plan</strong> ahead.</p>', 'created_at' => '2026-10-01 10:00:00' ),
+	);
+	$rest = new TBT_Notes_REST();
+
+	// An ordinary teacher: only their own class, in SQL and in the result.
+	$GLOBALS['__current_user'] = 7;
+	$GLOBALS['__cur_can']      = array( TBT_NOTES_CAP );
+	$out = $rest->search( new WP_REST_Request( array( 'q' => 'the deadline for' ) ) );
+	$call = end( TBT_Notes_DB::$search_calls );
+	ok( array( 1 ) === $call[0], 'route: a teacher who is not an admin searches only their own classes' );
+	ok( array( 'the', 'dead_ine', 'for' ) === $call[1] && 200 === $call[2], 'route: per-token prefilter with a 200-row candidate cap' );
+	ok( 1 === $out['total'] && 30 === $out['hits'][0]['lesson_id'], 'route: a phrase across a highlight span is found; a class attribute is not' );
+	ok( 'Class 1' === $out['hits'][0]['class_title'] && false === $out['truncated'], 'route: hit carries the class title; not truncated' );
+	ok( 'Pete says ' === $out['hits'][0]['snippet']['before'] && 'the deadline for' === $out['hits'][0]['snippet']['match'], 'route: snippet is plain text around the hit' );
+
+	// An administrator: every class.
+	$GLOBALS['__cur_can'] = true;
+	$out = $rest->search( new WP_REST_Request( array( 'q' => 'przelozony' ) ) );
+	$call = end( TBT_Notes_DB::$search_calls );
+	ok( array( 1, 2 ) === $call[0], 'route: an administrator searches every class' );
+	ok( 1 === $out['total'] && 'przełożony' === $out['hits'][0]['snippet']['match'], 'route: przelozony finds przełożony through the ł wildcard' );
+
+	$out = $rest->search( new WP_REST_Request( array( 'q' => 'deadline' ) ) );
+	ok( 2 === $out['total'] && 30 === $out['hits'][0]['lesson_id'], 'route: hits keep the newest-first order' );
+	ok( 2 === $out['hits'][1]['count'] && 'deadline' === $out['hits'][1]['snippet']['match'] && 0 === strpos( $out['hits'][1]['snippet']['before'], 'Mój' ), 'route: the header counts, the snippet comes from the note text' );
+
+	$out = $rest->search( new WP_REST_Request( array( 'q' => 'strong' ) ) );
+	ok( 0 === $out['total'], 'route: markup words never match' );
+
+	$out = $rest->search( new WP_REST_Request( array( 'q' => 'a?' ) ) );
+	ok( 0 === $out['total'] && isset( $out['reason'] ) && 'too_short' === $out['reason'], 'route: a query with no usable token returns too_short' );
+	$bad = $rest->search( new WP_REST_Request( array( 'q' => ' x ' ) ) );
+	ok( is_wp_error( $bad ), 'route: under 2 characters is rejected' );
+	$bad = $rest->search( new WP_REST_Request( array( 'q' => str_repeat( 'a', 101 ) ) ) );
+	ok( is_wp_error( $bad ), 'route: over 100 characters is rejected' );
+
+	// The 50-hit cap.
+	$rows = array();
+	for ( $i = 1; $i <= 60; $i++ ) {
+		$rows[] = array( 'id' => $i, 'class_id' => 1, 'header' => 'L' . $i, 'body' => '<p>deadline</p>', 'created_at' => '2026-10-01 10:00:00' );
+	}
+	TBT_Notes_DB::$search_rows = $rows;
+	$out = $rest->search( new WP_REST_Request( array( 'q' => 'deadline' ) ) );
+	ok( 50 === $out['total'] && true === $out['truncated'], 'route: stops at 50 hits and says so' );
+
+	// A teacher with no classes gets an empty result, not every class.
+	$GLOBALS['__current_user'] = 99;
+	$GLOBALS['__cur_can']      = array( TBT_NOTES_CAP );
+	$out = $rest->search( new WP_REST_Request( array( 'q' => 'deadline' ) ) );
+	ok( 0 === $out['total'] && array() === $out['hits'], 'route: no classes, no hits' );
+
+	TBT_Notes_DB::$search_rows = array();
+	TBT_Notes_DB::reset_roster();
+	$GLOBALS['__current_user'] = 0;
+	$GLOBALS['__cur_can']      = false;
+}
+test_search_route();
 
 /* ----------------------------------------------------------------- Summary */
 

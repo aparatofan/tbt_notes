@@ -309,6 +309,24 @@ request is made.
 > accepts `noteContext`, `noteTitle`, and `selectedText`, but the editor does not
 > send them yet — using the note as context is a deliberate future step.
 
+### Search in notes (teacher, Page Mode)
+
+A magnifier, first in the class strip's icons, opens a search row that pins
+with the strip. It searches **This note** (the open editor, instantly),
+**This class** (every lesson already loaded, instantly) or **All classes**
+(`GET /search`, teachers/admins only, scoped exactly like `/me`: an ordinary
+teacher searches only their own classes). Matching ignores case and Polish
+accents (`przelozony` finds `przełożony`) and never matches markup.
+
+Marks in the open note are painted with the CSS Custom Highlight API over DOM
+ranges — the note itself is never changed, so searching cannot trigger a save.
+Enter / Shift+Enter step through matches, Esc closes. Students and Overlay Mode
+are unchanged.
+
+The server narrows lessons with one `LIKE` per query word (relying on the
+table's accent-insensitive collation; `l` is a `_` wildcard so `ł` still
+matches), then confirms the exact phrase against each note's plain text.
+
 ## Installation
 
 1. Copy this repository's contents into `wp-content/plugins/tbt-notes/` (the repo
@@ -330,6 +348,7 @@ includes/
   class-tbt-notes-db.php          Custom tables + all queries ($wpdb->prepare)
   class-tbt-notes-capabilities.php Capability (role-based) management
   class-tbt-notes-sanitizer.php   Body/text sanitisation (the kses allowlist)
+  class-tbt-notes-search.php      Pure search helpers (fold, plain text, prefilter, snippets)
   class-tbt-notes-pronunciation.php  Pink-highlight ElevenLabs audio (extract/cache/generate)
   class-tbt-notes-expression-cards.php  Blue-highlight OpenAI expression cards (extract/generate/approve)
   class-tbt-notes-ai-quick-note.php  In-editor "Ask AI" prompt → OpenAI (presets/rate-limit)

@@ -236,6 +236,24 @@ class TBT_Notes_REST {
 				'permission_callback' => array( $this, 'require_manage' ),
 			)
 		);
+
+		// Search across every class the caller manages. Teacher/admin only; the
+		// class set is re-derived in the handler exactly as /me derives it.
+		register_rest_route(
+			$ns,
+			'/search',
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => array( $this, 'search' ),
+				'permission_callback' => array( $this, 'require_manage' ),
+				'args'                => array(
+					'q' => array(
+						'type'     => 'string',
+						'required' => true,
+					),
+				),
+			)
+		);
 	}
 
 	/* --------------------------------------------------------------------- *
@@ -486,6 +504,99 @@ class TBT_Notes_REST {
 				'classes'    => array_map( array( $this, 'present_class' ), $classes ),
 			)
 		);
+	}
+
+	/**
+	 * Search the caller's notes.
+	 *
+	 * SQL narrows the lessons to those holding every query token; each
+	 * candidate is then confirmed against its visible text, so markup never
+	 * matches and a phrase that crosses a highlight still does. The response is
+	 * plain text only — the panel renders it with textContent.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function search( WP_REST_Request $request ) {
+		$q   = trim( preg_replace( '/\s+/u', ' ', (string) $request->get_param( 'q' ) ) );
+		$len = mb_strlen( TBT_Notes_Search::fold( $q ), 'UTF-8' );
+		if ( $len < 2 || $len > 100 ) {
+			return new WP_Error( 'tbt_notes_bad_query', __( 'Search for 2 to 100 characters.', 'tbt-notes' ), array( 'status' => 400 ) );
+		}
+
+		$out = array(
+			'query'     => $q,
+			'total'     => 0,
+			'truncated' => false,
+			'hits'      => array(),
+		);
+
+		// The same class set the caller sees in /me: never another teacher's.
+		if ( TBT_Notes_Capabilities::user_can_manage_all() ) {
+			$classes = TBT_Notes_DB::get_all_classes();
+		} else {
+			$classes = TBT_Notes_DB::get_classes_for_teacher( get_current_user_id() );
+		}
+		$titles = array();
+		foreach ( $classes as $class ) {
+			$titles[ (int) $class['id'] ] = (string) $class['title'];
+		}
+		if ( ! $titles ) {
+			return rest_ensure_response( $out );
+		}
+
+		$tokens = TBT_Notes_Search::prefilter_tokens( $q );
+		if ( ! $tokens ) {
+			$out['reason'] = 'too_short';
+			return rest_ensure_response( $out );
+		}
+
+		$max_hits   = 50;
+		$candidates = 200;
+		$rows       = TBT_Notes_DB::search_lessons( array_keys( $titles ), $tokens, $candidates );
+		foreach ( $rows as $row ) {
+			$class_id = (int) $row['class_id'];
+			if ( ! isset( $titles[ $class_id ] ) ) {
+				continue;
+			}
+			$header = (string) $row['header'];
+			$text   = TBT_Notes_Search::plain_text( (string) $row['body'] );
+			$found  = TBT_Notes_Search::match( $header . '  ' . $text, $q );
+			if ( null === $found ) {
+				continue;
+			}
+			// The header counts, but the snippet comes from the note text when it
+			// holds a hit, so a result does not repeat its own title.
+			$in_body = TBT_Notes_Search::match( $text, $q );
+			if ( null !== $in_body ) {
+				$in_body['count'] = $found['count'];
+				$found            = $in_body;
+			}
+			$out['hits'][] = array(
+				'lesson_id'   => (int) $row['id'],
+				'class_id'    => $class_id,
+				'class_title' => $titles[ $class_id ],
+				'header'      => $header,
+				'created_at'  => (string) $row['created_at'],
+				'count'       => (int) $found['count'],
+				'snippet'     => array(
+					'before' => $found['before'],
+					'match'  => $found['match'],
+					'after'  => $found['after'],
+				),
+			);
+			if ( count( $out['hits'] ) >= $max_hits ) {
+				$out['truncated'] = true;
+				break;
+			}
+		}
+		// A full candidate page may have left later matches unread.
+		if ( count( $rows ) >= $candidates ) {
+			$out['truncated'] = true;
+		}
+		$out['total'] = count( $out['hits'] );
+
+		return rest_ensure_response( $out );
 	}
 
 	/**

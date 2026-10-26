@@ -623,6 +623,55 @@ class TBT_Notes_DB {
 	}
 
 	/**
+	 * Search candidates: lessons in the given classes whose body or header holds
+	 * every token, newest first.
+	 *
+	 * Tokens come from TBT_Notes_Search::prefilter_tokens() and are matched one
+	 * by one rather than as a phrase, because a phrase can cross a highlight
+	 * <span> in the stored HTML. The result is only a prefilter: markup can
+	 * produce false positives, so callers confirm each row against its text.
+	 *
+	 * @param int[]    $class_ids Classes the caller may manage.
+	 * @param string[] $tokens    LIKE fragments without %; letters, digits, _ only.
+	 * @param int      $limit     Most candidates to return.
+	 * @return array[] Rows with id, class_id, header, body and created_at.
+	 */
+	public static function search_lessons( array $class_ids, array $tokens, $limit = 200 ) {
+		global $wpdb;
+		$class_ids = array_values( array_filter( array_map( 'intval', $class_ids ) ) );
+		// Defensive: anything but letters, digits and _ would need LIKE escaping.
+		$tokens = array_values(
+			array_filter(
+				array_map( 'strval', $tokens ),
+				function ( $token ) {
+					return '' !== $token && preg_match( '/^[\p{L}\p{N}_]+$/u', $token );
+				}
+			)
+		);
+		if ( ! $class_ids || ! $tokens ) {
+			return array();
+		}
+
+		$table = self::table_lessons();
+		$in    = implode( ',', array_fill( 0, count( $class_ids ), '%d' ) );
+		$where = array();
+		$args  = $class_ids;
+		foreach ( $tokens as $token ) {
+			$where[] = '(body LIKE %s OR header LIKE %s)';
+			$args[]  = '%' . $token . '%';
+			$args[]  = '%' . $token . '%';
+		}
+		$args[] = max( 1, (int) $limit );
+
+		$sql  = "SELECT id, class_id, header, body, created_at FROM {$table} WHERE class_id IN ({$in}) AND "
+			. implode( ' AND ', $where )
+			. ' ORDER BY created_at DESC, id DESC LIMIT %d';
+		$rows = $wpdb->get_results( $wpdb->prepare( $sql, $args ), ARRAY_A ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+
+		return $rows ? $rows : array();
+	}
+
+	/**
 	 * Count the lessons (notes) in a class. Used for the class-card note count.
 	 *
 	 * @param int $class_id Class ID.
