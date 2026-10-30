@@ -58,13 +58,15 @@ class TBT_Notes_Examples {
 	}
 
 	/**
-	 * The preferred connectors (B1 and B2), as one comma-separated string.
+	 * Connectors that suit the sentences when one is needed, as one
+	 * comma-separated string. Offered, never required: a list the model is
+	 * told to use produces "although" and "while" clauses that join two ideas
+	 * with no real link between them.
 	 *
 	 * @return string
 	 */
 	public static function connectors() {
-		return 'although, while, unless, until, as soon as, so that, however, whereas, despite, '
-			. 'even though, therefore, as long as, otherwise, which is why';
+		return 'because, so, when, until, unless, as soon as, so that, although, however, therefore';
 	}
 
 	/**
@@ -178,7 +180,12 @@ class TBT_Notes_Examples {
 			. '3. Real people. Prefer people who are no longer alive and whose work is admired: scientists, inventors, explorers, writers, artists, composers, musicians, philosophers, and statesmen remembered for constructive achievement. Use a living person only where the learner context clearly points to one, and never a living politician. Do not use religious figures or religious topics, or anyone known mainly for war, crime, scandal or cruelty. Each real person appears at most once in this answer. Vary the fields and the centuries.' . "\n\n"
 			. "4. Facts. Use only facts that are widely known and that you are certain are true. Never put words in a real person's mouth: no quotations, no \"once said\", no invented thoughts or feelings. Avoid exact dates and figures unless they are famous. If you are not certain a fact is true, write about a place or a work instead, or use an EVERYDAY situation. A plain true sentence is better than a vivid doubtful one." . "\n\n"
 			. '5. Real places. Name real places: Polish cities, towns, regions and landmarks often; also world cities, well-known travel destinations and national parks. Facts about places follow rule 4.' . "\n\n"
-			. '6. Connectors. Link ideas with connectors and vary them. Prefer these: ' . self::connectors() . '. Simpler ones (and, but, because, so, when) are also allowed. Most sentences should contain a connector. No connector may appear more than once in this answer. A connector never makes a sentence long or hard to read.' . "\n\n"
+			. '6. Keep it simple. One clear idea is enough: a short, plain sentence that shows the meaning is better than a long one. '
+			. 'Add a second part only when it helps show the meaning, and join it with the connector that is logically right — the second part must really follow from, explain or contrast with the first. '
+			. 'Never add a clause or a connector just for variety or to sound advanced; many good sentences need no connector at all. '
+			. 'Where a connector fits, these suit the sentences: ' . self::connectors() . '. Simpler ones (and, but, because, so, when) are always fine. '
+			. 'No connector may appear more than once in this answer. '
+			. 'Before you finish, read each sentence on its own: an ordinary reader must find it natural, logical and true.' . "\n\n"
 			. "7. Variety. Do not begin two sentences with the same word, and do not begin most sentences with a person's name. The only invented names allowed are Alita, Pete, Sven and Kat; never invent any other name.";
 	}
 

@@ -4881,6 +4881,33 @@
 			}
 		} );
 
+		/**
+		 * Put the armed colour back on the caret — but never from inside a
+		 * Quill event. selection-change is emitted while Quill is still in the
+		 * middle of its own update (typing fires one per keystroke), and calling
+		 * quill.format() from there re-inserts Quill's cursor blot into a tree
+		 * it has not finished reconciling. The tree is left corrupted, and the
+		 * next update — the disarm on Escape, Alt+0 or ✕ — never returns: the
+		 * page freezes. Deferring to the next task lets Quill finish first, the
+		 * same reason the Enter binding below already defers.
+		 */
+		var reapplyTimer = 0;
+		function scheduleReapply() {
+			if ( reapplyTimer ) {
+				return;
+			}
+			reapplyTimer = window.setTimeout( function () {
+				reapplyTimer = 0;
+				var r = quill.getSelection();
+				if ( ! r || r.length > 0 || ! armedColour ) {
+					return;
+				}
+				reentrant = true;
+				quill.format( 'highlight', armedColour, 'api' );
+				reentrant = false;
+			}, 0 );
+		}
+
 		/* ------------------------------------------------------------- Wiring */
 
 		// Quill drops a cursor format whenever the selection moves. Putting it back
@@ -4899,9 +4926,7 @@
 			if ( ! range || range.length > 0 || null === armedColour || reentrant ) {
 				return;
 			}
-			reentrant = true;
-			quill.format( 'highlight', armedColour, 'api' );
-			reentrant = false;
+			scheduleReapply();
 		} );
 
 		quill.on( 'text-change', function () {

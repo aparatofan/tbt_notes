@@ -715,7 +715,7 @@ class TBT_Notes_Expression_Cards {
 							),
 							'connector'          => array(
 								'type'        => 'string',
-								'description' => 'Plan first: the connector the example will use, or "none".',
+								'description' => 'Plan first: "none", or the one connector the example genuinely needs.',
 							),
 							'example_sentence'   => array(
 								'type'        => 'string',

@@ -1906,6 +1906,9 @@ function test_examples_block() {
 	ok( contains( $variants['single choose'], 'whichever shows the meaning best' ), 'choose lets the model pick' );
 	ok( contains( $variants['counts 3, no profile'], 'Your 3 example sentences' ), 'counts states the total' );
 	ok( contains( $variants['counts 3, no profile'], TBT_Notes_Examples::connectors() ), 'the connector list is included' );
+	ok( contains( $variants['counts 3, no profile'], '6. Keep it simple.' ), 'rule 6 asks for simple sentences' );
+	ok( ! contains( $variants['counts 3, no profile'], 'Most sentences should contain a connector' ), 'no rule demands a connector' );
+	ok( ! contains( TBT_Notes_Examples::connectors(), 'while' ), 'the ambiguous "while" is not offered' );
 
 	$forbidden = array( 'Curie', 'Einstein', 'Aurelius', 'Disraeli', 'Chopin', 'Copernicus', 'Mozart', 'Shakespeare', 'Kraków', 'Warsaw', 'Gdańsk', 'Paris', 'London', 'Yellowstone' );
 	$clean     = true;
