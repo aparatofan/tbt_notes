@@ -3,7 +3,7 @@ Contributors: thebluetree
 Requires at least: 6.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 1.19.0
+Stable tag: 1.20.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -48,6 +48,10 @@ No. Each student is assigned to at most one class (v1 design).
 No. The editor autosaves as the teacher types.
 
 == Changelog ==
+
+= 1.20.0 =
+* Class strip: Back to top and new Refresh button moved next to the back
+  arrow; right-hand buttons reordered to Settings, Print, Search, Lessons.
 
 = 1.19.0 =
 * Search in notes (teacher, Page Mode): a magnifier in the class strip opens

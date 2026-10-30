@@ -169,6 +169,7 @@
 		chevronUp: [ 'M18 15l-6-6-6 6' ],
 		chevronDown: [ 'M6 9l6 6 6-6' ],
 		trash: [ 'M3 6h18', 'M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2', 'M10 11v6', 'M14 11v6' ],
+		refresh: [ 'M23 4v6h-6', 'M20.49 15a9 9 0 1 1-2.12-9.36L23 10' ],
 	};
 
 	/**
@@ -893,10 +894,19 @@
 	function buildTopbar( opts ) {
 		var bar = el( 'div', 'tbt-notes-topbar' );
 		var inner = el( 'div', 'tbt-notes-topbar__inner' );
+		var addButton = function ( btn ) {
+			var b = iconButton( btn.symbol, btn.label, btn.onClick, btn.icon );
+			if ( btn.setup ) {
+				btn.setup( b );
+			}
+			inner.appendChild( b );
+		};
 		
 		if ( opts.onBack ) {
 			inner.appendChild( iconButton( '‹', t( 'back', 'Back' ), opts.onBack, 'back' ) );
 		}
+		// Leading controls sit beside the back button, before the title.
+		( opts.leadButtons || [] ).forEach( addButton );
 
 		// Centered Title Container
 		var titleWrap = el( 'div', 'tbt-notes-topbar__title-wrap' );
@@ -913,13 +923,7 @@
 		}
 		inner.appendChild( titleWrap );
 
-		( opts.buttons || [] ).forEach( function ( btn ) {
-			var b = iconButton( btn.symbol, btn.label, btn.onClick, btn.icon );
-			if ( btn.setup ) {
-				btn.setup( b );
-			}
-			inner.appendChild( b );
-		} );
+		( opts.buttons || [] ).forEach( addButton );
 		// Page mode has no overlay to dismiss, so omit the close button (the back
 		// button for class → classes navigation is added separately and stays).
 		if ( ! isPageMode ) {
@@ -2196,36 +2200,32 @@
 	function renderClassView( isTeacher ) {
 		var cls = state.currentClass;
 
-		var buttons = [
-			{ symbol: '☰', icon: 'lessons', label: t( 'toggleLessons', 'Show/hide lessons' ), onClick: toggleSidebar },
-		];
-		// Search in notes: teachers in Page Mode only, first in the icon group.
-		var withSearch = isPageMode && isTeacher;
-		if ( withSearch ) {
-			searchUi = { topbar: null, button: null };
-			buttons.unshift( {
-				symbol: '⌕',
-				icon: 'search',
-				label: t( 'searchNotes', 'Search notes' ),
-				onClick: toggleSearch,
-				setup: setupSearchButton,
-			} );
-		}
-		// Back to top sits with the other navigation control, and is offered to
-		// students as well as teachers — a long lesson is long for both.
+		// Back to top and Refresh lead the strip, right after the back arrow, and
+		// are offered to students as well as teachers — a long lesson is long for
+		// both.
 		//
-		// Page Mode only: there, the window scrolls and the strip is pinned, so the
-		// button is always reachable and always does something. Overlay mode locks
-		// body scroll and scrolls an inner container instead, so the same control
-		// would be a dead glyph in a header that is a different visual system.
+		// Page Mode only: there, the window scrolls and the strip is pinned, so
+		// Back to top is always reachable and always does something. Overlay mode
+		// locks body scroll and scrolls an inner container instead, so the same
+		// control would be a dead glyph in a header that is a different visual
+		// system — and a reload there would close the overlay.
+		//
+		// Refresh does not flush the saver itself: a flush sent now would go
+		// without keepalive and be cancelled by the reload. The beforeunload
+		// handler flushes with keepalive, and the hash brings the teacher back to
+		// the same class and lesson.
+		var leadButtons = [];
 		if ( isPageMode ) {
-			buttons.push( { symbol: '↑', icon: 'arrowUp', label: t( 'backToTop', 'Back to top' ), onClick: function () {
+			leadButtons.push( { symbol: '↑', icon: 'arrowUp', label: t( 'backToTop', 'Back to top' ), onClick: function () {
 				window.scrollTo( { top: 0, behavior: 'smooth' } );
 			} } );
+			leadButtons.push( { symbol: '⟳', icon: 'refresh', label: t( 'refresh', 'Refresh' ), onClick: function () {
+				window.location.reload();
+			} } );
 		}
-		buttons.push( { symbol: '⎙', icon: 'print', label: t( 'print', 'Print' ), onClick: function () {
-			window.print();
-		} } );
+
+		// Right-hand group, left to right: settings, print, search, lessons.
+		var buttons = [];
 		if ( isTeacher ) {
 			buttons.push( { symbol: '⚙', icon: 'settings', label: t( 'manageClass', 'Class settings' ), onClick: function () {
 				state.classIsNew = false;
@@ -2233,6 +2233,22 @@
 				render();
 			} } );
 		}
+		buttons.push( { symbol: '⎙', icon: 'print', label: t( 'print', 'Print' ), onClick: function () {
+			window.print();
+		} } );
+		// Search in notes: teachers in Page Mode only, between print and lessons.
+		var withSearch = isPageMode && isTeacher;
+		if ( withSearch ) {
+			searchUi = { topbar: null, button: null };
+			buttons.push( {
+				symbol: '⌕',
+				icon: 'search',
+				label: t( 'searchNotes', 'Search notes' ),
+				onClick: toggleSearch,
+				setup: setupSearchButton,
+			} );
+		}
+		buttons.push( { symbol: '☰', icon: 'lessons', label: t( 'toggleLessons', 'Show/hide lessons' ), onClick: toggleSidebar } );
 
 		// Create the input field for the top bar if the teacher is editing a lesson
 		var headerInput = null;
@@ -2256,6 +2272,7 @@
 				state.currentLesson = null;
 				render();
 			} : null,
+			leadButtons: leadButtons,
 			buttons: buttons,
 			after: withSearch && state.search.open ? buildSearchRow() : null,
 		} );
