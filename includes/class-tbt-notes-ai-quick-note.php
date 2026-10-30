@@ -138,6 +138,21 @@ class TBT_Notes_AI_Quick_Note {
 	 * --------------------------------------------------------------------- */
 
 	/**
+	 * How many example sentences each preset writes. Presets listed here get
+	 * the shared example rules (TBT_Notes_Examples) after their instruction;
+	 * Grammar and Translate are deliberately absent.
+	 *
+	 * @var array<string,int>
+	 */
+	protected static $example_counts = array(
+		'define'       => 1,
+		'example'      => 3,
+		'compare'      => 2,
+		'thesaurus'    => 3,
+		'collocations' => 5,
+	);
+
+	/**
 	 * Instruction fragment for each supported preset.
 	 *
 	 * @return array<string,string> Map of preset key => instruction.
@@ -377,6 +392,17 @@ class TBT_Notes_AI_Quick_Note {
 		if ( '' !== $preset ) {
 			$instructions = self::preset_instructions();
 			$parts[]      = $instructions[ $preset ];
+
+			// Shortcuts that write example sentences also get the example rules.
+			if ( isset( self::$example_counts[ $preset ] ) ) {
+				$n = self::$example_counts[ $preset ];
+				if ( 1 === $n ) {
+					$parts[] = TBT_Notes_Examples::block( array( 'single' => 'choose' ), false );
+				} else {
+					$parts[] = TBT_Notes_Examples::block( array( 'counts' => TBT_Notes_Examples::strand_counts( $n, false ) ), false );
+				}
+				$parts[] = 'These rules shape the content of the example sentences only. Keep exactly the output format above.';
+			}
 		}
 
 		$selected = isset( $args['selected_text'] ) ? trim( (string) $args['selected_text'] ) : '';

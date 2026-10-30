@@ -443,12 +443,35 @@ class TBT_Notes_Expression_Cards {
 
 		$context = self::extract_context_for_text( $lesson['body'], $norm );
 
+		// Example-sentence planning: the learner profile (one-to-one classes
+		// only), this card's group, and what the lesson's other cards already
+		// use. The card being regenerated is not one of the "others".
+		$profile = TBT_Notes_Examples::profile_for_lesson( $lesson_id );
+		$others  = array();
+		foreach ( TBT_Notes_DB::get_expression_cards_for_lesson( $lesson_id ) as $card ) {
+			if ( isset( $card['text_hash'] ) && $card['text_hash'] === $hash ) {
+				continue;
+			}
+			$others[] = $card;
+		}
+		$group = TBT_Notes_Examples::card_group( count( $others ), '' !== $profile );
+		$used  = array();
+		foreach ( array_slice( $others, -10 ) as $card ) {
+			$sentence = isset( $card['example_sentence'] ) ? trim( (string) preg_replace( '/\s+/u', ' ', (string) $card['example_sentence'] ) ) : '';
+			if ( '' !== $sentence ) {
+				$used[] = $sentence;
+			}
+		}
+
 		$result = self::call_openai(
 			array(
 				'term'         => $norm,
 				'context'      => $context,
 				'lesson_title' => (string) $lesson['header'],
 				'level'        => self::DEFAULT_LEVEL,
+				'profile'      => $profile,
+				'group'        => $group,
+				'used'         => $used,
 			)
 		);
 		if ( is_wp_error( $result ) ) {
@@ -585,34 +608,69 @@ class TBT_Notes_Expression_Cards {
 	 * --------------------------------------------------------------------- */
 
 	/**
+	 * Build the user prompt for one expression card.
+	 *
+	 * @param array $payload_context term, context, lesson_title, level, profile, group, used.
+	 * @return string
+	 */
+	protected static function build_prompt( array $payload_context ) {
+		$term         = isset( $payload_context['term'] ) ? (string) $payload_context['term'] : '';
+		$context      = isset( $payload_context['context'] ) ? (string) $payload_context['context'] : '';
+		$lesson_title = isset( $payload_context['lesson_title'] ) ? (string) $payload_context['lesson_title'] : '';
+		$level        = isset( $payload_context['level'] ) ? (string) $payload_context['level'] : self::DEFAULT_LEVEL;
+		$profile      = isset( $payload_context['profile'] ) ? (string) $payload_context['profile'] : '';
+		$group        = isset( $payload_context['group'] ) ? $payload_context['group'] : 'choose';
+		$used         = isset( $payload_context['used'] ) && is_array( $payload_context['used'] ) ? $payload_context['used'] : array();
+
+		$prompt = "Term:\n{$term}\n\n"
+			. "Lesson title:\n{$lesson_title}\n\n"
+			. "Context:\n{$context}\n\n"
+			. "Student level:\n{$level}\n\n"
+			. "Rules for the translation:\n"
+			. "- Translate the meaning in this context, not every possible meaning.\n"
+			. "- Use natural Polish, not a literal translation.\n"
+			. "- If two natural Polish versions are useful, separate them with \" / \".\n\n"
+			. "Rules for the example sentence:\n"
+			. "- It must be in English, at B1/B2 level, with no complicated grammar unless necessary.\n"
+			. "- It must show the same meaning the term has in the context above.\n"
+			. "- Do not mention the lesson, teacher, app, AI, or context.\n"
+			. "- Do not add explanations, notes, markdown, or extra fields.\n\n"
+			. TBT_Notes_Examples::block( array( 'single' => $group ), '' !== $profile );
+
+		if ( '' !== $profile ) {
+			$prompt .= "\n\nLearner context for PROFILE sentences — this is one adult learner, described by their teacher:\n"
+				. '"' . $profile . "\"\n"
+				. '- Use this to choose WHERE a PROFILE sentence is set: the interests, places, works, people and situations this learner cares about. If they like films, a PROFILE sentence can be about a film, a director, an actor, a scene or a film location.' . "\n"
+				. '- Do NOT describe the learner, do NOT write about them, and do NOT address them. Never use "you".' . "\n"
+				. "- Do NOT mention the description itself.\n"
+				. '- WORLD and EVERYDAY sentences ignore this description.';
+		}
+
+		if ( ! empty( $used ) ) {
+			$prompt .= "\n\nExample sentences already on other cards in this lesson:\n";
+			foreach ( $used as $sentence ) {
+				$prompt .= '- ' . (string) $sentence . "\n";
+			}
+			$prompt .= 'Do not reuse any real person, place or work named in them. Do not begin with the same first word as any of them. Avoid their connectors where you can.';
+		}
+
+		$prompt .= "\n\nFill in \"group\" and \"connector\" before writing the example, and make the example match them.";
+
+		return $prompt;
+	}
+
+	/**
 	 * Call the OpenAI Responses API with a strict JSON-schema structured output.
 	 *
-	 * @param array $payload_context term, context, lesson_title, level.
+	 * @param array $payload_context term, context, lesson_title, level, and the
+	 *                               example plan: profile, group, used.
 	 * @return array|WP_Error array{polish_translation:string,example_sentence:string}.
 	 */
 	protected static function call_openai( array $payload_context ) {
 		$key   = self::openai_api_key();
 		$model = self::openai_model();
 
-		$term         = isset( $payload_context['term'] ) ? (string) $payload_context['term'] : '';
-		$context      = isset( $payload_context['context'] ) ? (string) $payload_context['context'] : '';
-		$lesson_title = isset( $payload_context['lesson_title'] ) ? (string) $payload_context['lesson_title'] : '';
-		$level        = isset( $payload_context['level'] ) ? (string) $payload_context['level'] : self::DEFAULT_LEVEL;
-
-		$prompt = "Term:\n{$term}\n\n"
-			. "Lesson title:\n{$lesson_title}\n\n"
-			. "Context:\n{$context}\n\n"
-			. "Student level:\n{$level}\n\n"
-			. "Rules:\n"
-			. "- Translate the meaning in this context, not every possible meaning.\n"
-			. "- Use natural Polish, not a literal translation.\n"
-			. "- If two natural Polish versions are useful, separate them with \" / \".\n"
-			. "- The example sentence must be in English.\n"
-			. "- The example sentence must be B1/B2 level.\n"
-			. "- The example sentence must clearly show the same meaning as in the context.\n"
-			. "- Avoid complicated grammar unless necessary.\n"
-			. "- Do not mention the lesson, teacher, app, AI, or context.\n"
-			. "- Do not add explanations, notes, markdown, or extra fields.";
+		$prompt = self::build_prompt( $payload_context );
 
 		$body = array(
 			'model' => $model,
@@ -644,11 +702,20 @@ class TBT_Notes_Expression_Cards {
 					'schema'               => array(
 						'type'                 => 'object',
 						'additionalProperties' => false,
-						'required'             => array( 'polish_translation', 'example_sentence' ),
+						'required'             => array( 'polish_translation', 'group', 'connector', 'example_sentence' ),
 						'properties'           => array(
 							'polish_translation' => array(
 								'type'        => 'string',
 								'description' => 'Natural Polish translation of the English expression in the given context.',
+							),
+							'group'              => array(
+								'type'        => 'string',
+								'enum'        => array( 'WORLD', 'EVERYDAY', 'PROFILE' ),
+								'description' => 'Plan first: the group this example belongs to.',
+							),
+							'connector'          => array(
+								'type'        => 'string',
+								'description' => 'Plan first: the connector the example will use, or "none".',
 							),
 							'example_sentence'   => array(
 								'type'        => 'string',

@@ -495,6 +495,7 @@ require_once dirname( __DIR__ ) . '/includes/class-tbt-notes-capabilities.php';
 require_once dirname( __DIR__ ) . '/includes/class-tbt-notes-sanitizer.php';
 require_once dirname( __DIR__ ) . '/includes/class-tbt-notes-search.php';
 require_once dirname( __DIR__ ) . '/includes/class-tbt-notes-pronunciation.php';
+require_once dirname( __DIR__ ) . '/includes/class-tbt-notes-examples.php';
 require_once dirname( __DIR__ ) . '/includes/class-tbt-notes-expression-cards.php';
 require_once dirname( __DIR__ ) . '/includes/class-tbt-notes-ai-quick-note.php';
 require_once dirname( __DIR__ ) . '/includes/class-tbt-notes-rest.php';
@@ -1808,6 +1809,242 @@ function test_search_route() {
 	$GLOBALS['__cur_can']      = false;
 }
 test_search_route();
+
+/* --------------------------------------------------------- Example sentences */
+
+/**
+ * Call a protected static method on a class by name.
+ *
+ * @param string $class  Class name.
+ * @param string $method Method name.
+ * @param array  $args   Positional arguments.
+ * @return mixed
+ */
+function call_protected_static( $class, $method, array $args = array() ) {
+	$m = new ReflectionMethod( $class, $method );
+	$m->setAccessible( true );
+	return $m->invokeArgs( null, $args );
+}
+
+echo "Example sentences — strand counts:\n";
+function test_examples_strand_counts() {
+	$cases = array(
+		array( 1, false, 1, 0, 0 ),
+		array( 3, false, 2, 1, 0 ),
+		array( 5, false, 3, 2, 0 ),
+		array( 2, false, 1, 1, 0 ),
+		array( 4, true, 1, 1, 2 ),
+	);
+	foreach ( $cases as $c ) {
+		$got = TBT_Notes_Examples::strand_counts( $c[0], $c[1] );
+		ok(
+			array( 'world' => $c[2], 'everyday' => $c[3], 'profile' => $c[4] ) === $got,
+			sprintf( 'strand_counts(%d, %s) = %d/%d/%d', $c[0], $c[1] ? 'true' : 'false', $c[2], $c[3], $c[4] )
+		);
+	}
+}
+test_examples_strand_counts();
+
+echo "Example sentences — card groups:\n";
+function test_examples_card_group() {
+	$cases = array(
+		array( 0, false, 'WORLD', 'EVERYDAY' ),
+		array( 1, false, 'EVERYDAY', 'WORLD' ),
+		array( 0, true, 'PROFILE', 'WORLD' ),
+		array( 1, true, 'WORLD', 'EVERYDAY' ),
+		array( 2, true, 'PROFILE', 'EVERYDAY' ),
+		array( 3, true, 'EVERYDAY', 'WORLD' ),
+		array( 4, false, 'WORLD', 'EVERYDAY' ),
+		array( 5, true, 'WORLD', 'EVERYDAY' ),
+	);
+	foreach ( $cases as $c ) {
+		$got = TBT_Notes_Examples::card_group( $c[0], $c[1] );
+		ok(
+			array( 'group' => $c[2], 'fallback' => $c[3] ) === $got,
+			sprintf( 'card_group(%d, %s) = %s / %s', $c[0], $c[1] ? 'true' : 'false', $c[2], $c[3] )
+		);
+	}
+}
+test_examples_card_group();
+
+echo "Example sentences — rules block:\n";
+function test_examples_block() {
+	$profile_line = '- PROFILE:';
+
+	$variants = array(
+		'counts 3, no profile'       => TBT_Notes_Examples::block( array( 'counts' => TBT_Notes_Examples::strand_counts( 3, false ) ), false ),
+		'counts 1, no profile'       => TBT_Notes_Examples::block( array( 'counts' => TBT_Notes_Examples::strand_counts( 1, false ) ), false ),
+		'counts 4, profile'          => TBT_Notes_Examples::block( array( 'counts' => TBT_Notes_Examples::strand_counts( 4, true ) ), true ),
+		'single PROFILE, profile'    => TBT_Notes_Examples::block( array( 'single' => TBT_Notes_Examples::card_group( 0, true ) ), true ),
+		'single WORLD, no profile'   => TBT_Notes_Examples::block( array( 'single' => TBT_Notes_Examples::card_group( 0, false ) ), false ),
+		'single EVERYDAY, profile'   => TBT_Notes_Examples::block( array( 'single' => TBT_Notes_Examples::card_group( 3, true ) ), true ),
+		'single choose'              => TBT_Notes_Examples::block( array( 'single' => 'choose' ), false ),
+	);
+
+	foreach ( $variants as $label => $text ) {
+		ok( contains( $text, 'Meaning first' ), "block ({$label}) contains Meaning first" );
+		ok( contains( $text, 'no quotations' ), "block ({$label}) contains no quotations" );
+	}
+
+	ok( contains( $variants['counts 4, profile'], $profile_line ), 'counts with a profile lists the PROFILE group' );
+	ok( contains( $variants['counts 4, profile'], 'WORLD 1, EVERYDAY 1, PROFILE 2' ), 'counts with a profile gives all three numbers' );
+	ok( contains( $variants['single PROFILE, profile'], $profile_line ), 'a PROFILE card lists the PROFILE group' );
+	ok( ! contains( $variants['counts 3, no profile'], $profile_line ), 'counts without a profile omits the PROFILE group' );
+	ok( ! contains( $variants['counts 3, no profile'], 'PROFILE 0' ), 'counts without a profile omits the PROFILE number' );
+	ok( ! contains( $variants['single WORLD, no profile'], $profile_line ), 'a WORLD card without a profile omits the PROFILE group' );
+	ok( ! contains( $variants['single choose'], $profile_line ), 'choose omits the PROFILE group' );
+	ok(
+		! contains( TBT_Notes_Examples::block( array( 'counts' => array( 'world' => 1, 'everyday' => 0, 'profile' => 2 ) ), false ), $profile_line ),
+		'PROFILE is never listed without a profile, whatever the counts say'
+	);
+
+	ok( contains( $variants['counts 1, no profile'], '- WORLD:' ), 'counts 1 lists the WORLD group' );
+	ok( ! contains( $variants['counts 1, no profile'], '- EVERYDAY:' ), 'counts omits a group whose count is 0' );
+
+	ok( contains( $variants['single WORLD, no profile'], 'This sentence belongs to the WORLD group' ), 'single names its group' );
+	ok( contains( $variants['single WORLD, no profile'], 'use the EVERYDAY group instead' ), 'single names its fallback' );
+	ok( contains( $variants['single choose'], 'whichever shows the meaning best' ), 'choose lets the model pick' );
+	ok( contains( $variants['counts 3, no profile'], 'Your 3 example sentences' ), 'counts states the total' );
+	ok( contains( $variants['counts 3, no profile'], TBT_Notes_Examples::connectors() ), 'the connector list is included' );
+
+	$forbidden = array( 'Curie', 'Einstein', 'Aurelius', 'Disraeli', 'Chopin', 'Copernicus', 'Mozart', 'Shakespeare', 'Kraków', 'Warsaw', 'Gdańsk', 'Paris', 'London', 'Yellowstone' );
+	$clean     = true;
+	foreach ( $variants as $label => $text ) {
+		foreach ( $forbidden as $name ) {
+			if ( contains( $text, $name ) ) {
+				$clean = false;
+				echo "    found {$name} in block ({$label})\n";
+			}
+		}
+	}
+	ok( $clean, 'no block variant names a real person or place' );
+}
+test_examples_block();
+
+echo "Example sentences — learner profile:\n";
+function test_examples_profile() {
+	TBT_Notes_DB::reset();
+	TBT_Notes_DB::reset_roster();
+
+	ok( '' === TBT_Notes_Examples::profile_for_lesson( 1 ), "returns '' when get_profile is unavailable" );
+
+	$reader = function ( $user_id ) {
+		return isset( $GLOBALS['__profiles'][ $user_id ] ) ? $GLOBALS['__profiles'][ $user_id ] : '';
+	};
+	$GLOBALS['__profiles'] = array(
+		7 => "Loves  films\nand \"jazz\".",
+		8 => 'Group student',
+		9 => str_repeat( 'é', 400 ),
+	);
+
+	// Lesson with no class_id: '' and no warning.
+	TBT_Notes_DB::$lessons[1] = array( 'id' => 1, 'header' => 'L', 'body' => '' );
+	$warned = false;
+	set_error_handler(
+		function () use ( &$warned ) {
+			$warned = true;
+			return true;
+		}
+	);
+	$out = call_protected_static( 'TBT_Notes_Examples', 'profile_from_lesson', array( 1, $reader ) );
+	restore_error_handler();
+	ok( '' === $out && ! $warned, "a lesson with no class_id returns '' without a warning" );
+
+	ok( '' === call_protected_static( 'TBT_Notes_Examples', 'profile_from_lesson', array( 404, $reader ) ), "a missing lesson returns ''" );
+
+	TBT_Notes_DB::$lessons[2] = array( 'id' => 2, 'class_id' => 20, 'header' => 'L', 'body' => '' );
+	TBT_Notes_DB::set_class( 20, 1, array( 7 ) );
+	ok(
+		"Loves films and 'jazz'." === call_protected_static( 'TBT_Notes_Examples', 'profile_from_lesson', array( 2, $reader ) ),
+		'a one-to-one class gives the profile, whitespace collapsed and double quotes replaced'
+	);
+
+	TBT_Notes_DB::set_class( 20, 1, array( 7, 8 ) );
+	ok( '' === call_protected_static( 'TBT_Notes_Examples', 'profile_from_lesson', array( 2, $reader ) ), "a group class returns ''" );
+
+	TBT_Notes_DB::set_class( 20, 1, array() );
+	ok( '' === call_protected_static( 'TBT_Notes_Examples', 'profile_from_lesson', array( 2, $reader ) ), "an empty class returns ''" );
+
+	TBT_Notes_DB::set_class( 20, 1, array( 9 ) );
+	ok( 300 === mb_strlen( call_protected_static( 'TBT_Notes_Examples', 'profile_from_lesson', array( 2, $reader ) ) ), 'the profile is capped at 300 characters' );
+
+	TBT_Notes_DB::set_class( 20, 1, array( 7 ) );
+	$not_string = function () {
+		return array( 'films' );
+	};
+	ok( '' === call_protected_static( 'TBT_Notes_Examples', 'profile_from_lesson', array( 2, $not_string ) ), "a non-string profile returns ''" );
+
+	$throws = function () {
+		throw new RuntimeException( 'boom' );
+	};
+	ok( '' === call_protected_static( 'TBT_Notes_Examples', 'profile_from_lesson', array( 2, $throws ) ), "a failing reader returns '' (fail open)" );
+
+	unset( $GLOBALS['__profiles'] );
+	TBT_Notes_DB::reset();
+	TBT_Notes_DB::reset_roster();
+}
+test_examples_profile();
+
+echo "Example sentences — expression-card prompt:\n";
+function test_examples_card_prompt() {
+	$base = array(
+		'term'         => 'reluctant',
+		'context'      => 'She was reluctant to leave.',
+		'lesson_title' => 'Lesson 3',
+		'level'        => 'B1/B2',
+	);
+
+	$plain = call_protected_static( 'TBT_Notes_Expression_Cards', 'build_prompt', array( $base + array( 'group' => TBT_Notes_Examples::card_group( 1, false ) ) ) );
+	ok( contains( $plain, "Term:\nreluctant" ) && contains( $plain, "Student level:\nB1/B2" ), 'card prompt keeps the term and level sections' );
+	ok( contains( $plain, 'Rules for the translation:' ) && contains( $plain, 'Rules for the example sentence:' ), 'card prompt has both rule lists' );
+	ok( contains( $plain, 'Meaning first' ), 'card prompt includes the example rules' );
+	ok( contains( $plain, 'This sentence belongs to the EVERYDAY group' ), 'card prompt names the card group' );
+	ok( ! contains( $plain, 'Learner context' ), 'no profile section without a profile' );
+	ok( ! contains( $plain, 'already on other cards' ), 'no used section without other cards' );
+	ok( contains( $plain, 'Fill in "group" and "connector"' ), 'card prompt ends with the planning line' );
+
+	$full = call_protected_static(
+		'TBT_Notes_Expression_Cards',
+		'build_prompt',
+		array(
+			$base + array(
+				'profile' => 'Loves films.',
+				'group'   => TBT_Notes_Examples::card_group( 0, true ),
+				'used'    => array( 'Although it rained, Pete went out.', 'Sven left early.' ),
+			),
+		)
+	);
+	ok( contains( $full, "\"Loves films.\"" ) && contains( $full, 'Never use "you"' ), 'profile section is added with a profile' );
+	ok( contains( $full, '- PROFILE:' ), 'a profiled card lists the PROFILE group' );
+	ok( contains( $full, "- Although it rained, Pete went out.\n- Sven left early.\n" ), 'used sentences are listed' );
+	ok( contains( $full, 'Do not reuse any real person, place or work' ), 'used section asks for no reuse' );
+}
+test_examples_card_prompt();
+
+echo "Example sentences — AI shortcut prompts:\n";
+function test_examples_ai_prompts() {
+	$example = call_ai_static( 'build_user_prompt', array( array( 'prompt' => 'reluctant', 'preset' => 'example' ) ) );
+	ok( contains( $example, 'Meaning first' ), 'example shortcut gets the example rules' );
+	ok( contains( $example, 'WORLD 2, EVERYDAY 1' ), 'example shortcut asks for 2 WORLD and 1 EVERYDAY' );
+	ok( contains( $example, 'Keep exactly the output format above.' ), 'example shortcut keeps its format' );
+	ok( strpos( $example, 'Give exactly 3 natural example sentences' ) < strpos( $example, 'Meaning first' ), 'the preset instruction stays first' );
+
+	$define = call_ai_static( 'build_user_prompt', array( array( 'prompt' => 'reluctant', 'preset' => 'define' ) ) );
+	ok( contains( $define, 'whichever shows the meaning best' ), 'define shortcut lets the model choose the group' );
+
+	$compare = call_ai_static( 'build_user_prompt', array( array( 'prompt' => 'a vs b', 'preset' => 'compare' ) ) );
+	ok( contains( $compare, 'WORLD 1, EVERYDAY 1' ), 'compare shortcut asks for 1 WORLD and 1 EVERYDAY' );
+	$thesaurus = call_ai_static( 'build_user_prompt', array( array( 'prompt' => 'big', 'preset' => 'thesaurus' ) ) );
+	ok( contains( $thesaurus, 'WORLD 2, EVERYDAY 1' ), 'thesaurus shortcut asks for 2 WORLD and 1 EVERYDAY' );
+	$colloc = call_ai_static( 'build_user_prompt', array( array( 'prompt' => 'task', 'preset' => 'collocations' ) ) );
+	ok( contains( $colloc, 'WORLD 3, EVERYDAY 2' ), 'collocations shortcut asks for 3 WORLD and 2 EVERYDAY' );
+
+	foreach ( array( 'grammar', 'translate', '' ) as $preset ) {
+		$text = call_ai_static( 'build_user_prompt', array( array( 'prompt' => 'reluctant', 'preset' => $preset ) ) );
+		ok( ! contains( $text, 'Meaning first' ), sprintf( '%s gets no example rules', '' === $preset ? 'no shortcut' : $preset ) );
+	}
+}
+test_examples_ai_prompts();
 
 /* ----------------------------------------------------------------- Summary */
 
