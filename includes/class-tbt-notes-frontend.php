@@ -558,6 +558,7 @@ class TBT_Notes_Frontend {
 			'toggleLessons'     => __( 'Show / hide lessons', 'tbt-notes' ),
 			'print'             => __( 'Print', 'tbt-notes' ),
 			'backToTop'         => __( 'Back to top', 'tbt-notes' ),
+			'refresh'           => __( 'Refresh', 'tbt-notes' ),
 			// Contributed extras panel. Polish by design: these labels sit next to
 			// links students open in class, and the classroom language is Polish.
 			'extrasCopy'        => __( 'Kopiuj link', 'tbt-notes' ),
