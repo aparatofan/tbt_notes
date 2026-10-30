@@ -3,7 +3,7 @@ Contributors: thebluetree
 Requires at least: 6.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 1.20.0
+Stable tag: 1.21.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -48,6 +48,13 @@ No. Each student is assigned to at most one class (v1 design).
 No. The editor autosaves as the teacher types.
 
 == Changelog ==
+
+= 1.21.0 =
+* Example sentences on expression cards and in the AI shortcuts (Define,
+  Example, Compare, Thesaurus, Collocations) follow the same rules as Swipe:
+  meaning first, real people, places and works, everyday situations with
+  Alita, Pete, Sven and Kat, varied connectors, and the student's profile
+  in one-to-one classes.
 
 = 1.20.0 =
 * Class strip: Back to top and new Refresh button moved next to the back
