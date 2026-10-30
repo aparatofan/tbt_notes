@@ -3,7 +3,7 @@ Contributors: thebluetree
 Requires at least: 6.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 1.21.0
+Stable tag: 1.21.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -48,6 +48,14 @@ No. Each student is assigned to at most one class (v1 design).
 No. The editor autosaves as the teacher types.
 
 == Changelog ==
+
+= 1.21.1 =
+* Fix: pressing Escape (or Alt+0 / ✕) after typing with a highlight colour
+  armed froze the page. The armed colour is now re-applied after Quill
+  finishes its own update instead of from inside it.
+* Example sentences are simpler: one clear idea, a connector only when the
+  sentence genuinely needs one, and a final check that each sentence makes
+  sense on its own.
 
 = 1.21.0 =
 * Example sentences on expression cards and in the AI shortcuts (Define,
