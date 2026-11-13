@@ -148,31 +148,19 @@ class TBT_Notes_Activity_REST {
 	/**
 	 * Record the current user's completed work.
 	 *
+	 * The user is the session; the class and its teacher come from the
+	 * membership table, never from the payload. A student who is in no class
+	 * is recorded without one (class 0, teacher 0), so their work still
+	 * reaches TBT Results. A teacher or administrator who is in no class is
+	 * not recorded at all. Both rules live in record().
+	 *
 	 * @param WP_REST_Request $request Request.
 	 * @return WP_REST_Response|WP_Error
 	 */
 	public function create_activity( WP_REST_Request $request ) {
 		$user_id = get_current_user_id();
 
-		// The class and its teacher come from the membership table, never from
-		// the payload. A student who is in no class has no teacher to show the
-		// work to, so there is nothing to record and nothing to log.
-		$class = TBT_Notes_DB::get_class_for_student( $user_id );
-		if ( ! $class ) {
-			return new WP_Error( 'tbt_notes_no_class', __( 'You are not in a class.', 'tbt-notes' ), array( 'status' => 403 ) );
-		}
-
 		$clean = self::sanitize_payload( (array) $request->get_params() );
-
-		if ( '' === $clean['tool'] || '' === $clean['object_ref'] ) {
-			return new WP_Error( 'tbt_notes_bad_request', __( 'A tool and an object reference are required.', 'tbt-notes' ), array( 'status' => 400 ) );
-		}
-
-		// A post reference that does not resolve is dropped rather than
-		// refused: the completion really happened, only the link is junk.
-		if ( $clean['post_id'] > 0 && ! get_post( $clean['post_id'] ) ) {
-			$clean['post_id'] = 0;
-		}
 
 		$guard = self::duplicate_key( $user_id, $clean['tool'], $clean['object_ref'] );
 		if ( get_transient( $guard ) ) {
@@ -183,35 +171,20 @@ class TBT_Notes_Activity_REST {
 			);
 		}
 
-		$user = wp_get_current_user();
-		$name = $user ? trim( (string) $user->display_name ) : '';
-
-		$id = TBT_Notes_DB::insert_activity(
-			array(
-				'user_id'          => $user_id,
-				'class_id'         => (int) $class['id'],
-				'teacher_id'       => (int) $class['teacher_id'],
-				'student_name'     => self::clip( $name, 190 ),
-				'tool'             => $clean['tool'],
-				'object_ref'       => $clean['object_ref'],
-				'object_title'     => $clean['object_title'],
-				'post_id'          => $clean['post_id'],
-				'event'            => 'completed',
-				'score'            => $clean['score'],
-				'score_max'        => $clean['score_max'],
-				'duration_seconds' => $clean['duration_seconds'],
-			)
-		);
-
-		if ( ! $id ) {
-			return new WP_Error( 'tbt_notes_write_failed', __( 'Could not record that work.', 'tbt-notes' ), array( 'status' => 500 ) );
+		$id = self::record( $user_id, $clean );
+		if ( is_wp_error( $id ) ) {
+			return $id;
 		}
 
 		set_transient( $guard, 1, self::DUPLICATE_WINDOW );
 
 		// The heartbeat stops at completion, so clear the student's presence
 		// rather than leaving them reading as "working" for another minute.
-		delete_transient( self::presence_key( (int) $class['id'], $user_id ) );
+		// Presence is per class; a student in no class never had any.
+		$class_id = TBT_Notes_DB::get_class_id_of_student( $user_id );
+		if ( $class_id > 0 ) {
+			delete_transient( self::presence_key( $class_id, $user_id ) );
+		}
 
 		return rest_ensure_response(
 			array(
@@ -219,6 +192,97 @@ class TBT_Notes_Activity_REST {
 				'recorded' => true,
 			)
 		);
+	}
+
+	/**
+	 * The one recording path: the browser route and the PHP API both end here.
+	 *
+	 * The caller has already proved who $user_id is: the route takes it from
+	 * the session, and a PHP caller is trusted code that must never take it
+	 * from a browser. Everything else about the row — class, teacher, name —
+	 * is resolved here.
+	 *
+	 * @param int         $user_id    The student.
+	 * @param array       $clean      Output of sanitize_payload().
+	 * @param string|null $created_at UTC 'Y-m-d H:i:s', or null for now.
+	 * @return int|WP_Error Inserted row ID.
+	 */
+	public static function record( int $user_id, array $clean, ?string $created_at = null ) {
+		$user = $user_id > 0 ? get_userdata( $user_id ) : false;
+		if ( ! $user ) {
+			return new WP_Error( 'tbt_notes_bad_user', __( 'That user does not exist.', 'tbt-notes' ), array( 'status' => 400 ) );
+		}
+
+		if ( '' === ( $clean['tool'] ?? '' ) || '' === ( $clean['object_ref'] ?? '' ) ) {
+			return new WP_Error( 'tbt_notes_bad_request', __( 'A tool and an object reference are required.', 'tbt-notes' ), array( 'status' => 400 ) );
+		}
+
+		// A post reference that does not resolve is dropped rather than
+		// refused: the completion really happened, only the link is junk.
+		$post_id = (int) ( $clean['post_id'] ?? 0 );
+		if ( $post_id > 0 && ! get_post( $post_id ) ) {
+			$post_id = 0;
+		}
+
+		// The class and its teacher come from the membership table. A student
+		// in no class is recorded without one; nobody's class panel reads
+		// class 0. A teacher or administrator in no class is someone trying a
+		// tool, not a learner, and stays unrecorded.
+		$class = TBT_Notes_DB::get_class_for_student( $user_id );
+		if ( $class ) {
+			$class_id   = (int) $class['id'];
+			$teacher_id = (int) $class['teacher_id'];
+		} elseif ( TBT_Notes_Capabilities::user_can_manage( $user_id ) ) {
+			return new WP_Error( 'tbt_notes_no_class', __( 'You are not in a class.', 'tbt-notes' ), array( 'status' => 403 ) );
+		} else {
+			$class_id   = 0;
+			$teacher_id = 0;
+		}
+
+		$name = trim( (string) $user->display_name );
+
+		// Resolved here rather than left to the insert, so the row handed to
+		// listeners carries the time that was actually stored.
+		$created_at = self::valid_created_at( $created_at );
+		if ( null === $created_at ) {
+			$created_at = gmdate( 'Y-m-d H:i:s' );
+		}
+
+		$row = array(
+			'user_id'          => $user_id,
+			'class_id'         => $class_id,
+			'teacher_id'       => $teacher_id,
+			'student_name'     => self::clip( $name, 190 ),
+			'tool'             => $clean['tool'],
+			'object_ref'       => $clean['object_ref'],
+			'object_title'     => (string) ( $clean['object_title'] ?? '' ),
+			'post_id'          => $post_id,
+			'event'            => 'completed',
+			'score'            => $clean['score'] ?? null,
+			'score_max'        => $clean['score_max'] ?? null,
+			'duration_seconds' => $clean['duration_seconds'] ?? null,
+			'created_at'       => $created_at,
+		);
+
+		$id = TBT_Notes_DB::insert_activity( $row );
+		if ( ! $id ) {
+			return new WP_Error( 'tbt_notes_write_failed', __( 'Could not record that work.', 'tbt-notes' ), array( 'status' => 500 ) );
+		}
+
+		$row['id'] = (int) $id;
+
+		/**
+		 * Fires after a row is added to the activity log, from either the
+		 * browser route or tbt_notes_record_activity().
+		 *
+		 * @since 1.22.0
+		 *
+		 * @param int   $id  Inserted row ID.
+		 * @param array $row The inserted row, with `id` added.
+		 */
+		do_action( 'tbt_notes_activity_recorded', (int) $id, $row );
+
+		return (int) $id;
 	}
 
 	/**
@@ -398,6 +462,38 @@ class TBT_Notes_Activity_REST {
 			return null;
 		}
 		return max( 0, min( 4294967295, (int) $value ) );
+	}
+
+	/**
+	 * A caller-supplied completion time, or null when it cannot be trusted.
+	 *
+	 * Accepts only a UTC 'Y-m-d H:i:s' string that names a real moment (no
+	 * 30 February) and is not more than a minute ahead of the server's clock.
+	 * Only the PHP API passes a time, so Test Maker can copy past attempts
+	 * across with their real dates; the browser route never does.
+	 *
+	 * @param mixed $value Raw value.
+	 * @return string|null
+	 */
+	public static function valid_created_at( $value ): ?string {
+		if ( ! is_string( $value ) || ! preg_match( '/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/', $value ) ) {
+			return null;
+		}
+
+		$utc  = new DateTimeZone( 'UTC' );
+		$date = DateTime::createFromFormat( '!Y-m-d H:i:s', $value, $utc );
+
+		// createFromFormat() rolls 30 February over into March; a round trip
+		// that does not come back unchanged was never a real date.
+		if ( ! $date || $date->format( 'Y-m-d H:i:s' ) !== $value ) {
+			return null;
+		}
+
+		if ( $date->getTimestamp() > time() + 60 ) {
+			return null;
+		}
+
+		return $value;
 	}
 
 	/**
