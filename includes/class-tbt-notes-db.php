@@ -1078,7 +1078,9 @@ class TBT_Notes_DB {
 	 * Record one completed piece of work.
 	 *
 	 * Every caller has already resolved the student's class and teacher and
-	 * shaped the row; this only writes it. The nullable columns are passed as
+	 * shaped the row; this only writes it. created_at is taken as given when
+	 * present (TBT_Notes_Activity_REST::record() has validated it) and is now
+	 * otherwise. The nullable columns are passed as
 	 * null rather than 0 so "no score" stays distinguishable from "scored
 	 * zero", which is why the format array is built rather than fixed.
 	 *
@@ -1102,7 +1104,7 @@ class TBT_Notes_DB {
 			'score_max'        => isset( $data['score_max'] ) ? $data['score_max'] : null,
 			'duration_seconds' => isset( $data['duration_seconds'] ) ? $data['duration_seconds'] : null,
 			'meta'             => isset( $data['meta'] ) ? $data['meta'] : null,
-			'created_at'       => self::now(),
+			'created_at'       => ! empty( $data['created_at'] ) ? (string) $data['created_at'] : self::now(),
 		);
 
 		// wpdb emits a literal NULL for any null value and ignores that

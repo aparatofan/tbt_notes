@@ -8,14 +8,17 @@ without checking the flags on it has a security bug of its own making.
 
 Notes opens two doors and stops there:
 
-1. A read-only PHP API for asking who may see what.
+1. A PHP API for asking who may see what — read-only, except for one write to
+   the activity log (since 1.22.0).
 2. An empty slot under a student's note, plus an event when the view changes,
    so another plugin can mount something there.
 
 Everything else — routes, tables, UI, policy — belongs to the plugin that calls
-these. Notes stores nothing on anyone else's behalf.
+these. Apart from activity-log rows recorded through
+`tbt_notes_record_activity()`, Notes stores nothing on anyone else's behalf.
 
-Available since **TBT Notes 1.18.0**.
+Available since **TBT Notes 1.18.0**. `tbt_notes_record_activity()` and the
+`tbt_notes_activity_recorded` action are available since **TBT Notes 1.22.0**.
 
 ---
 
@@ -24,8 +27,9 @@ Available since **TBT Notes 1.18.0**.
 - **It is not a permission.** `tbt_notes_lesson_context()` returns a row for a
   lesson that exists, whether or not the caller may see it. The `can_view` and
   `can_manage` flags are the answer; the presence of the row is not.
-- **It never writes.** There is no write API and there will not be one. Another
-  plugin never writes through Notes — it keeps its own rows in its own tables.
+- **It writes in one place only.** Since 1.22.0 another plugin may add a row to
+  the activity log with `tbt_notes_record_activity()`. Every other part of this
+  API stays read-only, and Notes still stores nothing else on anyone's behalf.
 - **It grants nothing and caches nothing.** Every call is resolved fresh from
   Notes' own tables through Notes' own ownership rule.
 - **It is not a substitute for your own checks.** Validate on your own route,
@@ -41,8 +45,9 @@ rule reaches every caller at once. Do not copy the rule into your plugin.
 
 ## PHP API
 
-Three file-level functions, all `function_exists`-guarded, all read-only. Each
-takes `$user_id = 0` meaning "the current user".
+Four file-level functions, all `function_exists`-guarded. The three readers
+each take `$user_id = 0` meaning "the current user". The fourth,
+`tbt_notes_record_activity()`, is the only write and has no such default.
 
 Notes may not be active. Guard your calls:
 
@@ -156,6 +161,88 @@ public function submit( WP_REST_Request $request ) {
 
 Note what the example does **not** do: it does not read `class_id` from the
 request, and it does not decide visibility itself.
+
+### `tbt_notes_record_activity( array $args ): int|WP_Error`
+
+*Available since TBT Notes 1.22.0.*
+
+Adds one row to the activity log (`{prefix}tbt_activity`) for a piece of
+finished work. It exists for plugins that decide **on the server** that work is
+finished — a submitted test attempt, a mark a teacher has given — and therefore
+cannot use the browser route, which takes the user from the session. Returns the
+new row's id, or a `WP_Error`.
+
+| Key | Required | Notes |
+|---|---|---|
+| `user_id` | yes | The student. Must be > 0 and an existing user |
+| `tool` | yes | Slug, as on the REST route (`test`, `homework`, …). Lowercased, max 20 chars |
+| `object_ref` | yes | The activity's own id, e.g. the test id — **not** the attempt id. TBT Results groups rows by `tool` + `object_ref`. Max 64 chars |
+| `object_title` | no | Plain text, max 190 chars |
+| `post_id` | no | A post that does not exist is stored as 0 |
+| `score`, `score_max` | no | Non-negative integers. Null (or omitted) means "done, no score" — not zero |
+| `duration_seconds` | no | Non-negative integer |
+| `created_at` | no | UTC `Y-m-d H:i:s`. Omitted means now. A malformed value, an impossible date, or one more than 60 seconds in the future is ignored and now is used |
+
+The arguments pass through the same sanitising and limits as the REST route.
+Class, teacher and name are never taken from the arguments; Notes resolves them:
+
+- A student **in a class** is recorded with that class and its teacher.
+- A student **in no class** is recorded with `class_id` 0 and `teacher_id` 0.
+  No class panel or teacher feed ever shows such a row.
+- A teacher or administrator **in no class** is not recorded:
+  `tbt_notes_no_class` (403).
+
+Other errors: `tbt_notes_bad_user` (400) for a missing or unknown user,
+`tbt_notes_bad_request` (400) when `tool` or `object_ref` is empty,
+`tbt_notes_write_failed` (500).
+
+> **Never pass a `user_id` taken from a browser.** This is PHP: there is no
+> nonce and no capability check. Take the user from your own stored records or
+> from the session. A `user_id` read from a request parameter lets anyone record
+> work in anyone's name.
+
+There is **no duplicate guard**. The REST route refuses a repeat of the same
+completion within ten seconds; this function does not, because a server-side
+caller knows what counts as one completion. Call it once per completion.
+
+Example — Test Maker recording a finished attempt:
+
+```php
+// Inside Test Maker, after an attempt has been marked finished. $attempt is
+// Test Maker's own row; its user_id was stored from the session when the
+// attempt started, never read from this request.
+if ( function_exists( 'tbt_notes_record_activity' ) ) {
+    $result = tbt_notes_record_activity(
+        array(
+            'user_id'      => (int) $attempt->user_id,
+            'tool'         => 'test',
+            'object_ref'   => (string) $test->id,   // the test, not the attempt
+            'object_title' => $test->title,
+            'score'        => (int) $attempt->score,
+            'score_max'    => (int) $attempt->total,
+        )
+    );
+    if ( is_wp_error( $result ) && 'tbt_notes_no_class' !== $result->get_error_code() ) {
+        error_log( 'Test Maker: activity not recorded: ' . $result->get_error_message() );
+    }
+}
+```
+
+### Action: `tbt_notes_activity_recorded( int $id, array $row )`
+
+*Available since TBT Notes 1.22.0.*
+
+Fires after every row added to the activity log, whether it came from the
+browser route or from `tbt_notes_record_activity()`. `$row` is the inserted row
+with `id` added: `user_id`, `class_id`, `teacher_id`, `student_name`, `tool`,
+`object_ref`, `object_title`, `post_id`, `event`, `score`, `score_max`,
+`duration_seconds`, `created_at` (UTC). Notes itself does not listen to it.
+
+```php
+add_action( 'tbt_notes_activity_recorded', function ( int $id, array $row ) {
+    // e.g. award points for $row['user_id'].
+}, 10, 2 );
+```
 
 ---
 

@@ -920,6 +920,23 @@ function test_activity_payload() {
 }
 test_activity_payload();
 
+echo "Activity — a caller-supplied completion time:\n";
+function test_valid_created_at() {
+	$past = gmdate( 'Y-m-d H:i:s', time() - 86400 );
+	ok( TBT_Notes_Activity_REST::valid_created_at( $past ) === $past, 'a valid past UTC time passes unchanged' );
+	ok( TBT_Notes_Activity_REST::valid_created_at( '2025-03-01 08:15:00' ) === '2025-03-01 08:15:00', 'a fixed past date passes' );
+	ok( TBT_Notes_Activity_REST::valid_created_at( 'yesterday' ) === null, 'a malformed string is null' );
+	ok( TBT_Notes_Activity_REST::valid_created_at( '2026-1-5 10:00:00' ) === null, 'an unpadded date is null' );
+	ok( TBT_Notes_Activity_REST::valid_created_at( '2025-03-01T08:15:00' ) === null, 'an ISO "T" separator is null' );
+	ok( TBT_Notes_Activity_REST::valid_created_at( '2026-02-30 10:00:00' ) === null, '30 February is null' );
+	ok( TBT_Notes_Activity_REST::valid_created_at( '2025-03-01 25:00:00' ) === null, 'hour 25 is null' );
+	ok( TBT_Notes_Activity_REST::valid_created_at( array( '2025-03-01 08:15:00' ) ) === null, 'an array is null' );
+	ok( TBT_Notes_Activity_REST::valid_created_at( null ) === null, 'null is null' );
+	ok( TBT_Notes_Activity_REST::valid_created_at( gmdate( 'Y-m-d H:i:s', time() + 3600 ) ) === null, 'an hour ahead is null' );
+	ok( TBT_Notes_Activity_REST::valid_created_at( gmdate( 'Y-m-d H:i:s', time() + 30 ) ) !== null, 'thirty seconds ahead (clock skew) passes' );
+}
+test_valid_created_at();
+
 echo "Activity poll — the since cursor:\n";
 function test_activity_since() {
 	$none = TBT_Notes_Activity_REST::parse_since( '' );

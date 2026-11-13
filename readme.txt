@@ -3,7 +3,7 @@ Contributors: thebluetree
 Requires at least: 6.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 1.21.1
+Stable tag: 1.22.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -48,6 +48,10 @@ No. Each student is assigned to at most one class (v1 design).
 No. The editor autosaves as the teacher types.
 
 == Changelog ==
+
+= 1.22.0 =
+* Students who are not in a class now have their finished work recorded (no class, no teacher), so TBT Results can show it.
+* New: tbt_notes_record_activity() lets another plugin record finished work from the server, and the tbt_notes_activity_recorded action fires after every recorded row.
 
 = 1.21.1 =
 * Fix: pressing Escape (or Alt+0 / ✕) after typing with a highlight colour

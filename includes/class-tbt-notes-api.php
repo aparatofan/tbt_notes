@@ -1,6 +1,6 @@
 <?php
 /**
- * The public read-only API other TBT plugins call.
+ * The public API other TBT plugins call: read-only, with one write.
  *
  * Notes owns the ownership rule; everything built beside it asks rather than
  * re-derives. A companion plugin storing its own rows against a lesson needs
@@ -11,8 +11,9 @@
  *
  * Three constraints hold for every method here, and they are the whole point:
  *
- * 1. Read-only. Nothing in this file writes, and no companion plugin ever
- *    writes through Notes.
+ * 1. Read-only, with one exception. record_activity() (since 1.22.0) adds a
+ *    row to the activity log and nothing else; every other method here only
+ *    reads, and Notes stores nothing else on a companion plugin's behalf.
  * 2. No permission logic of its own. Each decision is delegated to
  *    TBT_Notes_REST::user_can_view_class() or ::user_can_manage_class(), given
  *    a class row assembled exactly as the REST permission callbacks assemble
@@ -179,6 +180,51 @@ class TBT_Notes_API {
 		}
 
 		return $out;
+	}
+
+	/**
+	 * Record one piece of finished work in the activity log.
+	 *
+	 * The single write in this API. For server-side callers that decide for
+	 * themselves that work is finished — a submitted test attempt, a mark a
+	 * teacher has given — and so cannot use the browser route, which takes the
+	 * user from the session.
+	 *
+	 * SECURITY: there is no nonce and no capability check, because this is PHP
+	 * and the caller is trusted code. That trust ends at user_id: a caller
+	 * must NEVER pass a user_id taken from a browser (a request parameter, a
+	 * form field, a cookie value). Resolve it from your own records or from
+	 * the session, or anyone can record work in anyone's name.
+	 *
+	 * There is no duplicate guard either: the caller decides what counts as
+	 * one completion. Arguments go through the same sanitising and limits as
+	 * the REST route, and class, teacher and name are resolved by Notes. A
+	 * student in no class is recorded with class 0; a teacher or administrator
+	 * in no class is refused with tbt_notes_no_class.
+	 *
+	 * @param array $args {
+	 *     @type int         $user_id          Required. The student; must be > 0.
+	 *     @type string      $tool             Required. Tool slug, e.g. 'test'.
+	 *     @type string      $object_ref       Required. The activity's own ID (the test, not the attempt).
+	 *     @type string      $object_title     Optional.
+	 *     @type int         $post_id          Optional.
+	 *     @type int|null    $score            Optional. Null means done, no score.
+	 *     @type int|null    $score_max        Optional.
+	 *     @type int|null    $duration_seconds Optional.
+	 *     @type string|null $created_at       Optional. UTC 'Y-m-d H:i:s'; omitted means now.
+	 * }
+	 * @return int|WP_Error Inserted row ID.
+	 */
+	public static function record_activity( array $args ) {
+		$user_id = (int) ( $args['user_id'] ?? 0 );
+		if ( $user_id <= 0 ) {
+			return new WP_Error( 'tbt_notes_bad_user', __( 'That user does not exist.', 'tbt-notes' ), array( 'status' => 400 ) );
+		}
+
+		$clean      = TBT_Notes_Activity_REST::sanitize_payload( $args );
+		$created_at = isset( $args['created_at'] ) && is_string( $args['created_at'] ) ? $args['created_at'] : null;
+
+		return TBT_Notes_Activity_REST::record( $user_id, $clean, $created_at );
 	}
 
 	/**
