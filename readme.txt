@@ -3,7 +3,7 @@ Contributors: thebluetree
 Requires at least: 6.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 1.22.0
+Stable tag: 1.23.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -48,6 +48,9 @@ No. Each student is assigned to at most one class (v1 design).
 No. The editor autosaves as the teacher types.
 
 == Changelog ==
+
+= 1.23.0 =
+* One-click filter chips replace the Show dropdown and colour squares in the teacher toolbar; a five-colour highlight pie in the margin replaces the armed-colour dot; Copy button on expression cards copies the example sentence.
 
 = 1.22.0 =
 * Students who are not in a class now have their finished work recorded (no class, no teacher), so TBT Results can show it.

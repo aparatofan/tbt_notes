@@ -100,9 +100,9 @@
 	--tbtn-s4: 24px;
 	--tbtn-radius: 10px;
 
-	/* Left gutter reserved in the editor for the armed-highlight dot. The dot is
-	   centred in it, so both the padding and the dot's offset read this. */
-	--tbtn-hl-gutter: 28px;
+	/* Left gutter reserved in the editor for the highlight pie (40px). The pie
+	   is centred in it, so both the padding and the pie's offset read this. */
+	--tbtn-hl-gutter: 56px;
 
 	--tbtn-admin-offset: 0px;
 	/* Very high so the full-screen panel/header sits above the site's own
@@ -2376,8 +2376,9 @@ body.tbt-notes-open {
 	flex-wrap: wrap;
 }
 
-/* Student filter buttons — one per view, category buttons tinted with their
-   highlight colour. Replaces the old "Show: [Full note ▾]" select. */
+/* Highlight filter buttons — one per view, category buttons tinted with their
+   highlight colour. Students get them above the note; teachers get a compact
+   chip row in the editor toolbar (see .tbt-filter-group below). */
 .tbt-notes-filterbtns {
 	display: flex;
 	flex-wrap: wrap;
@@ -2434,37 +2435,42 @@ body.tbt-notes-open {
 	}
 }
 
-/* Reusable inline filter control — used both in the student filter bar and,
-   in teacher view, inside the Quill editor toolbar. */
-.tbt-notes-filter-inline {
-	display: inline-flex;
-	align-items: center;
-	gap: 8px;
-	margin-right: 8px;
-	font-size: 14px;
-	font-weight: 700;
-	color: var(--tbtn-muted);
-	vertical-align: middle;
-}
-
-.tbt-notes-filter-select {
-	min-width: 180px;
-	max-width: 240px;
-	padding: 5px 28px 5px 10px;
-	border: 1px solid var(--tbtn-border);
-	border-radius: 8px;
-	background: #fff;
-	color: var(--tbtn-text);
-	font: inherit;
-	font-weight: 700;
-}
-
-/* The filter group sits inside the Quill toolbar, ahead of the colours. */
+/* The filter chips are the Quill toolbar's first group. */
 .tbt-notes-editor-quillwrap .ql-toolbar .tbt-filter-group {
 	display: inline-flex;
 	align-items: center;
 	vertical-align: middle;
 }
+
+/* The Snow theme sizes and floats every .ql-toolbar button for its 28×24
+   icons, and its `.ql-snow.ql-toolbar button` rule also strips background and
+   border and turns hover/focus text blue. The chips undo all of that; the
+   pressed ring and focus outline still come from the shared
+   .tbt-notes-filterbtn rules. */
+.tbt-notes-editor-quillwrap .ql-toolbar .tbt-notes-filterbtn {
+	width: auto !important;
+	height: auto !important;
+	float: none !important;
+	min-width: 34px;
+	padding: 6px 10px !important;
+	margin: 0 2px;
+	font-size: 13px;
+	line-height: 1;
+	color: var(--tbtn-text) !important;
+	background: #eef2f8;
+	border: 1px solid var(--tbtn-border);
+	border-radius: 8px;
+}
+
+.tbt-notes-editor-quillwrap .ql-toolbar .tbt-notes-filterbtn[data-color] {
+	border-color: transparent;
+}
+
+.tbt-notes-editor-quillwrap .ql-toolbar .tbt-notes-filterbtn[data-color="blue"]   { background: var(--tbtn-hl-blue); }
+.tbt-notes-editor-quillwrap .ql-toolbar .tbt-notes-filterbtn[data-color="red"]    { background: var(--tbtn-hl-red); }
+.tbt-notes-editor-quillwrap .ql-toolbar .tbt-notes-filterbtn[data-color="yellow"] { background: var(--tbtn-hl-yellow); }
+.tbt-notes-editor-quillwrap .ql-toolbar .tbt-notes-filterbtn[data-color="pink"]   { background: var(--tbtn-hl-pink); }
+.tbt-notes-editor-quillwrap .ql-toolbar .tbt-notes-filterbtn[data-color="green"]  { background: var(--tbtn-hl-green); }
 
 /* Teacher view: the extracted-highlights summary overlays the editor area
    while keeping Quill mounted underneath. */
@@ -2641,6 +2647,18 @@ body.tbt-notes-open {
 .tbt-expression-actions .tbt-notes-btn {
 	padding: 6px 12px;
 	font-size: 14px;
+}
+
+/* Copy: greyed out while the example box is empty; green for 1.5 s after a
+   successful copy. */
+.tbt-expression-actions .tbt-expression-copy:disabled {
+	opacity: 0.45;
+	cursor: not-allowed;
+}
+
+.tbt-expression-actions .tbt-expression-copy.is-copied {
+	color: var(--tbtn-hl-dot-green);
+	border-color: var(--tbtn-hl-dot-green);
 }
 
 .tbt-expression-error {
@@ -2843,7 +2861,7 @@ body.tbt-notes-open {
 	line-height: var(--tbtn-lh-body);
 	color: var(--tbtn-text);
 	/* Top / right / bottom as before; the left side also carries the gutter the
-	   armed-highlight dot sits in. Stored note content is unchanged — this only
+	   highlight pie sits in. Stored note content is unchanged — this only
 	   shifts the text right on screen. */
 	padding: var(--tbtn-s3) var(--tbtn-s4) 48px calc( var(--tbtn-s4) + var(--tbtn-hl-gutter) );
 }
@@ -2950,53 +2968,13 @@ body.tbt-notes-open {
 	border-radius: 2px;
 }
 
-.tbt-notes-editor-quillwrap .ql-toolbar .tbt-hl-btn {
-	width: 24px !important;
-	height: 24px !important;
-	padding: 0 !important;
-	border-radius: 4px !important;
-	border: 1px solid rgba(0, 0, 0, 0.2) !important;
-	margin: 0 2px;
-}
-
-.tbt-notes-editor-quillwrap .ql-toolbar .tbt-hl-btn[data-color="blue"] {
-	background: var(--tbtn-hl-blue);
-}
-
-.tbt-notes-editor-quillwrap .ql-toolbar .tbt-hl-btn[data-color="yellow"] {
-	background: var(--tbtn-hl-yellow);
-}
-
-.tbt-notes-editor-quillwrap .ql-toolbar .tbt-hl-btn[data-color="red"] {
-	background: var(--tbtn-hl-red);
-}
-
-.tbt-notes-editor-quillwrap .ql-toolbar .tbt-hl-btn[data-color="pink"] {
-	background: var(--tbtn-hl-pink);
-}
-
-.tbt-notes-editor-quillwrap .ql-toolbar .tbt-hl-btn[data-color="green"] {
-	background: var(--tbtn-hl-green);
-}
-
-.tbt-notes-editor-quillwrap .ql-toolbar .tbt-hl-clear {
-	font-size: 13px !important;
-	width: auto !important;
-	padding: 0 4px !important;
-	color: var(--tbtn-muted);
-}
-
 /* -------------------------------------------- Floating highlight popup (F3) */
 
 /* Shown just above a non-empty selection in the editor; positioned in JS and
    anchored inside the (position:relative) editor wrapper. Swatch colours are
    sourced from the same --tbtn-hl-* variables the applied highlights use, so the
-   popup and the resulting highlight always match.
-   The armed-colour palette the margin dot opens is the same control in a
-   different place (anchored to .ql-container instead), so it shares this box and
-   these swatches rather than restating them. */
-.tbt-notes-editor-quillwrap .tbt-hl-popup,
-.tbt-notes-editor-quillwrap .tbt-hl-palette {
+   popup and the resulting highlight always match. */
+.tbt-notes-editor-quillwrap .tbt-hl-popup {
 	position: absolute;
 	z-index: 6;
 	display: flex;
@@ -3009,13 +2987,11 @@ body.tbt-notes-open {
 	box-shadow: 0 4px 14px rgba( 17, 52, 107, 0.18 );
 }
 
-.tbt-notes-editor-quillwrap .tbt-hl-popup[hidden],
-.tbt-notes-editor-quillwrap .tbt-hl-palette[hidden] {
+.tbt-notes-editor-quillwrap .tbt-hl-popup[hidden] {
 	display: none;
 }
 
-.tbt-notes-editor-quillwrap .tbt-hl-popup__swatch,
-.tbt-notes-editor-quillwrap .tbt-hl-palette__swatch {
+.tbt-notes-editor-quillwrap .tbt-hl-popup__swatch {
 	width: 22px;
 	height: 22px;
 	padding: 0;
@@ -3025,38 +3001,31 @@ body.tbt-notes-open {
 	transition: transform 0.08s ease;
 }
 
-.tbt-notes-editor-quillwrap .tbt-hl-popup__swatch:hover,
-.tbt-notes-editor-quillwrap .tbt-hl-palette__swatch:hover {
+.tbt-notes-editor-quillwrap .tbt-hl-popup__swatch:hover {
 	transform: scale( 1.12 );
 }
 
-.tbt-notes-editor-quillwrap .tbt-hl-popup__swatch[data-color="blue"],
-.tbt-notes-editor-quillwrap .tbt-hl-palette__swatch[data-color="blue"] {
+.tbt-notes-editor-quillwrap .tbt-hl-popup__swatch[data-color="blue"] {
 	background: var(--tbtn-hl-blue);
 }
 
-.tbt-notes-editor-quillwrap .tbt-hl-popup__swatch[data-color="red"],
-.tbt-notes-editor-quillwrap .tbt-hl-palette__swatch[data-color="red"] {
+.tbt-notes-editor-quillwrap .tbt-hl-popup__swatch[data-color="red"] {
 	background: var(--tbtn-hl-red);
 }
 
-.tbt-notes-editor-quillwrap .tbt-hl-popup__swatch[data-color="yellow"],
-.tbt-notes-editor-quillwrap .tbt-hl-palette__swatch[data-color="yellow"] {
+.tbt-notes-editor-quillwrap .tbt-hl-popup__swatch[data-color="yellow"] {
 	background: var(--tbtn-hl-yellow);
 }
 
-.tbt-notes-editor-quillwrap .tbt-hl-popup__swatch[data-color="pink"],
-.tbt-notes-editor-quillwrap .tbt-hl-palette__swatch[data-color="pink"] {
+.tbt-notes-editor-quillwrap .tbt-hl-popup__swatch[data-color="pink"] {
 	background: var(--tbtn-hl-pink);
 }
 
-.tbt-notes-editor-quillwrap .tbt-hl-popup__swatch[data-color="green"],
-.tbt-notes-editor-quillwrap .tbt-hl-palette__swatch[data-color="green"] {
+.tbt-notes-editor-quillwrap .tbt-hl-popup__swatch[data-color="green"] {
 	background: var(--tbtn-hl-green);
 }
 
-.tbt-notes-editor-quillwrap .tbt-hl-popup__remove,
-.tbt-notes-editor-quillwrap .tbt-hl-palette__remove {
+.tbt-notes-editor-quillwrap .tbt-hl-popup__remove {
 	display: flex;
 	align-items: center;
 	justify-content: center;
@@ -3074,88 +3043,88 @@ body.tbt-notes-open {
 	cursor: pointer;
 }
 
-.tbt-notes-editor-quillwrap .tbt-hl-popup__remove:hover,
-.tbt-notes-editor-quillwrap .tbt-hl-palette__remove:hover {
+.tbt-notes-editor-quillwrap .tbt-hl-popup__remove:hover {
 	color: var(--tbtn-text);
 }
 
 /* ------------------------------------------- Armed highlight colour (margin) */
 
-/* A faint dot in the editor's left gutter tracks the caret's line and shows
-   which colour is armed: hollow while nothing is, filled and bordered in the
-   armed colour otherwise. Only `top` is set in JS. No label, ever — the state is
-   carried in aria-label for assistive tech. */
-.tbt-notes-editor-quillwrap .tbt-hl-dot {
+/* A 40px pie of all five colours sits in the editor's left gutter and tracks
+   the caret's line (only `top` is set in JS). Unarmed, every slice is a faded
+   pastel around a white centre; the armed slice takes the saturated dot token,
+   full opacity and a 2px step outward along its bisector (the offset is set
+   per slice in JS as --tbtn-pie-dx / --tbtn-pie-dy), and the centre fades. */
+.tbt-notes-editor-quillwrap .tbt-hl-pie {
 	position: absolute;
 	top: 0;
-	left: calc( var(--tbtn-s4) + ( var(--tbtn-hl-gutter) - 14px ) / 2 );
-	width: 14px;
-	height: 14px;
-	padding: 0;
-	background: transparent;
-	border: 1.5px solid var(--tbtn-border);
-	border-radius: 50%;
-	opacity: 0.4;
-	cursor: pointer;
-	transition: opacity 150ms ease;
+	left: calc( var(--tbtn-s4) + ( var(--tbtn-hl-gutter) - 40px ) / 2 );
+	width: 40px;
+	height: 40px;
 	z-index: 5;
+	transition: top 120ms ease;
 }
 
-.tbt-notes-editor-quillwrap .tbt-hl-dot:hover,
-.tbt-notes-editor-quillwrap .tbt-hl-dot:focus,
-.tbt-notes-editor-quillwrap .tbt-hl-dot[aria-expanded="true"] {
+.tbt-notes-editor-quillwrap .tbt-hl-pie svg {
+	display: block;
+	overflow: visible;
+}
+
+.tbt-notes-editor-quillwrap .tbt-hl-pie__slice {
+	stroke: #fff;
+	stroke-width: 1.5;
+	opacity: 0.45;
+	cursor: pointer;
+	transition: opacity 120ms ease, transform 120ms ease;
+}
+
+.tbt-notes-editor-quillwrap .tbt-hl-pie__slice[data-color="blue"]   { fill: var(--tbtn-hl-blue); }
+.tbt-notes-editor-quillwrap .tbt-hl-pie__slice[data-color="red"]    { fill: var(--tbtn-hl-red); }
+.tbt-notes-editor-quillwrap .tbt-hl-pie__slice[data-color="yellow"] { fill: var(--tbtn-hl-yellow); }
+.tbt-notes-editor-quillwrap .tbt-hl-pie__slice[data-color="pink"]   { fill: var(--tbtn-hl-pink); }
+.tbt-notes-editor-quillwrap .tbt-hl-pie__slice[data-color="green"]  { fill: var(--tbtn-hl-green); }
+
+.tbt-notes-editor-quillwrap .tbt-hl-pie__slice:hover,
+.tbt-notes-editor-quillwrap .tbt-hl-pie__slice:focus {
 	opacity: 1;
 }
 
-/* Keyboard focus is a ring around the dot, so it reads at 14px. */
-.tbt-notes-editor-quillwrap .tbt-hl-dot:focus-visible,
-.tbt-notes-editor-quillwrap .tbt-hl-palette__swatch:focus-visible,
-.tbt-notes-editor-quillwrap .tbt-hl-palette__remove:focus-visible {
+.tbt-notes-editor-quillwrap .tbt-hl-pie__slice:focus {
 	outline: none;
-	box-shadow: 0 0 0 2px var(--tbtn-panel-bg), 0 0 0 4px var(--tbtn-accent);
 }
 
-/* Armed, the dot is an indicator rather than a sample of the highlight: a pastel
-   at 0.4 opacity is next to invisible on white, so the armed state takes the
-   saturated dot token and full opacity. Unarmed stays hollow and faint. */
-.tbt-notes-editor-quillwrap .tbt-hl-dot[data-color] {
+.tbt-notes-editor-quillwrap .tbt-hl-pie__slice:focus-visible {
+	stroke: var(--tbtn-text);
+	stroke-width: 2;
 	opacity: 1;
-	border-width: 2px;
 }
 
-.tbt-notes-editor-quillwrap .tbt-hl-dot[data-color="blue"] {
-	background: var(--tbtn-hl-dot-blue);
-	border-color: var(--tbtn-hl-dot-blue);
+.tbt-notes-editor-quillwrap .tbt-hl-pie__slice[aria-pressed="true"] {
+	opacity: 1;
+	transform: translate( var(--tbtn-pie-dx, 0px), var(--tbtn-pie-dy, 0px) );
 }
 
-.tbt-notes-editor-quillwrap .tbt-hl-dot[data-color="red"] {
-	background: var(--tbtn-hl-dot-red);
-	border-color: var(--tbtn-hl-dot-red);
+.tbt-notes-editor-quillwrap .tbt-hl-pie__slice[aria-pressed="true"][data-color="blue"]   { fill: var(--tbtn-hl-dot-blue); }
+.tbt-notes-editor-quillwrap .tbt-hl-pie__slice[aria-pressed="true"][data-color="red"]    { fill: var(--tbtn-hl-dot-red); }
+.tbt-notes-editor-quillwrap .tbt-hl-pie__slice[aria-pressed="true"][data-color="yellow"] { fill: var(--tbtn-hl-dot-yellow); }
+.tbt-notes-editor-quillwrap .tbt-hl-pie__slice[aria-pressed="true"][data-color="pink"]   { fill: var(--tbtn-hl-dot-pink); }
+.tbt-notes-editor-quillwrap .tbt-hl-pie__slice[aria-pressed="true"][data-color="green"]  { fill: var(--tbtn-hl-dot-green); }
+
+.tbt-notes-editor-quillwrap .tbt-hl-pie__centre {
+	fill: #fff;
+	stroke: var(--tbtn-border);
+	stroke-width: 1.5;
+	pointer-events: none;
+	transition: opacity 120ms ease;
 }
 
-.tbt-notes-editor-quillwrap .tbt-hl-dot[data-color="yellow"] {
-	background: var(--tbtn-hl-dot-yellow);
-	border-color: var(--tbtn-hl-dot-yellow);
-}
-
-.tbt-notes-editor-quillwrap .tbt-hl-dot[data-color="pink"] {
-	background: var(--tbtn-hl-dot-pink);
-	border-color: var(--tbtn-hl-dot-pink);
-}
-
-.tbt-notes-editor-quillwrap .tbt-hl-dot[data-color="green"] {
-	background: var(--tbtn-hl-dot-green);
-	border-color: var(--tbtn-hl-dot-green);
+.tbt-notes-editor-quillwrap .tbt-hl-pie[data-armed] .tbt-hl-pie__centre {
+	opacity: 0;
 }
 
 @media ( prefers-reduced-motion: reduce ) {
-	.tbt-notes-editor-quillwrap .tbt-hl-dot {
-		transition: none;
-	}
-
-	.tbt-notes-editor-quillwrap .tbt-hl-palette__swatch,
-	.tbt-notes-editor-quillwrap .tbt-hl-palette__swatch:hover {
-		transform: none;
+	.tbt-notes-editor-quillwrap .tbt-hl-pie,
+	.tbt-notes-editor-quillwrap .tbt-hl-pie__slice,
+	.tbt-notes-editor-quillwrap .tbt-hl-pie__centre {
 		transition: none;
 	}
 }
@@ -3615,10 +3584,6 @@ body.tbt-notes-open {
 		width: 100%;
 		margin-bottom: var(--tbtn-s1);
 	}
-	.tbt-notes-filter-select {
-		flex: 1 1 auto;
-		max-width: none;
-	}
 }
 
 /* ====================================================== Template picker ==== */
@@ -3922,8 +3887,7 @@ body.tbt-notes-open {
 	.tbt-notes-sidebar,
 	.tbt-notes-filterbar,
 	.tbt-notes-editor-quillwrap .ql-toolbar.ql-snow,
-	.tbt-notes-editor-quillwrap .tbt-hl-dot,
-	.tbt-notes-editor-quillwrap .tbt-hl-palette {
+	.tbt-notes-editor-quillwrap .tbt-hl-pie {
 		display: none !important;
 	}
 
