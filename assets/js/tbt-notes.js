@@ -2469,61 +2469,41 @@
 	}
 
 	/**
-	 * Reusable "Show: [Full note ▼]" control. Options come from cfg.highlightColors
-	 * so the dropdown always matches the toolbar's semantic categories. The select
-	 * is a plain custom control (no ql-* class) so Quill leaves it alone when it
-	 * sits inside the editor toolbar. `onChange` runs after state is updated.
-	 */
-	function buildHighlightFilterSelect( onChange ) {
-		var wrap = el( 'label', 'tbt-notes-filter-inline' );
-		wrap.appendChild( el( 'span', null, t( 'show', 'Show' ) + ':' ) );
-
-		var select = el( 'select', 'tbt-notes-filter-select' );
-		var options = [
-			{ value: 'full', label: t( 'fullNote', 'Full note' ) },
-			{ value: 'all', label: t( 'allHighlights', 'All highlights' ) },
-		];
-		( cfg.highlightColors || [] ).forEach( function ( c ) {
-			options.push( { value: c.key, label: c.label } );
-		} );
-		options.forEach( function ( o ) {
-			var opt = el( 'option', null, o.label );
-			opt.value = o.value;
-			if ( o.value === ( state.highlightFilter || 'full' ) ) {
-				opt.selected = true;
-			}
-			select.appendChild( opt );
-		} );
-		select.addEventListener( 'change', function () {
-			state.highlightFilter = select.value;
-			if ( onChange ) {
-				onChange();
-			}
-		} );
-
-		wrap.appendChild( select );
-		return wrap;
-	}
-
-	/**
-	 * Student-only filter control: one button per view instead of a dropdown.
+	 * Highlight filter control: one button per view instead of a dropdown.
 	 * Category buttons are tinted with their highlight colour via data-color;
 	 * 'full' and 'all' stay neutral because they are not categories. Exactly one
 	 * button is pressed at a time. `onChange` runs after state is updated.
+	 *
+	 * Students get it above the read-only note. Teachers get it inside the Quill
+	 * toolbar with `opts.compact`: short chip labels, the full name as the
+	 * tooltip. The buttons carry no ql-* class, so Quill's Toolbar module leaves
+	 * them alone. `wrap.tbtSync` refreshes the pressed state without a re-render.
+	 *
+	 * @param {Function} onChange Runs after state.highlightFilter changes.
+	 * @param {Object}   [opts]   { compact: true } for the teacher toolbar.
 	 */
-	function buildHighlightFilterButtons( onChange ) {
+	function buildHighlightFilterButtons( onChange, opts ) {
+		var compact = !! ( opts && opts.compact );
 		var wrap = el( 'div', 'tbt-notes-filterbtns' );
 		wrap.setAttribute( 'role', 'group' );
 		wrap.setAttribute( 'aria-label', t( 'show', 'Show' ) );
 
 		wrap.appendChild( el( 'span', 'tbt-notes-filterbtns__label', t( 'show', 'Show' ) + ':' ) );
 
-		var options = [
+		var options = compact ? [
+			{ value: 'full', label: t( 'filterFullChip', 'Full' ), title: t( 'fullNote', 'Full note' ), color: null },
+			{ value: 'all', label: t( 'filterAllChip', 'All' ), title: t( 'allHighlights', 'All highlights' ), color: null },
+		] : [
 			{ value: 'full', label: t( 'fullNote', 'Full note' ), color: null },
 			{ value: 'all', label: t( 'filterAllShort', 'Highlights' ), color: null },
 		];
 		( cfg.highlightColors || [] ).forEach( function ( c ) {
-			options.push( { value: c.key, label: c.short || c.label, color: c.key } );
+			options.push( compact ? {
+				value: c.key,
+				label: c.chip || c.short || c.label,
+				title: c.label,
+				color: c.key,
+			} : { value: c.key, label: c.short || c.label, color: c.key } );
 		} );
 
 		var buttons = [];
@@ -2540,6 +2520,10 @@
 			var b = el( 'button', 'tbt-notes-filterbtn', o.label );
 			b.type = 'button';
 			b.setAttribute( 'data-filter', o.value );
+			if ( o.title ) {
+				b.title = o.title;
+				b.setAttribute( 'aria-label', o.title );
+			}
 			if ( o.color ) {
 				b.setAttribute( 'data-color', o.color );
 			}
@@ -2558,6 +2542,7 @@
 		} );
 
 		sync();
+		wrap.tbtSync = sync;
 		return wrap;
 	}
 
@@ -2995,6 +2980,20 @@
 			regenBtn.type = 'button';
 			regenBtn.textContent = t( 'regenerate', 'Regenerate' );
 
+			// Copy: the example sentence exactly as it stands in the box, unsaved
+			// edits included. Deliberately outside setBusy() — copying never
+			// conflicts with a save.
+			var copyBtn = el( 'button', 'tbt-notes-btn tbt-notes-btn--ghost tbt-expression-copy' );
+			copyBtn.type = 'button';
+			copyBtn.textContent = t( 'copy', 'Copy' );
+			var copyTimer = 0;
+
+			function syncCopyBtn() {
+				copyBtn.disabled = '' === eArea.value.trim();
+			}
+			syncCopyBtn();
+			eArea.addEventListener( 'input', syncCopyBtn );
+
 			function setBusy( busy ) {
 				saveBtn.disabled = busy;
 				if ( approveBtn ) {
@@ -3053,6 +3052,51 @@
 				} );
 			}
 
+			function copyFeedback() {
+				// One timer per card; a second click restarts it. Success is shown
+				// on the button, not in msgSlot, so a "Saved" message survives.
+				window.clearTimeout( copyTimer );
+				copyBtn.textContent = t( 'copied', 'Copied ✓' );
+				copyBtn.classList.add( 'is-copied' );
+				copyTimer = window.setTimeout( function () {
+					copyTimer = 0;
+					copyBtn.textContent = t( 'copy', 'Copy' );
+					copyBtn.classList.remove( 'is-copied' );
+				}, 1500 );
+			}
+
+			function copyFallback() {
+				var ok = false;
+				var text = eArea.value.trim();
+				var start = eArea.value.indexOf( text );
+				try {
+					eArea.focus();
+					eArea.select();
+					// Select only the trimmed sentence, matching the clipboard path.
+					eArea.setSelectionRange( start, start + text.length );
+					ok = document.execCommand( 'copy' );
+				} catch ( err ) {
+					ok = false;
+				}
+				if ( ok ) {
+					copyFeedback();
+				} else {
+					showError( t( 'copyFailed', 'Copy failed — select the sentence and press Ctrl+C' ) );
+				}
+			}
+
+			copyBtn.addEventListener( 'click', function () {
+				var text = eArea.value.trim();
+				if ( ! text ) {
+					return;
+				}
+				if ( navigator.clipboard && navigator.clipboard.writeText ) {
+					navigator.clipboard.writeText( text ).then( copyFeedback, copyFallback );
+				} else {
+					copyFallback();
+				}
+			} );
+
 			regenBtn.addEventListener( 'click', function () {
 				setBusy( true );
 				clear( msgSlot );
@@ -3074,6 +3118,7 @@
 				actions.appendChild( approveBtn );
 			}
 			actions.appendChild( regenBtn );
+			actions.appendChild( copyBtn );
 			actions.appendChild( msgSlot );
 			card.appendChild( actions );
 
@@ -4183,25 +4228,22 @@
 
 		initEditor( editorEl, toolbar, headerInput, lesson, indicator );
 
-		// Insert the filter control AFTER Quill is built: the Snow theme runs
-		// buildPickers() over every <select> in the toolbar at construction time
-		// and would turn our native filter select into a broken, empty picker.
-		// Adding it now (right after the highlight colours) keeps it untouched.
+		// Insert the filter chips AFTER Quill is built, as the toolbar's first
+		// group. Quill's Toolbar module and the Snow theme only process controls
+		// that exist at construction time (buildPickers() would also turn any
+		// <select> into a broken picker), so adding the row now keeps it entirely
+		// our own.
 		var filterGroup = el( 'span', 'ql-formats tbt-filter-group' );
-		filterGroup.appendChild( buildHighlightFilterSelect( function () {
+		var filterChips = buildHighlightFilterButtons( function () {
 			applyTeacherFilter( lesson, editorEl, summaryPanel );
-		} ) );
-		var hlGroup = toolbar.querySelector( '.tbt-hl-group' );
-		if ( hlGroup ) {
-			toolbar.insertBefore( filterGroup, hlGroup.nextSibling );
-		} else {
-			toolbar.insertBefore( filterGroup, toolbar.firstChild );
-		}
+		}, { compact: true } );
+		filterGroup.appendChild( filterChips );
+		toolbar.insertBefore( filterGroup, toolbar.firstChild );
 
 		// Honour any pre-selected filter (normally reset to 'full' per lesson).
 		applyTeacherFilter( lesson, editorEl, summaryPanel );
 
-		setActiveEditor( lesson, editorEl, summaryPanel, filterGroup.querySelector( 'select' ) );
+		setActiveEditor( lesson, editorEl, summaryPanel, filterChips.tbtSync );
 	}
 
 	/**
@@ -4243,30 +4285,7 @@
 			return b;
 		}
 
-		// 1. Highlight colours + clear. (The filter dropdown is inserted right
-		//    after this group once Quill has initialised — see renderEditorInto.)
-		var gh = group();
-		gh.className = 'ql-formats tbt-hl-group';
-		( cfg.highlightColors || [] ).forEach( function ( c, i ) {
-			var b = el( 'button', 'tbt-hl-btn' );
-			b.type = 'button';
-			b.setAttribute( 'data-color', c.key );
-			// Swatches map to Alt+1..Alt+5 in config order; surface the hint.
-			var hint = c.label + ' — Alt+' + ( i + 1 );
-			b.setAttribute( 'aria-label', t( 'highlight', 'Highlight' ) + ': ' + hint );
-			b.title = t( 'highlight', 'Highlight' ) + ': ' + hint;
-			gh.appendChild( b );
-		} );
-		var clearBtn = el( 'button', 'tbt-hl-clear' );
-		clearBtn.type = 'button';
-		clearBtn.textContent = '✕';
-		clearBtn.setAttribute( 'data-color', '' );
-		clearBtn.setAttribute( 'aria-label', t( 'removeHighlight', 'No highlight' ) + ' — Alt+0' );
-		clearBtn.title = t( 'removeHighlight', 'No highlight' ) + ' — Alt+0';
-		gh.appendChild( clearBtn );
-		bar.appendChild( gh );
-
-		// 2. Inline text tools.
+		// 1. Inline text tools.
 		var g1 = group();
 		g1.appendChild( qbtn( 'ql-bold', null, t( 'bold', 'Bold' ) ) );
 		g1.appendChild( qbtn( 'ql-italic', null, t( 'italic', 'Italic' ) ) );
@@ -4274,7 +4293,7 @@
 		g1.appendChild( qbtn( 'ql-strike', null, t( 'strike', 'Strikethrough' ) ) );
 		bar.appendChild( g1 );
 
-		// 3. Link + photo upload. A custom (non-ql) image button so we never get
+		// 2. Link + photo upload. A custom (non-ql) image button so we never get
 		//    Quill's default "paste an image URL" prompt: uploads go through our
 		//    own file picker + REST route instead (wired up in initEditor).
 		var g2 = group();
@@ -4287,7 +4306,7 @@
 		g2.appendChild( imgBtn );
 		bar.appendChild( g2 );
 
-		// 4. Lists + indentation.
+		// 3. Lists + indentation.
 		var g3 = group();
 		g3.appendChild( qbtn( 'ql-list', 'ordered', t( 'orderedList', 'Numbered list' ) ) );
 		g3.appendChild( qbtn( 'ql-list', 'bullet', t( 'bulletList', 'Bulleted list' ) ) );
@@ -4295,14 +4314,14 @@
 		g3.appendChild( qbtn( 'ql-indent', '+1', t( 'indent', 'Increase indent' ) ) );
 		bar.appendChild( g3 );
 
-		// 5. Structure: headings + blockquote.
+		// 4. Structure: headings + blockquote.
 		var g4 = group();
 		g4.appendChild( qbtn( 'ql-header', '2', t( 'heading2', 'H2' ) ) );
 		g4.appendChild( qbtn( 'ql-header', '3', t( 'heading3', 'H3' ) ) );
 		g4.appendChild( qbtn( 'ql-blockquote', null, t( 'blockquote', 'Quote' ) ) );
 		bar.appendChild( g4 );
 
-		// 6. AI Quick Note launcher. Plain (non-ql) button so the Snow theme
+		// 5. AI Quick Note launcher. Plain (non-ql) button so the Snow theme
 		//    leaves it alone; wired up after Quill is built (see initEditor).
 		if ( cfg.aiEnabled ) {
 			var g5 = group();
@@ -4337,8 +4356,8 @@
 	}
 
 	/**
-	 * Apply (or toggle off) a highlight colour over a range, exactly as a swatch
-	 * click does. Shared by the toolbar swatches and the Alt+number shortcuts.
+	 * Apply (or toggle off) a highlight colour over a range. Shared by the
+	 * margin pie, the selection pop-up path and the Alt+number shortcuts.
 	 * `color` '' clears the highlight.
 	 */
 	function applyHighlightFormat( quill, color, range ) {
@@ -4577,13 +4596,14 @@
 	}
 
 	/**
-	 * Armed highlight colours: a second way to use the same five swatches.
+	 * Armed highlight colours, shown and picked from a pie in the margin.
 	 *
-	 * With text selected, a swatch is the retroactive fix it has always been. With
-	 * nothing selected it *arms* that colour instead, and everything typed from
-	 * then on comes out highlighted until the colour is changed or cleared. A
-	 * faint dot in the editor's left gutter tracks the caret's line and shows what
-	 * is armed; clicking it opens the same five colours plus ✕.
+	 * With text selected, a slice highlights the selection, as a swatch always
+	 * did. With nothing selected it *arms* that colour instead, and everything
+	 * typed from then on comes out highlighted until the colour is changed or
+	 * cleared. The pie sits in the editor's left gutter, tracks the caret's line,
+	 * and always shows all five colours: faded while unarmed, the armed slice
+	 * vivid and pulled slightly outward, a white centre while nothing is armed.
 	 *
 	 * Arming is nothing more than Quill's own cursor format — quill.format() on a
 	 * collapsed selection changes no document content, only what the next
@@ -4605,19 +4625,15 @@
 		// re-apply below recurses.
 		var reentrant = false;
 		var frame = 0;
-		var dotTop = 0;
+		var PIE_SIZE = 40;
+		var SVG_NS = 'http://www.w3.org/2000/svg';
 
-		var dot = el( 'button', 'tbt-hl-dot' );
-		dot.type = 'button';
-		dot.setAttribute( 'aria-haspopup', 'true' );
-		dot.setAttribute( 'aria-expanded', 'false' );
+		var pie = el( 'div', 'tbt-hl-pie' );
+		pie.setAttribute( 'role', 'group' );
+		pie.setAttribute( 'aria-label', t( 'highlightColour', 'Highlight colour' ) );
+		var slices = [];
 
-		var palette = el( 'div', 'tbt-hl-palette' );
-		palette.hidden = true;
-		var paletteButtons = [];
-
-		container.appendChild( dot );
-		container.appendChild( palette );
+		container.appendChild( pie );
 
 		/* ------------------------------------------------------------- Arming */
 
@@ -4631,28 +4647,32 @@
 			return found;
 		}
 
-		/** The dot's accessible name — it never carries a visible label. */
-		function dotLabel() {
-			if ( ! armedColour ) {
-				return t( 'noHighlightArmed', 'No highlight colour armed' );
-			}
-			var c = colourFor( armedColour );
-			return t( 'highlightArmed', 'Highlight armed' ) + ': ' + ( c ? c.label : armedColour );
-		}
-
-		function refreshDot() {
+		/**
+		 * Mark the armed slice pressed (CSS turns it vivid and pulls it out) and
+		 * move the roving tab stop to it, or to the first slice when unarmed.
+		 */
+		function refreshPie() {
+			var stop = 0;
+			slices.forEach( function ( slice, i ) {
+				var on = slice.getAttribute( 'data-color' ) === armedColour;
+				slice.setAttribute( 'aria-pressed', on ? 'true' : 'false' );
+				if ( on ) {
+					stop = i;
+				}
+			} );
+			slices.forEach( function ( slice, i ) {
+				slice.setAttribute( 'tabindex', i === stop ? '0' : '-1' );
+			} );
 			if ( armedColour ) {
-				dot.setAttribute( 'data-color', armedColour );
+				pie.setAttribute( 'data-armed', armedColour );
 			} else {
-				dot.removeAttribute( 'data-color' );
+				pie.removeAttribute( 'data-armed' );
 			}
-			// aria-label only: the dot never carries a visible label or tooltip.
-			dot.setAttribute( 'aria-label', dotLabel() );
 		}
 
 		/**
 		 * Arm `value` (a colour key), or disarm with null. Focuses the editor and
-		 * restores the caret first: the swatch that armed the colour may have taken
+		 * restores the caret first: the slice that armed the colour may have taken
 		 * focus away from it.
 		 */
 		function setArmed( value ) {
@@ -4671,28 +4691,24 @@
 				quill.format( 'highlight', armedColour ? armedColour : false, 'user' );
 				reentrant = false;
 			}
-			refreshDot();
+			refreshPie();
 			reposition();
 		}
 
 		/**
-		 * A swatch (or Alt+digit, or a palette pick) with nothing selected. The ✕
-		 * — colour '' — always disarms, the armed colour's own swatch toggles off,
-		 * anything else arms.
+		 * A pie slice (or Alt+digit) with nothing selected. Colour '' (Alt+0)
+		 * always disarms, the armed colour's own slice toggles off, anything else
+		 * arms.
 		 */
 		function toggle( color ) {
 			setArmed( ( ! color || color === armedColour ) ? null : color );
 		}
 
 		/**
-		 * Escape closes the palette, then disarms. Returns whether it was used, so
-		 * the caller can leave Escape alone when neither is active.
+		 * Escape disarms. Returns whether it was used, so the caller can leave
+		 * Escape alone when nothing is armed.
 		 */
 		function handleEscape() {
-			if ( ! palette.hidden ) {
-				closePalette( true );
-				return true;
-			}
 			if ( armedColour ) {
 				setArmed( null );
 				return true;
@@ -4700,11 +4716,11 @@
 			return false;
 		}
 
-		/* ---------------------------------------------------------- The dot */
+		/* ---------------------------------------------------------- The pie */
 
 		/**
 		 * Track the caret's line. quill.getBounds() is measured against
-		 * .ql-container's visible box; the dot is an absolutely positioned child of
+		 * .ql-container's visible box; the pie is an absolutely positioned child of
 		 * that same container, which scrolls in Overlay Mode, so the container's
 		 * scrollTop turns the visible offset into a content-relative one. In Page
 		 * Mode the container does not scroll and scrollTop is 0.
@@ -4726,22 +4742,19 @@
 			if ( ! bounds ) {
 				return;
 			}
-			dotTop = bounds.top + bounds.height / 2 - 7 + container.scrollTop;
+			var top = bounds.top + bounds.height / 2 - PIE_SIZE / 2 + container.scrollTop;
 			// Keep it inside the container: an absolutely positioned child that
 			// overflows would give the (overflow:auto) container its own scrollbar.
-			// The dot is a status indicator, so it rests at the nearest edge rather
+			// The pie is a status indicator, so it rests at the nearest edge rather
 			// than vanishing when the caret's line is scrolled out of view.
-			var maxTop = container.clientHeight - 14 + container.scrollTop;
-			if ( dotTop > maxTop ) {
-				dotTop = maxTop;
+			var maxTop = container.clientHeight - PIE_SIZE + container.scrollTop;
+			if ( top > maxTop ) {
+				top = maxTop;
 			}
-			if ( dotTop < container.scrollTop ) {
-				dotTop = container.scrollTop;
+			if ( top < container.scrollTop ) {
+				top = container.scrollTop;
 			}
-			dot.style.top = dotTop + 'px';
-			if ( ! palette.hidden ) {
-				positionPalette();
-			}
+			pie.style.top = top + 'px';
 		}
 
 		function scheduleReposition() {
@@ -4765,63 +4778,97 @@
 			scheduleReposition();
 		}
 
-		/* ------------------------------------------------------- The palette */
+		/* --------------------------------------------------- Building the pie */
 
-		function positionPalette() {
-			var top = dotTop + 22;
-			// Flip above the dot when the bottom of the editor is too close.
-			if ( top + palette.offsetHeight > container.clientHeight + container.scrollTop ) {
-				top = dotTop - palette.offsetHeight - 8;
-			}
-			palette.style.top = top + 'px';
-			var left = dot.offsetLeft;
-			var maxLeft = container.clientWidth - palette.offsetWidth - 4;
-			if ( maxLeft < 4 ) {
-				maxLeft = 4;
-			}
-			palette.style.left = ( left > maxLeft ? maxLeft : left ) + 'px';
+		function svgEl( name, attrs ) {
+			var node = document.createElementNS( SVG_NS, name );
+			Object.keys( attrs || {} ).forEach( function ( k ) {
+				node.setAttribute( k, attrs[ k ] );
+			} );
+			return node;
 		}
 
-		function onDocMousedown( e ) {
-			if ( palette.contains( e.target ) || dot.contains( e.target ) ) {
+		/** Point on the circle `deg` degrees clockwise from 12 o'clock. */
+		function polar( deg, radius ) {
+			var rad = ( deg - 90 ) * Math.PI / 180;
+			return {
+				x: 20 + radius * Math.cos( rad ),
+				y: 20 + radius * Math.sin( rad ),
+			};
+		}
+
+		function round( n ) {
+			return Math.round( n * 1000 ) / 1000;
+		}
+
+		/**
+		 * A slice with nothing selected arms (or disarms) its colour; with text
+		 * selected it highlights the selection — the same branch as Alt+1…5.
+		 */
+		function activateSlice( key ) {
+			var r = quill.getSelection() || getLastRange();
+			if ( r && r.length > 0 ) {
+				applyHighlightFormat( quill, key, r );
 				return;
 			}
-			closePalette( false );
+			toggle( key );
 		}
 
-		function openPalette() {
-			if ( ! palette.hidden ) {
-				return;
-			}
-			palette.hidden = false;
-			dot.setAttribute( 'aria-expanded', 'true' );
-			positionPalette();
-			document.addEventListener( 'mousedown', onDocMousedown, true );
-			if ( paletteButtons.length ) {
-				paletteButtons[ 0 ].focus();
-			}
-		}
+		var svg = svgEl( 'svg', {
+			viewBox: '0 0 40 40',
+			width: String( PIE_SIZE ),
+			height: String( PIE_SIZE ),
+			focusable: 'false',
+		} );
+		var colours = cfg.highlightColors || [];
+		var sweep = colours.length ? 360 / colours.length : 360;
 
-		function closePalette( returnFocus ) {
-			if ( palette.hidden ) {
-				return;
-			}
-			palette.hidden = true;
-			dot.setAttribute( 'aria-expanded', 'false' );
-			document.removeEventListener( 'mousedown', onDocMousedown, true );
-			if ( returnFocus ) {
-				dot.focus();
-			}
-		}
+		// Clockwise from 12 o'clock in config order: blue at the top, then the
+		// rest in Alt+1…5 order.
+		colours.forEach( function ( c, i ) {
+			var a0 = i * sweep;
+			var a1 = a0 + sweep;
+			var p0 = polar( a0, 19 );
+			var p1 = polar( a1, 19 );
+			var d = 'M20 20 L' + round( p0.x ) + ' ' + round( p0.y ) +
+				' A19 19 0 ' + ( sweep > 180 ? 1 : 0 ) + ' 1 ' + round( p1.x ) + ' ' + round( p1.y ) + ' Z';
+			// The armed slice moves 2px outward along its bisector.
+			var mid = polar( a0 + sweep / 2, 2 );
+			var hint = c.label + ' — Alt+' + ( i + 1 );
 
-		// Arrow keys walk the row; Escape closes and hands focus back to the dot.
-		function addPaletteButton( btn ) {
-			var index = paletteButtons.length;
-			btn.addEventListener( 'keydown', function ( e ) {
+			var slice = svgEl( 'path', {
+				'class': 'tbt-hl-pie__slice',
+				d: d,
+				'data-color': c.key,
+				role: 'button',
+				'aria-pressed': 'false',
+				'aria-label': hint,
+				tabindex: '-1',
+			} );
+			slice.style.setProperty( '--tbtn-pie-dx', round( mid.x - 20 ) + 'px' );
+			slice.style.setProperty( '--tbtn-pie-dy', round( mid.y - 20 ) + 'px' );
+			var title = svgEl( 'title' );
+			title.textContent = hint;
+			slice.appendChild( title );
+
+			// Keep the editor's selection, as the toolbar swatches did.
+			slice.addEventListener( 'mousedown', function ( e ) {
+				e.preventDefault();
+			} );
+			slice.addEventListener( 'click', function () {
+				activateSlice( c.key );
+			} );
+			slice.addEventListener( 'keydown', function ( e ) {
 				if ( 'Escape' === e.key ) {
+					if ( handleEscape() ) {
+						e.preventDefault();
+						e.stopPropagation();
+					}
+					return;
+				}
+				if ( 'Enter' === e.key || ' ' === e.key || 'Spacebar' === e.key ) {
 					e.preventDefault();
-					e.stopPropagation();
-					closePalette( true );
+					activateSlice( c.key );
 					return;
 				}
 				var step = 0;
@@ -4834,52 +4881,25 @@
 					return;
 				}
 				e.preventDefault();
-				paletteButtons[ ( index + step + paletteButtons.length ) % paletteButtons.length ].focus();
+				var next = slices[ ( i + step + slices.length ) % slices.length ];
+				slices.forEach( function ( s2 ) {
+					s2.setAttribute( 'tabindex', s2 === next ? '0' : '-1' );
+				} );
+				next.focus();
 			} );
-			paletteButtons.push( btn );
-			palette.appendChild( btn );
-		}
 
-		// The same five colours plus ✕, in toolbar order. A duplicate route to
-		// arming, never a second implementation: every pick goes through toggle().
-		( cfg.highlightColors || [] ).forEach( function ( c, i ) {
-			var sw = el( 'button', 'tbt-hl-palette__swatch' );
-			sw.type = 'button';
-			sw.setAttribute( 'data-color', c.key );
-			var hint = c.label + ' — Alt+' + ( i + 1 );
-			sw.setAttribute( 'aria-label', hint );
-			sw.title = hint;
-			sw.addEventListener( 'click', function () {
-				closePalette( false );
-				toggle( c.key );
-			} );
-			addPaletteButton( sw );
+			slices.push( slice );
+			svg.appendChild( slice );
 		} );
 
-		var paletteClear = el( 'button', 'tbt-hl-palette__remove', '✕' );
-		paletteClear.type = 'button';
-		paletteClear.setAttribute( 'data-color', '' );
-		paletteClear.setAttribute( 'aria-label', t( 'removeHighlight', 'No highlight' ) + ' — Alt+0' );
-		paletteClear.title = paletteClear.getAttribute( 'aria-label' );
-		paletteClear.addEventListener( 'click', function () {
-			closePalette( false );
-			toggle( '' );
-		} );
-		addPaletteButton( paletteClear );
-
-		dot.addEventListener( 'click', function () {
-			if ( palette.hidden ) {
-				openPalette();
-			} else {
-				closePalette( true );
-			}
-		} );
-
-		dot.addEventListener( 'keydown', function ( e ) {
-			if ( 'Escape' === e.key && handleEscape() ) {
-				e.stopPropagation();
-			}
-		} );
+		svg.appendChild( svgEl( 'circle', {
+			'class': 'tbt-hl-pie__centre',
+			cx: '20',
+			cy: '20',
+			r: '5',
+			'aria-hidden': 'true',
+		} ) );
+		pie.appendChild( svg );
 
 		/**
 		 * Put the armed colour back on the caret — but never from inside a
@@ -4964,7 +4984,7 @@
 		window.addEventListener( 'scroll', onViewportChange, true );
 		window.addEventListener( 'resize', onViewportChange );
 
-		refreshDot();
+		refreshPie();
 		reposition( { index: 0, length: 0 } );
 
 		return {
@@ -5012,10 +5032,10 @@
 			}
 		} );
 
-		// The five swatches gain a second behaviour, and the branch is on the
-		// selection only. With a real selection this is the retroactive fix it has
-		// always been and the armed colour is left alone; with nothing selected the
-		// colour is armed instead, so everything typed next comes out highlighted.
+		// The Alt shortcuts (like the margin pie) branch on the selection only.
+		// With a real selection this is the retroactive fix it has always been
+		// and the armed colour is left alone; with nothing selected the colour is
+		// armed instead, so everything typed next comes out highlighted.
 		var armed = setupArmedHighlight( quill, function () {
 			return lastRange;
 		} );
@@ -5028,16 +5048,6 @@
 			}
 			armed.toggle( color );
 		}
-
-		var swatches = toolbar.querySelectorAll( '.tbt-hl-btn, .tbt-hl-clear' );
-		Array.prototype.forEach.call( swatches, function ( btn ) {
-			btn.addEventListener( 'mousedown', function ( e ) {
-				e.preventDefault();
-			} );
-			btn.addEventListener( 'click', function () {
-				highlightWithFallbackRange( btn.getAttribute( 'data-color' ) );
-			} );
-		} );
 
 		// Keyboard shortcuts: Alt+1..5 apply highlight colours over a selection and
 		// arm them when there is none; Alt+0 clears or disarms. Keyed off e.code
@@ -5053,8 +5063,8 @@
 		shortcutMap.Digit0 = '';
 		shortcutMap.Numpad0 = '';
 		quill.root.addEventListener( 'keydown', function ( e ) {
-			// Escape disarms (and closes the margin palette first), but is never
-			// swallowed when neither is active — other components may want it.
+			// Escape disarms, but is never swallowed when nothing is armed —
+			// other components may want it.
 			if ( 'Escape' === e.key ) {
 				if ( armed.handleEscape() ) {
 					e.stopPropagation();
@@ -6331,7 +6341,7 @@
 
 	/* ---- Editor handle */
 
-	function setActiveEditor( lesson, editorEl, summaryPanel, select ) {
+	function setActiveEditor( lesson, editorEl, summaryPanel, syncFilter ) {
 		var quill = window.Quill && window.Quill.find ? window.Quill.find( editorEl ) : null;
 		if ( ! quill || ! quill.root ) {
 			return;
@@ -6341,7 +6351,7 @@
 			quill: quill,
 			editorEl: editorEl,
 			summaryPanel: summaryPanel,
-			select: select,
+			syncFilter: syncFilter,
 		};
 		// Keep the marks in step with typing, without moving the page.
 		quill.on( 'text-change', function () {
@@ -6358,7 +6368,7 @@
 
 	/**
 	 * Marks need the editor on screen, so a highlight filter gives way to the
-	 * full note — the same three things the filter select itself changes.
+	 * full note — the same three things a filter chip itself changes.
 	 */
 	function ensureFullNote() {
 		var ed = activeEditor;
@@ -6366,8 +6376,8 @@
 			return;
 		}
 		state.highlightFilter = 'full';
-		if ( ed.select ) {
-			ed.select.value = 'full';
+		if ( ed.syncFilter ) {
+			ed.syncFilter();
 		}
 		applyTeacherFilter( ed.lesson, ed.editorEl, ed.summaryPanel );
 	}
