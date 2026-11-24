@@ -456,6 +456,9 @@ class TBT_Notes_Frontend {
 		return array(
 			'restUrl'         => esc_url_raw( rest_url( TBT_NOTES_REST_NAMESPACE . '/' ) ),
 			'nonce'           => wp_create_nonce( 'wp_rest' ),
+			// TBT Dictionary's REST root, only while that plugin is active; the
+			// add-to-dictionary + on expression cards is hidden without it.
+			'dictRestUrl'     => defined( 'TBTDIC_VERSION' ) ? esc_url_raw( rest_url( 'tbt-dictionary/v1/' ) ) : '',
 			'isTeacher'       => (bool) $is_teacher,
 			'currentUserId'   => get_current_user_id(),
 			'logoUrl'         => esc_url_raw( $this->logo_url() ),

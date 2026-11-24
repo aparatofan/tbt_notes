@@ -3139,17 +3139,18 @@
 		return li;
 	}
 
-	/* ------------------------------------ Add to Personal Dictionary (blue) */
+	/* ---------------------------------------- Add to TBT Dictionary (blue) */
 
-	// Bridge to the Personal Dictionary plugin: every operation is one
-	// admin-ajax action (action=ays_pd_ajax) with a `function` selector, cookie
-	// authenticated (no nonce — the plugin's own handlers use none and scope all
-	// reads/writes to get_current_user_id() server-side).
+	// Bridge to the TBT Dictionary plugin (tbt-dictionary/v1 REST, cookie +
+	// wp_rest nonce, the same nonce Notes already sends). The Dictionary scopes
+	// every read and write to the session user and awards the new-word point
+	// itself. cfg.dictRestUrl is only set while the Dictionary is active; without
+	// it the + control is not shown at all.
 
 	// Expressions added this session, keyed by lesson + expression text, so a
 	// re-render (filter change, card repaint) keeps the "Added ✓" state and a
 	// second click cannot double-insert. Deliberately not persisted — the
-	// dictionary itself has no duplicate check, and a page reload resetting the
+	// Dictionary refuses duplicates itself, and a page reload resetting the
 	// affordance is acceptable per spec.
 	var dictAdded = {};
 
@@ -3164,61 +3165,55 @@
 		'<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
 		'<path d="M12 5v14"/><path d="M5 12h14"/></svg>';
 
-	/**
-	 * Resolve admin-ajax.php. Prefer Personal Dictionary's own localized URL when
-	 * its script happens to be on the page; otherwise derive it from our REST
-	 * root (which always sits alongside wp-admin), covering both pretty
-	 * (…/wp-json/…) and plain (…?rest_route=…) permalinks.
-	 */
-	function pdAjaxUrl() {
-		var pd = window.aysPersonalDictionaryAjaxPublic;
-		if ( pd && pd.ajaxUrl ) {
-			return pd.ajaxUrl;
-		}
-		var rest = '' + ( cfg.restUrl || '' );
-		var m = rest.match( /^(.*?)wp-json\// );
-		if ( ! m ) {
-			m = rest.match( /^(.*?)\?rest_route=/ );
-		}
-		if ( m ) {
-			return m[ 1 ] + 'wp-admin/admin-ajax.php';
-		}
-		return '/wp-admin/admin-ajax.php';
+	function dictAvailable() {
+		return !! cfg.dictRestUrl;
 	}
 
 	/**
-	 * POST one Personal Dictionary operation. Mirrors api()'s conventions
-	 * (fetch, same-origin credentials, JSON-or-error) but form-encoded, which is
-	 * what admin-ajax handlers read.
+	 * One Dictionary REST call. Mirrors api() (JSON, nonce, same-origin), but
+	 * keeps the error's code and data so a 409 can be read, and falls back to
+	 * the generic message when the server sent none.
 	 */
-	function pdAjax( fn, fields ) {
-		var params = new URLSearchParams();
-		params.set( 'action', 'ays_pd_ajax' );
-		params.set( 'function', fn );
-		Object.keys( fields || {} ).forEach( function ( key ) {
-			params.set( key, fields[ key ] );
-		} );
-		return fetch( pdAjaxUrl(), {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+	function dictApi( method, path, body ) {
+		var opts = {
+			method: method,
+			headers: {
+				'Content-Type': 'application/json',
+				'X-WP-Nonce': cfg.nonce,
+			},
 			credentials: 'same-origin',
-			body: params.toString(),
-		} ).then( function ( res ) {
-			if ( ! res.ok ) {
-				throw new Error( t( 'dictError', DICT_ERR ) );
-			}
+		};
+		if ( body !== undefined ) {
+			opts.body = JSON.stringify( body );
+		}
+		return fetch( cfg.dictRestUrl + path, opts ).then( function ( res ) {
 			return res.json().catch( function () {
-				throw new Error( t( 'dictError', DICT_ERR ) );
+				return null;
+			} ).then( function ( data ) {
+				if ( ! res.ok ) {
+					var err = new Error( ( data && data.code && 0 === String( data.code ).indexOf( 'tbtdic_' ) && data.message ) || t( 'dictError', DICT_ERR ) );
+					err.status = res.status;
+					err.code = ( data && data.code ) || '';
+					err.data = ( data && data.data ) || {};
+					throw err;
+				}
+				return data;
 			} );
+		} ).catch( function ( err ) {
+			if ( err && err.status ) {
+				throw err;
+			}
+			throw new Error( t( 'dictError', DICT_ERR ) ); // Network failure.
 		} );
 	}
 
 	/**
-	 * The learner's dictionary groups, newest first: [{ id, name }].
+	 * The learner's dictionary groups, newest first: [{ id, name }]. The
+	 * Dictionary lists them oldest first; the newest is the likeliest target.
 	 */
 	function pdFetchGroups() {
-		return pdAjax( 'ays_groups_pd' ).then( function ( data ) {
-			var rows = ( data && data.status && Array.isArray( data.results ) ) ? data.results : [];
+		return dictApi( 'GET', 'state' ).then( function ( data ) {
+			var rows = ( data && Array.isArray( data.groups ) ) ? data.groups : [];
 			var out = [];
 			rows.forEach( function ( row ) {
 				var id = parseInt( row && row.id, 10 );
@@ -3226,48 +3221,56 @@
 					out.push( { id: id, name: String( ( row && row.name ) || '' ) } );
 				}
 			} );
-			return out;
+			return out.reverse();
 		} );
 	}
 
 	/**
-	 * Insert one word. The handler only reports added_words when the insert
-	 * really ran (missing/empty fields fall through to a bare status:true), so
-	 * added_words >= 1 — not status — is the success signal.
+	 * Insert one word. A word already in the dictionary (409 tbtdic_duplicate)
+	 * counts as done: the learner has it, and the + should not keep inviting a
+	 * second try. A fresh word gets its AI fill-in (phonetics, example,
+	 * missing translation) started at once, as the Dictionary page does;
+	 * fire-and-forget, as a failure there leaves the word as typed.
 	 */
 	function pdAddWord( groupId, word, translation ) {
-		return pdAjax( 'ays_words_add_ajax', {
-			category_id: groupId,
-			word: word,
-			translation: translation,
+		return dictApi( 'POST', 'words', {
+			group_id: groupId,
+			term: word,
+			translation: translation || '',
 		} ).then( function ( data ) {
-			if ( ! data || ! ( parseInt( data.added_words, 10 ) >= 1 ) ) {
+			var id = parseInt( data && data.word && data.word.id, 10 );
+			if ( ! ( id > 0 ) ) {
 				throw new Error( t( 'dictError', DICT_ERR ) );
 			}
+			if ( data.word.ai_status === 'pending' ) {
+				dictApi( 'POST', 'words/' + id + '/fill' ).catch( function () {} );
+			}
 			return data;
+		}, function ( err ) {
+			if ( err && 'tbtdic_duplicate' === err.code ) {
+				return { duplicate: true };
+			}
+			throw err;
 		} );
 	}
 
 	/**
-	 * Create a group and resolve its id. Current Personal Dictionary (2.7.x)
-	 * returns the new id as last_id; older builds did not, so fall back to
-	 * re-fetching the (newest-first) group list.
+	 * Create a group and resolve its id. A name the learner already uses
+	 * (409 tbtdic_group_exists) resolves to that group.
 	 */
 	function pdCreateGroup( name ) {
-		return pdAjax( 'ays_groups_add_ajax', { value: name } ).then( function ( data ) {
-			if ( ! data || ! ( parseInt( data.added_group, 10 ) >= 1 ) ) {
+		return dictApi( 'POST', 'groups', { name: name } ).then( function ( data ) {
+			var id = parseInt( data && data.group && data.group.id, 10 );
+			if ( ! ( id > 0 ) ) {
 				throw new Error( t( 'dictError', DICT_ERR ) );
 			}
-			var id = parseInt( data.last_id, 10 );
-			if ( id > 0 ) {
+			return id;
+		}, function ( err ) {
+			var id = parseInt( err && err.data && err.data.group && err.data.group.id, 10 );
+			if ( err && 'tbtdic_group_exists' === err.code && id > 0 ) {
 				return id;
 			}
-			return pdFetchGroups().then( function ( groups ) {
-				if ( ! groups.length ) {
-					throw new Error( t( 'dictError', DICT_ERR ) );
-				}
-				return groups[ 0 ].id;
-			} );
+			throw err;
 		} );
 	}
 
@@ -3550,6 +3553,9 @@
 	 * never sent.
 	 */
 	function dictAddControl( lesson, word, getTranslation ) {
+		if ( ! dictAvailable() ) {
+			return document.createDocumentFragment(); // Dictionary not active.
+		}
 		if ( dictAdded[ dictKey( lesson, word ) ] ) {
 			return dictAddedBadge();
 		}
